@@ -1,6 +1,7 @@
 import { createTrip } from "@raiquora/trip/trip";
 import { expect, it, vi } from "vitest";
-import type { ConversationModel, ConversationModelRequest } from "../ports/conversation-model.js";
+import { strandsScriptedRuntime } from "../adapters/strands-scripted-model.fixture.js";
+import type { ServerAgentRuntimeRunner } from "../ports/server-agent-runtime.js";
 import { stateDynamoFixture, stateA, conversationId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
@@ -15,15 +16,19 @@ it("reuses a published candidate source after an unrelated follow-up Tool call",
   const metadata = stateMetadata();
   trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), stateA.subject);
   await state.conversations.create(stateA, conversationId, { ...metadata, scope: "trip" });
-  const requests: ConversationModelRequest[] = [];
-  const responses = [toolCall("source-1", "discover_source"), finalPlan(), toolCall("lodging-1", "check_lodging"), finalPlan()];
-  const model: ConversationModel = { converse: vi.fn(async request => {
-    requests.push(structuredClone(request));
-    return responses.shift()!;
-  }) };
+  const models: ReturnType<typeof strandsScriptedRuntime>["model"][] = [];
+  const runRuntime: ServerAgentRuntimeRunner = input => {
+    const fixture = strandsScriptedRuntime([
+      { name: models.length ? "check_lodging" : "discover_source", input: {} },
+      { name: "strands_structured_output", input: { reply: { kind: "answer", commentary: "出雲大社は出雲市にあり、参拝と門前町散策を組み合わせられます。",
+        references: [{ evidenceId: sourceEvidenceId, field: "sourceExcerpt" }] } } },
+    ]);
+    models.push(fixture.model);
+    return fixture.runRuntime(input);
+  };
   let execution = 0;
   const options = { stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model, weather: { search: vi.fn() }, newExecutionId: () => `aaaaaaaa-aaaa-4aaa-8aaa-${String(++execution).padStart(12, "0")}`,
+    runRuntime, weather: { search: vi.fn() }, newExecutionId: () => `aaaaaaaa-aaaa-4aaa-8aaa-${String(++execution).padStart(12, "0")}`,
     additionalTools: [sourceTool(), lodgingTool()] };
   const agent = createConversationServerAgent(options);
 
@@ -35,61 +40,39 @@ it("reuses a published candidate source after an unrelated follow-up Tool call",
 
   expect(second.status).toBe("completed");
   expect(second.response).toContain("出雲大社");
-  expect(JSON.stringify(requests[2])).toContain(sourceExcerpt);
-  expect(JSON.stringify(requests[2])).not.toContain("groundingEvidence");
+  expect(JSON.stringify(models[1].observedMessages[0])).toContain(sourceExcerpt);
+  expect(JSON.stringify(models[1].observedMessages[0])).not.toContain("groundingEvidence");
   const working = await new DynamoDbConversationTurnRepository("test-state", state.client)
     .getWorkingState(stateA, conversationId);
   expect(working?.groundingEvidence?.map(({ id }) => id)).toContain(sourceEvidenceId);
 });
 
-it("keeps a verified draft usable when the next turn supplies tomorrow's departure", async () => {
+it("keeps published source Evidence when a later turn supplies tomorrow's departure", async () => {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
-  const metadata = stateMetadata();
   trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), stateA.subject);
-  await state.conversations.create(stateA, conversationId, { ...metadata, scope: "trip" });
-  let providerUnavailable = false;
-  const model: ConversationModel = { converse: vi.fn(async (request) => {
-    if (request.outputContract?.name === "conversation_semantic_delta") {
-      const current = JSON.parse("text" in request.messages[0]!.content[0]! ? request.messages[0]!.content[0]!.text : "{}");
-      return { message: { role: "assistant" as const, content: [{ text: JSON.stringify(current.utterance === "明日出発します"
-        ? { outcome: "delta", speechAct: "inform", operations: [{ atomicGroup: 1, action: "set", target: "start_date", modality: "required", precision: "exact", frame: "actual", quote: "明日", value: { kind: "relative_date", relation: "tomorrow" } }], unresolvedFragments: [] }
-        : { outcome: "no_change", speechAct: "inform", operations: [], unresolvedFragments: [] }) }] },
-      stopReason: "end_turn" as const, metadata: { modelId: "semantic", latencyMs: 1 } };
-    }
-    if (providerUnavailable) throw new Error("provider unavailable");
-    return toolCall("source-1", "discover_source");
-  }) };
+  await state.conversations.create(stateA, conversationId, stateMetadata());
+  let turn = 0;
+  const runRuntime: ServerAgentRuntimeRunner = input => {
+    const steps: Array<{ name: string; input: unknown }> = [];
+    if (turn === 0) steps.push({ name: "discover_source", input: {} });
+    if (turn === 1) steps.push({ name: "update_current_travel_period", input: {
+      action: "set", period: { start: { kind: "relative_date", relation: "tomorrow" } }, quote: "明日" } });
+    steps.push({ name: "strands_structured_output", input: { reply: turn === 1
+      ? { kind: "conversation", message: "acknowledgement", text: "明日出発する条件を確認しました。" }
+      : { kind: "answer", commentary: sourceExcerpt, references: [{ evidenceId: sourceEvidenceId, field: "sourceExcerpt" }] } } });
+    turn += 1;
+    return strandsScriptedRuntime(steps).runRuntime(input);
+  };
   const agent = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model, weather: { search: vi.fn() }, newExecutionId: () => crypto.randomUUID(), additionalTools: [sourceTool()], semanticIntentEnabled: true });
-  const first = await agent.runConversationTurn({ principal: stateA, conversationId,
+    runRuntime, weather: { search: vi.fn() }, newExecutionId: () => crypto.randomUUID(), additionalTools: [sourceTool()] });
+  await agent.runConversationTurn({ principal: stateA, conversationId,
     turnId: "11111111-1111-4111-8111-111111111111", userRequest: "出雲大社に行きたい", uiContext: { calendarDate: "2026-09-25" } });
-  expect(first.publicPlanPresentation?.candidates[0]?.label).toBe("出雲大社");
-  const retained = await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(stateA, conversationId);
-  expect(retained?.groundingEvidence?.map(({ id }) => id)).toContain(sourceEvidenceId);
-  providerUnavailable = true;
   const second = await agent.runConversationTurn({ principal: stateA, conversationId,
     turnId: "22222222-2222-4222-8222-222222222222", userRequest: "明日出発します", uiContext: { calendarDate: "2026-09-25" } });
   expect(second.status).toBe("completed");
-  expect(second.response).toContain("9月26日出発");
-  expect(second.response).toContain("出雲大社");
+  expect(second.semanticReceipt?.changes.map(change => change.target)).toContain("start_date");
+  expect((await new DynamoDbConversationTurnRepository("test-state", state.client).getWorkingState(stateA, conversationId))?.groundingEvidence?.map(({ id }) => id)).toContain(sourceEvidenceId);
 });
-
-function toolCall(toolUseId: string, name: string) {
-  return { message: { role: "assistant" as const, content: [{ toolUse: { toolUseId, name, input: {} } }] },
-    stopReason: "tool_use" as const, metadata: { modelId: "synthetic", latencyMs: 1 } };
-}
-
-function finalPlan() {
-  const presentation = { kind: "travel-plan", startDate: "2026-09-25", candidates: [{ evidenceId: sourceEvidenceId, quote: sourceExcerpt,
-    itinerary: [{ day: 1, activities: [{ period: "afternoon", title: "出雲大社を参拝し門前町を散策する", kind: "activity" },
-      { period: "evening", title: "宿で休む", kind: "stay" }] }, { day: 2, activities: [{ period: "morning", title: "周辺をゆっくり歩く", kind: "activity" },
-      { period: "afternoon", title: "余裕を持って帰路につく", kind: "transport" }] }],
-    estimate: { currency: "JPY", partySize: 1, nights: 1, originTravel: "excluded", lodgingClass: "standard",
-      items: { transport: 0, accommodation: 18_000, sightseeing: 2_000, food: 7_000 } } }] };
-  return { message: { role: "assistant" as const, content: [{ text: JSON.stringify({ kind: "answer", responseText: "旅行案です", presentation,
-    evidenceIds: [sourceEvidenceId] }) }] },
-    stopReason: "end_turn" as const, metadata: { modelId: "synthetic", latencyMs: 1, outputMode: "application_strict" as const } };
-}
 
 function sourceTool(): ServerAgentToolBinding {
   return { descriptor: { name: "discover_source", description: "旅行先の資料を確認する", inputSchema: { type: "object", additionalProperties: false, properties: {} },

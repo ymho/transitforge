@@ -1,18 +1,17 @@
 import { DynamoDbConversationTurnRepository } from "../adapters/dynamodb-conversation-turn-repository.js";
 import { createConversationTurnApplication } from "../usecases/agent/conversation-turn.js";
 import { createStatefulServerAgent } from "./stateful-server-agent.js";
-import { createConversationIntentInterpreter } from "../usecases/agent/conversation-intent-interpreter.js";
 import { DynamoDbTripRepository } from "../adapters/dynamodb-trip-repository.js";
 import { TripApplication } from "../usecases/trip-application.js";
 import { createHash } from "node:crypto";
 
-/** Conversation state is Application-owned; an injected V2 runtime never uses the V1 interpreter. */
-export function createConversationServerAgent(options: Omit<Parameters<typeof createStatefulServerAgent>[0], "historyBeforeSequence"> & { semanticIntentEnabled?: boolean }) {
+/** Conversation state and condition acceptance are Application-owned. */
+export function createConversationServerAgent(options: Omit<Parameters<typeof createStatefulServerAgent>[0], "historyBeforeSequence">) {
   const turns = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
   const trips = new DynamoDbTripRepository(options.tripTable, options.tripClient);
   const tripApplication = new TripApplication(trips, trips, undefined, undefined, undefined, undefined, turns);
   return createConversationTurnApplication({
-    turns, ...(options.runRuntime ? { conditions: turns } : {}),
+    turns, conditions: turns,
     adoptTripProposal: async (identity, lease, proposal) => {
       await turns.stageIntentProposal(identity, lease, proposal);
       const mutationId = stableMutationId(proposal.intentBinding!.changes.map(({ changeRef }) => changeRef).join("|"));
@@ -28,7 +27,6 @@ export function createConversationServerAgent(options: Omit<Parameters<typeof cr
           baseTripRevision: proposal.baseRevision, committedTripRevision: saved.revision, mutationId });
       }
     },
-    ...(options.semanticIntentEnabled && !options.runRuntime ? { interpretIntent: createConversationIntentInterpreter(options.model) } : {}),
     runAgentTurn: (input, historyBeforeSequence, reportProgress, acceptCondition) =>
       createStatefulServerAgent({ ...options, historyBeforeSequence }).runAgentTurn(input, reportProgress, acceptCondition),
     diagnostics: options.diagnostics,

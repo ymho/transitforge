@@ -77,7 +77,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
     }, { historyBeforeSequence: options.historyBeforeSequence, onConversationMessages: messages => { previousMessages = messages; }, onTrip: value => { trip = value; },
       onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } });
     const runtime = options.runRuntime;
-    const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) => {
+    const runRuntime = async (runtimeInput: Parameters<typeof runtime>[0]) => {
       turnExecutionId = runtimeInput.executionId;
       return runtime({
         ...runtimeInput,
@@ -101,7 +101,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
           },
         } } : {}),
       });
-    } : undefined;
+    };
     const result = await createServerAgent({ ...options,
       registerAdditionalTools: (tools, evidence, scope) => {
         turnExecutionId = scope.executionId;
@@ -129,11 +129,8 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
           }
         }
       },
-      // Restored private state may be echoed in any later turn block. Do not retain raw model-call traces.
-      // Runtime metadata/latency diagnostics remain available; no Bedrock/provider implementation change.
-      model: { converse: ({ trace: _trace, ...request }) => options.model.converse(request) },
       loadContext: contextLoader,
-      ...(runRuntime ? { runRuntime } : {}),
+      runRuntime,
     }).runAgentTurn(input, reportProgress);
     if (input.conversationId && effectiveIntent && currentIntentReceipt && trip) {
       const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent, receipt: currentIntentReceipt });

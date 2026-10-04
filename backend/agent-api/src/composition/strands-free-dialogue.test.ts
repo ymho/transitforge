@@ -80,7 +80,7 @@ async function runDialogue(model?: Model<BaseModelConfig>) {
   });
   const runtime = createStrandsServerRuntime(engine);
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: { converse: async () => { throw new Error("V1 must not run"); } }, weather: { search: async () => { throw new Error("No external Providers"); } },
+    weather: { search: async () => { throw new Error("No external Providers"); } },
     newExecutionId: () => "synthetic-free-dialogue", limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
     runRuntime: input => runtime({ ...input, ...(input.conditionController ? { conditionController: { ...input.conditionController,
       apply: change => { writes++; return input.conditionController!.apply(change); } } } : {}) }),

@@ -57,7 +57,7 @@ it(`completes the exact confirmation turn with ${live ? "Bedrock" : "scripted SD
   ]) }));
   let index = 0, execution = 0;
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() },
+    weather: { search: vi.fn() },
     newExecutionId: () => `78300000-2222-4000-8000-${String(++execution).padStart(12, "0")}`, runRuntime: input => index < 2 ? prelude(input) : finalRuntime(input),
     limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
     diagnostics: { record: async event => { if (live && (event.phase === "execution" || event.phase === "tool")) console.log(JSON.stringify({ phase: "confirmation", reason: event.reason, counts: event.counts, code: event.toolErrorCode })); } },
@@ -119,7 +119,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
   if (!live) hotelBinding.evidence = (output, context) => originalEvidence(output, context).map((evidence, index) => ({ ...evidence, id: `hotel-${index + 1}` }));
   let index = 0, execution = 0;
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() }, additionalTools: bindings,
+    weather: { search: vi.fn() }, additionalTools: bindings,
     newExecutionId: () => `78500000-2222-4000-8000-${String(++execution).padStart(12, "0")}`,
     runRuntime: input => {
       if (index === 2) expect(input.context?.conversation?.messages?.at(-1)?.text).toContain("宿泊施設の提案");

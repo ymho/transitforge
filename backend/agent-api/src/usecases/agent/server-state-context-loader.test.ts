@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { QueryCommand } from "@aws-sdk/client-dynamodb";
 import { createTrip } from "@raiquora/trip/trip";
 import { createAgentContextSnapshot } from "@raiquora/agent/agent-context-snapshot";
-import { agentDecisionContextText, buildAgentDecisionContext } from "@raiquora/agent/agent-decision-context";
+import { calendarDateReferences } from "@raiquora/agent/agent-runtime-context";
 import { createServerStateContextLoader, serverStateContextLimits } from "./server-state-context-loader.js";
 import { ConversationApplication } from "../conversation-application.js";
 import { ProfileApplication } from "../profile-application.js";
@@ -40,7 +40,7 @@ describe("Server State Context Loader", () => {
       target: { kind: "trip", tripId, tripRevision: 0 } });
     expect(context.featureContext?.uiFocus).toMatchObject({ itemId: "stay", item: { itemId: "stay", summary: "宿泊" } });
     expect(context.featureContext?.calendarDate).toBe("2026-09-21");
-    expect(buildAgentDecisionContext({ executionId: "date", feature: "concierge", userRequest: "明日から", context }, []).featureContext.relativeDates)
+    expect(calendarDateReferences(context.featureContext?.calendarDate).relativeDates)
       .toEqual({ today: "2026-09-21", tomorrow: "2026-09-22", dayAfterTomorrow: "2026-09-23" });
     expect(f.records).toEqual(stateBefore); expect(f.trips.records).toEqual(tripBefore);
     expect(JSON.stringify(context)).not.toContain(a.subject);
@@ -111,8 +111,7 @@ describe("Server State Context Loader", () => {
     expect(context.conversation?.resolvedTopics).toEqual(["行先"]);
     expect(JSON.stringify(context.conversation).length).toBeLessThanOrEqual(serverStateContextLimits.conversationJsonCharacters);
     expect(context.conversation?.messages?.every((m) => m.text.length <= 1600)).toBe(true);
-    const modelText = agentDecisionContextText(buildAgentDecisionContext({ executionId: "test", feature: "concierge", userRequest: "続けて", context }, []));
-    expect(modelText.match(/<agent_context>([\s\S]*)<\/agent_context>/)![1].length).toBeLessThanOrEqual(24_000);
+
   });
   it("handles byte-limited storage pages and JSON-escaped history within bounded work", async () => {
     const f = setup(); await f.conversations.create(a, metadata());

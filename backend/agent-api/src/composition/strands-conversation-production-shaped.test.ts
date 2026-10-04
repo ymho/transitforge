@@ -103,9 +103,9 @@ it("runs an actual Strands model-tool-model loop inside the production-shaped Co
   }];
   const engine = new StrandsAgentEngine({ modelId: "unused", region: "ap-northeast-1", systemPrompt: "Submit an evidence-bound reply.", maxTurns: 4 },
     { model: new ToolThenAnswerModel() });
-  const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
+
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: v1Model, weather: { search: async () => { throw new Error("weather not used"); } }, additionalTools: [{ descriptor, operation, evidence }],
+    weather: { search: async () => { throw new Error("weather not used"); } }, additionalTools: [{ descriptor, operation, evidence }],
     newExecutionId: () => "strands-production-shaped", runRuntime: createStrandsServerRuntime(engine) });
   const input = { principal, conversationId, turnId: secondId, userRequest: "京都について確認して" };
   const result = await app.runConversationTurn(input);
@@ -115,7 +115,6 @@ it("runs an actual Strands model-tool-model loop inside the production-shaped Co
   expect(result.response).not.toContain("thinking");
   expect(result.response).not.toContain("保存しておきます");
   expect(operation).toHaveBeenCalledTimes(1);
-  expect(v1Model.converse).not.toHaveBeenCalled();
   const replay = await app.runConversationTurn(input);
   expect(replay).toEqual(result);
   expect(operation).toHaveBeenCalledTimes(1);
@@ -131,13 +130,13 @@ it("publishes and replays a no-evidence greeting without calling Domain Tools or
   trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const weather = { search: vi.fn(async () => { throw new Error("weather must not run"); }) };
-  const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
+
   const engine = new StrandsAgentEngine({
     modelId: "unused", region: "ap-northeast-1", systemPrompt: "Submit a typed reply.", maxTurns: 3,
   }, { model: new ReplyOnlyModel({ kind: "conversation", message: "greeting" }, "<thinking>ignore</thinking>") });
   const app = createConversationServerAgent({
     stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: v1Model, weather, newExecutionId: () => "strands-greeting", runRuntime: createStrandsServerRuntime(engine),
+     weather, newExecutionId: () => "strands-greeting", runRuntime: createStrandsServerRuntime(engine),
   });
   const input = { principal, conversationId, turnId: secondId, userRequest: "こんにちは" };
 
@@ -146,7 +145,6 @@ it("publishes and replays a no-evidence greeting without calling Domain Tools or
   expect(result).toMatchObject({ status: "completed", response: "こんにちは。旅について相談したいことを教えてください。" });
   expect(result.response).not.toContain("thinking");
   expect(weather.search).not.toHaveBeenCalled();
-  expect(v1Model.converse).not.toHaveBeenCalled();
   expect(await app.runConversationTurn(input)).toEqual(result);
   expect(weather.search).not.toHaveBeenCalled();
   expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))
@@ -161,13 +159,13 @@ it("reports unavailable booking through the Application boundary and replays it 
   trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
   const weather = { search: vi.fn(async () => { throw new Error("weather must not run"); }) };
-  const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
+
   const engine = new StrandsAgentEngine({
     modelId: "unused", region: "ap-northeast-1", systemPrompt: "Submit a typed reply.", maxTurns: 3,
   }, { model: new ReplyOnlyModel({ kind: "unavailable", operation: "book" }, "保存しておきます。") });
   const app = createConversationServerAgent({
     stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: v1Model, weather, newExecutionId: () => "strands-save-unavailable", runRuntime: createStrandsServerRuntime(engine),
+     weather, newExecutionId: () => "strands-save-unavailable", runRuntime: createStrandsServerRuntime(engine),
   });
   const input = { principal, conversationId, turnId: secondId, userRequest: "このホテルを予約しておいて" };
 
@@ -178,7 +176,6 @@ it("reports unavailable booking through the Application boundary and replays it 
   expect(result.response).toContain("予約は行っていません");
   expect(result.response).not.toContain("保存しておきます");
   expect(weather.search).not.toHaveBeenCalled();
-  expect(v1Model.converse).not.toHaveBeenCalled();
   expect(await app.runConversationTurn(input)).toEqual(result);
   expect(weather.search).not.toHaveBeenCalled();
   expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))
@@ -193,14 +190,14 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   const metadata = stateMetadata();
   trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, metadata);
-  const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
+
   const failingEngine = new StrandsAgentEngine({
     modelId: "unused", region: "ap-northeast-1", systemPrompt: "Accept the destination before replying.", maxTurns: 3,
   }, { model: new IntentThenNoReplyModel() });
   const input = { principal, conversationId, turnId: secondId, userRequest: "行き先は京都にしたい" };
   const firstApp = createConversationServerAgent({
     stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: v1Model, weather: { search: vi.fn() }, newExecutionId: () => "strands-intent-fail",
+    weather: { search: vi.fn() }, newExecutionId: () => "strands-intent-fail",
     runRuntime: createStrandsServerRuntime(failingEngine),
   });
 
@@ -216,7 +213,7 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   }, { model: new ReplyOnlyModel({ kind: "conversation", message: "acknowledgement" }, "ignored") });
   const retryApp = createConversationServerAgent({
     stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: v1Model, weather: { search: vi.fn() }, newExecutionId: () => "strands-intent-retry",
+    weather: { search: vi.fn() }, newExecutionId: () => "strands-intent-retry",
     runRuntime: createStrandsServerRuntime(retryEngine),
   });
   const result = await retryApp.runConversationTurn(input);
@@ -230,7 +227,6 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   const saved = await trips.repository.get(principal, stateMetadata().tripId);
   expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "destinations" &&
     requirement.places.some(({ name }) => name === "京都"))).toBe(true);
-  expect(v1Model.converse).not.toHaveBeenCalled();
   expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))
     .toEqual([input.userRequest, result.response]);
 });

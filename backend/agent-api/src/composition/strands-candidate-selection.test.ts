@@ -36,7 +36,7 @@ it.each(["empty", "single", "multiple", "named", "negated", "hypothetical"] as c
   const selected = createStrandsServerRuntime(new StrandsAgentEngine(settings, live ? {} : { model: new StrandsScriptedModel(steps(mode)) }));
   let isPrelude = true, execution = 0;
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() },
+    weather: { search: vi.fn() },
     newExecutionId: () => `78400000-2222-4000-8000-${String(++execution).padStart(12, "0")}`,
     runRuntime: async input => { if (isPrelude) return prelude(input); calls++; inputSeen = input; const result = await selected(input); proof = result.publicReply;
       if (live) console.log(JSON.stringify({ mode, phase: "selection-reply", status: result.status, kind: result.publicReply?.kind, question: result.publicReply?.question,
@@ -94,7 +94,7 @@ it(`#784 ${live ? "Bedrock" : "SDK"} route choice saves the shown scheduled serv
   ]) }));
   let isPrelude = true, execution = 0;
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() }, additionalTools: bindings,
+    weather: { search: vi.fn() }, additionalTools: bindings,
     newExecutionId: () => `78400000-2222-4000-8000-${String(++execution).padStart(12, "0")}`,
     runRuntime: input => isPrelude ? prelude(input) : selected(input),
     projectResult: result => isPrelude ? { publicJourneyPresentation: projectPublicJourneyPresentation(rail, new Set(result.claims.flatMap(claim => claim.evidenceIds))) } : {},
@@ -139,7 +139,7 @@ it(`#784 ${live ? "Bedrock" : "SDK"} read-only place selection completes the rep
   ]) }));
   let index = 0, execution = 0, calls = 0;
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() }, additionalTools: bindings,
+    weather: { search: vi.fn() }, additionalTools: bindings,
     newExecutionId: () => `78400000-4444-4000-8000-${String(++execution).padStart(12, "0")}`,
     runRuntime: input => { calls++; return index < 3 ? prelude(input) : final(input); },
     limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 3, maxExecutionMs: 60000 },

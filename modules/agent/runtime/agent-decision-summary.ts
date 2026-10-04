@@ -1,4 +1,4 @@
-import type { AgentContextValue } from "./agent-decision-context";
+import type { AgentContextValue } from "./agent-runtime-context";
 import { validInTripAnswerPlan, type InTripAnswerPlan } from "./in-trip-answer-plan";
 import type { MissingRequirement } from "./semantic-decision";
 

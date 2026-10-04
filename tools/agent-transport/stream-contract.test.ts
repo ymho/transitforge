@@ -1,3 +1,4 @@
+import { strandsScriptedRuntime } from "../../backend/agent-api/src/adapters/strands-scripted-model.fixture.js";
 import { expect, it, vi } from "vitest";
 import { createTrip } from "@raiquora/trip/trip";
 import { createProductionAgentStream } from "../../backend/agent-api/src/agent-stream-composition.js";
@@ -14,12 +15,13 @@ it("the real Browser consumer accepts a persisted Runtime answer and its replay"
   const principal = await verifier.verify(token());
   trips.seed(createTrip(secondId, "検討中の旅", "2026-09-27T00:00:00Z"), principal.subject);
   await state.conversations.create(principal, conversationId, stateMetadata());
-  const converse = vi.fn(async () => ({ stopReason: "end_turn" as const, metadata: { modelId: "fixture", latencyMs: 0 },
-    message: { role: "assistant" as const, content: [{ text: "確認した候補を案内します。" }] } }));
+  const { model, runRuntime } = strandsScriptedRuntime([
+    { name: "strands_structured_output", input: { reply: { kind: "conversation", message: "acknowledgement", text: "散策の希望を確認しました。" } } },
+  ]);
   const handle = createProductionAgentStream({ enabled: true, path: "/api/agent-stream", verifier, log: () => {},
     newExecutionId: () => "wire-test", createApplication: executionId => createProductionConversationAgent({
       stateTable: "test-state", stateClient: state.client, tripTable: "test-trips", tripClient: trips.client,
-      newExecutionId: () => executionId, model: { converse }, weather: { search: vi.fn() },
+      newExecutionId: () => executionId, runRuntime, weather: { search: vi.fn() },
     }) });
   for (let attempt = 0; attempt < 2; attempt++) {
     const frames: string[] = [], onEvent = vi.fn();
@@ -33,10 +35,10 @@ it("the real Browser consumer accepts a persisted Runtime answer and its replay"
       measurement: { requestStart: 0, maxSilenceMs: 0 },
       fetcher: async () => new Response(frames.join(""), { headers: { "content-type": "text/event-stream" } }),
     });
-    expect(onEvent).toHaveBeenLastCalledWith(expect.objectContaining({ type: "final", response: "確認した候補を案内します。" }));
+    expect(onEvent).toHaveBeenLastCalledWith(expect.objectContaining({ type: "final", response: "散策の希望を確認しました。" }));
     expect(frames.join("")).not.toMatch(/turnObservation|presentationReceipt/);
   }
-  expect(converse).toHaveBeenCalledOnce();
+  expect(model.calls).toBe(1);
 });
 
 it.each(["completed", "follow_up"] as const)("projects only public fields from a stored %s result", async status => {

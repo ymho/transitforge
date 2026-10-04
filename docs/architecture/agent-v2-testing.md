@@ -22,18 +22,15 @@ Agent v2はStrandsを使うgreenfield実装であり、V1 `MultiStepAgentRuntime
    - bounded real-model evaluation
    - useful answer、不要質問、latency、Tool/model call、token/cost
 
-## V1 regressionとして残すもの
+## V1専用テストの撤去（#788）
 
-`modules/agent/runtime/agent-runtime.test.ts` とその周辺には、V1固有の次の確認がある。
-
-- repair prompt本文と回数
-- finalization phaseの順序
-- `finalization_tool_calls` 等のV1 reason名
-- planning/photo/progress guardの発火順序
-- V1 response wrapper / model class routing
-- V1 duplicate suppression方式
-
-V1がproduction defaultである間はこれらを維持する。ただし**Agent v2 cutoverの合否には使わない**。
+V1のrepair本文・finalization順序・guard発火順・旧renderer・旧model routing・duplicate suppression方式と、
+それらに依存するLive Eval、workflow、fault catalogは撤去した。
+保存・CAS・owner・Evidence・条件受理後の失敗/再送は現行v2 acceptance catalogとApplication境界のテストを維持する。
+Tool catalog未公開のproposal登録/保存は`proposal-runtime.fixture.ts`でApplicationのruntime portを通して検証する。
+これはv2が当該Toolをモデルへ公開済みであるという保証ではない。
+API/保存形式の`v1`、地点詳細のBedrock要約とそのテストは旧Runtimeの撤去対象にしない。
+画面の旧型は#721の範囲とする。
 
 ## V2で再表現する原則
 

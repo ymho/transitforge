@@ -7,22 +7,27 @@ import { stateDynamoFixture, conversationId, secondId, stateMetadata } from "./a
 import { tripDynamoFixture } from "./adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, issuer, token } from "./adapters/cognito-token.fixture.js";
 import type { StreamWriter } from "./ports/agent-stream-transport.js";
-import type { ConversationModel } from "./ports/conversation-model.js";
+import { StrandsAgentEngine, type StrandsAgentFactory } from "./adapters/strands-agent-engine.js";
+import { createStrandsServerRuntime } from "./adapters/strands-server-runtime.js";
+import type { ServerAgentRuntimeRunner } from "./ports/server-agent-runtime.js";
+import { strandsScriptedRuntime } from "./adapters/strands-scripted-model.fixture.js";
 import { ConversationTurnExecutionError } from "./usecases/agent/conversation-turn.js";
 import type { ConversationTurnInput } from "./usecases/agent/conversation-turn.js";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 
-function setup(enabled = true, maxExecutionMs?: number) {
+function setup(enabled = true, maxExecutionMs?: number, overrideRuntime?: ServerAgentRuntimeRunner) {
   const { verifier } = cognitoTokenFixture();
   const verify = vi.spyOn(verifier, "verify");
-  const model = { converse: vi.fn<ConversationModel["converse"]>(async () => ({ stopReason: "end_turn" as const, metadata: { modelId: "fake", latencyMs: 0 },
-    message: { role: "assistant" as const, content: [{ text: "確認したい日程を教えてください。" }] } })) };
+  const { model, runRuntime } = strandsScriptedRuntime([
+    { name: "strands_structured_output", input: { reply: { kind: "clarification", target: "start_date", text: "確認したい日程を教えてください。" } } },
+  ]);
+  vi.spyOn(model, "stream");
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   const createApplication = vi.fn((executionId: string) => createProductionConversationAgent({
     stateTable: "test-state", stateClient: state.client, tripTable: "test-trips", tripClient: trips.client,
     limits: maxExecutionMs === undefined ? undefined : { maxExecutionMs },
-    model, weather: { search: vi.fn() }, newExecutionId: () => executionId,
+    runRuntime: overrideRuntime ?? runRuntime, weather: { search: vi.fn() }, newExecutionId: () => executionId,
   }));
   const log = vi.fn();
   const handle = createProductionAgentStream({ enabled, path: "/api/agent-stream", verifier, createApplication,
@@ -56,7 +61,7 @@ it.each([
   const s = setup(); s.request.headers.authorization = `Bearer ${token(claims as Record<string, unknown>)}`;
   await s.handle(s.request, s.writer);
   expect(s.writer.start).toHaveBeenCalledWith(status, expect.anything());
-  expect(s.createApplication).not.toHaveBeenCalled(); expect(s.model.converse).not.toHaveBeenCalled();
+  expect(s.createApplication).not.toHaveBeenCalled(); expect(s.model.stream).not.toHaveBeenCalled();
   expect(s.state.commands).toHaveLength(0);
 });
 it("requires Bearer even for direct Gateway events and rejects legacy/PoC routes", async () => {
@@ -69,10 +74,9 @@ it("requires Bearer even for direct Gateway events and rejects legacy/PoC routes
 it("runs the real Server Agent once, with correlated safe logs and no request/state/response content", async () => {
   const s = setup(); await s.seed(); await s.handle(s.request, s.writer);
   expect(s.createApplication).toHaveBeenCalledExactlyOnceWith("execution-1");
-  expect(s.model.converse).toHaveBeenCalledOnce();
+  expect(s.model.stream).toHaveBeenCalledOnce();
   expect(s.frames.join("")).toContain('"type":"final"'); expect(s.frames.at(-1)).toContain("event: done");
   expect(s.frames.join("")).toContain('"phase":"understanding_request"');
-  expect(s.frames.join("")).toContain('"phase":"validating_answer"');
   expect(s.log.mock.calls.map(([entry]) => entry.event)).toEqual(["request_started", "stream_started", "final_sent", "completed"]);
   for (const [entry] of s.log.mock.calls) {
     expect(entry).toMatchObject({ requestId: "execution-1", apiRequestId: "gateway-1", lambdaRequestId: "lambda-1", latencyMs: expect.any(Number) });
@@ -96,15 +100,13 @@ it("streams Application acceptance after commit without terminating the answer s
   expect(payload.match(/public-semantic-receipt-v1/g)).toHaveLength(2);
   expect(s.frames.at(-1)).toContain("event: done");
 });
-it("validates the Browser calendar date and exposes calculated relative dates to the model", async () => {
+it("validates the Browser calendar date before composing the runtime", async () => {
   const s = setup(); await s.seed();
   s.request.body = JSON.stringify({ userRequest: "明日から", conversationId, turnId: secondId,
     uiContext: { calendarDate: "2026-09-21" } });
   await s.handle(s.request, s.writer);
-  const request = s.model.converse.mock.calls[0][0];
-  const contextText = request.messages[0].content.find(block => "text" in block)?.text;
-  expect(contextText).toContain('"calendarDate":"2026-09-21"');
-  expect(contextText).toContain('"tomorrow":"2026-09-22"');
+  const messages = s.model.observedMessages[0];
+  expect(JSON.stringify(messages)).toContain("明日から");
 
   for (const calendarDate of ["2026-02-30", "2026-99-99"]) {
     const invalid = setup(); invalid.request.body = JSON.stringify({ userRequest: "明日から", conversationId, turnId: secondId,
@@ -153,10 +155,10 @@ it("persists final before write and replays without a second model run; altered 
     await write(frame);
   };
   await s.handle(s.request, s.writer); await s.handle(s.request, s.writer);
-  expect(s.model.converse).toHaveBeenCalledTimes(1);
+  expect(s.model.stream).toHaveBeenCalledTimes(1);
   await s.handle({ ...s.request, body: JSON.stringify({ conversationId, turnId: secondId, userRequest: "different" }) }, s.writer);
   expect(s.frames.join("")).toContain('"code":"turn_conflict"');
-  expect(s.model.converse).toHaveBeenCalledTimes(1);
+  expect(s.model.stream).toHaveBeenCalledTimes(1);
 });
 it.each(["history", "profile", "trip", "tools", "toolResults", "messages", "principal"])("rejects %s instead of accepting Browser state", async key => {
   const s = setup(); await s.handle({ ...s.request, body: JSON.stringify({ ...JSON.parse(s.request.body), [key]: "private" }) }, s.writer);
@@ -172,8 +174,18 @@ it("requires both stable UUID references before state access", async () => {
 
 it("ends a bounded business timeout with limit_reached and no saved final, before the transport timeout", async () => {
   vi.useFakeTimers();
-  const s = setup(true, serverAgentDeadline({ SERVER_AGENT_MAX_EXECUTION_MS: "120000" })); await s.seed();
-  s.model.converse.mockImplementation(() => new Promise(() => {}));
+  const controller = new AbortController();
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => {
+    setTimeout(() => controller.abort(), ms);
+    return controller.signal;
+  });
+  const invoke = vi.fn(async (_args: string, options?: { cancelSignal?: AbortSignal }) => {
+    await new Promise<void>(resolve => options?.cancelSignal?.addEventListener("abort", () => resolve(), { once: true }));
+    return { stopReason: "cancelled" };
+  });
+  const createAgent: StrandsAgentFactory = () => ({ invoke });
+  const runtime = createStrandsServerRuntime(new StrandsAgentEngine({ modelId: "synthetic", region: "test", systemPrompt: "test" }, { createAgent }));
+  const s = setup(true, serverAgentDeadline({ SERVER_AGENT_MAX_EXECUTION_MS: "120000" }), runtime); await s.seed();
   const pending = s.handle(s.request, s.writer);
   await vi.advanceTimersByTimeAsync(119_999);
   expect(s.frames.join("")).not.toContain('"type":"error"');
@@ -182,6 +194,8 @@ it("ends a bounded business timeout with limit_reached and no saved final, befor
   expect(s.frames.join("")).toContain('"code":"limit_reached"');
   expect(s.frames.join("")).not.toContain('"type":"final"');
   expect(s.frames.at(-1)).toContain("event: done");
-  expect(s.model.converse).toHaveBeenCalledOnce();
+  expect(invoke).toHaveBeenCalledOnce();
+  expect(timeout).toHaveBeenCalledWith(120_000);
+  timeout.mockRestore();
   expect([...s.state.records.values()].some(row => row.sk.S?.startsWith("TRIP_TURN#") && row.payload.S?.includes('"completed"'))).toBe(false);
 });

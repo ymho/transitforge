@@ -7,8 +7,8 @@ import { createProductionConversationAgent } from "../../backend/agent-api/src/c
 import { productionServerTools } from "../../backend/agent-api/src/composition/production-server-tools.js";
 import { createFixedEgressAccommodationOperation } from "../../backend/agent-api/src/composition/fixed-egress-accommodation.js";
 import { createFixedEgressProviderHandler } from "../../backend/agent-api/src/adapters/fixed-egress-provider-handler.js";
-import { BedrockConversationModel } from "../../backend/agent-api/src/adapters/bedrock-conversation-model.js";
-import { stateDynamoFixture, conversationId, secondId } from "../../backend/agent-api/src/adapters/state-dynamodb.fixture.js";
+import { strandsScriptedRuntime } from "../../backend/agent-api/src/adapters/strands-scripted-model.fixture.js";
+import { stateDynamoFixture, conversationId, secondId, stateMetadata } from "../../backend/agent-api/src/adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../../backend/agent-api/src/adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../../backend/agent-api/src/adapters/cognito-token.fixture.js";
 import { createTrip } from "@raiquora/trip/trip";
@@ -19,6 +19,7 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
   const { verifier } = cognitoTokenFixture(); const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   await trips.repository.create(principal, createTrip(secondId, "server trip", "2026-09-18T00:00:00Z"));
+  await state.conversations.create(principal, conversationId, stateMetadata());
   let release: (() => void) | undefined, hold = false, dropFinal = false, toolFailure = false;
   const provider = createFixedEgressProviderHandler({ search: async () => {
     if (toolFailure) throw new Error("private tool failure");
@@ -27,32 +28,44 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
   } });
   const invoke = vi.fn(async (input: { Payload: Uint8Array }) => ({ StatusCode: 200,
     Payload: new TextEncoder().encode(JSON.stringify(await provider(JSON.parse(new TextDecoder().decode(input.Payload))))) }));
+  const restoredContexts: unknown[] = [];
   const modelCalls = vi.fn(); const bodies: Record<string, unknown>[] = [];
   const handle = createProductionAgentStream({ enabled: true, path: "/api/agent-stream", verifier, log: () => {},
     createApplication: executionId => {
       let calls = 0;
+      const { model, runRuntime } = strandsScriptedRuntime([
+        { name: "search_accommodations", input: { destination: "京都", checkInDate: "2026-10-01", checkOutDate: "2026-10-02" } },
+        { name: "strands_structured_output", input: { reply: { kind: "answer", commentary: "確認した宿泊候補です。空室は未確認です。",
+          references: [{ evidenceId: `browser-accommodation:${executionId}`, field: "accommodationSummary" }] } } },
+      ]);
+      const stream = model.stream.bind(model);
+      vi.spyOn(model, "stream").mockImplementation(async function* (messages) {
+        modelCalls(messages); calls++;
+        if (hold && calls === 1) await new Promise<void>(resolve => { release = resolve; });
+        if (toolFailure && calls > 1) throw new Error("private model failure");
+        yield* stream(messages);
+      });
+      const bindings = productionServerTools({ external: {}, journey: vi.fn(),
+        accommodation: createFixedEgressAccommodationOperation("provider-arn", { invoke }) });
+      const accommodation = bindings.find(tool => tool.descriptor.name === "search_accommodations")!;
+      const collect = accommodation.evidence;
+      // Stable synthetic identity for the scripted model; retain the real Provider mapper's facts/claims.
+      accommodation.evidence = (output, context) => collect(output, context).map(evidence => ({ ...evidence, id: `browser-accommodation:${executionId}` }));
       return createProductionConversationAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-        newExecutionId: () => executionId, weather: { search: vi.fn() }, additionalTools: productionServerTools({ external: {}, journey: vi.fn(),
-          accommodation: createFixedEgressAccommodationOperation("provider-arn", { invoke }) }),
-        model: new BedrockConversationModel({ converse: async request => {
-          modelCalls(request); calls++;
-          if (hold && calls === 1) await new Promise<void>(resolve => { release = resolve; });
-          if (toolFailure && calls > 1) throw new Error("private model failure");
-          return calls === 1 ? { output: { message: { role: "assistant", content: [{ toolUse: { toolUseId: "accommodation", name: "search_accommodations",
-            input: { destination: "京都", checkInDate: "2026-10-01", checkOutDate: "2026-10-02" } } }] } }, stopReason: "tool_use" }
-            : { output: { message: { role: "assistant", content: [{ text: '<decision_summary>{"interpretedGoal":"宿を調べる","hardConstraints":[],"softPreferences":[],"selectedAction":"answer","unresolvedFacts":[],"reasonCodes":["evidence_sufficient"],"usedEvidenceIds":["accommodation:travel-provider:42"]}</decision_summary>保存済みの宿泊回答です。空室は未確認です。' }] } }, stopReason: "end_turn" };
-        } }, { modelId: "fake", systemPrompt: "offline" }),
+        newExecutionId: () => executionId, weather: { search: vi.fn() }, additionalTools: bindings,
+        runRuntime: input => { restoredContexts.push(input.context); return runRuntime(input); },
       });
     },
   });
   const bundle = await build({ stdin: { resolveDir: process.cwd(), contents: `
     import { createConversationStreamSession } from "./frontend/src/adapters/http/agent-stream/session.ts";
     import { configureAiGuidePanel } from "./frontend/src/presentation/concierge/ai-guide-panel.ts";
-    import { LocalConversationHistoryRepository } from "./frontend/src/adapters/browser/conversation-history-repository.ts";
+    const history = [];
+    const historyRepository = {list:()=>history, append:(_session,message)=>{const row={...message,messageId:crypto.randomUUID()};history.push(row);return row;},delete:()=>{history.length=0;}};
     const refs = { conversationId: "${conversationId}", tripId: "${secondId}" };
     let authState = {status:"signed-in", displayName:"A"}; const listeners = new Set();
     let accessToken = ${JSON.stringify(token())};
-    const auth = {getState:()=>authState, getAccessToken:async()=>accessToken,
+    const auth = {getState:()=>authState, getAccessToken:async()=>accessToken, refreshAccessToken:async()=>undefined,
       subscribe:l=>{listeners.add(l);l(authState);return()=>listeners.delete(l);}, invalidate:()=>{}, initialize:async()=>{},login:async()=>{},logout:async()=>{}};
     const session = createConversationStreamSession({auth,references:()=>refs});
     const el = tag => document.body.appendChild(document.createElement(tag));
@@ -60,14 +73,14 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
     localStorage.setItem("PRIVATE_PROFILE", "NEVER_SEND");
     const panel = configureAiGuidePanel({ conversationSessionId: refs.conversationId, panel: el("div"), toggle: el("button"), close:el("button"),
       messages, form, input, submit:el("button"), suggestions:[],contextChoices:el("div"),settingsToggle:el("button"),settingsPanel:el("div"),
-      transferPace:el("select"),rankingPreference:el("select"),storage:localStorage,historyRepository:new LocalConversationHistoryRepository(sessionStorage),
+      transferPace:el("select"),rankingPreference:el("select"),storage:localStorage,historyRepository,
       responseContextKey:()=>session.contextVersion()
     }, prompt => { window.action = session.start(prompt); return window.action.send(); });
     window.test = {ask:()=>panel.ask("京都の宿を調べたい"), session, refs,
       switch:(kind)=>{ if(kind==="logout"||kind==="account") {authState={status:kind==="logout"?"signed-out":"signed-in", displayName:"B"};listeners.forEach(l=>l(authState));}
         else if(kind==="conversation")refs.conversationId=crypto.randomUUID();else if(kind==="trip")refs.tripId=crypto.randomUUID();else session.start("next");session.contextChanged(); },
       setToken:token=>{accessToken=token;}, send:()=>{window.action=session.start("京都の宿を調べたい");return window.action.send();}};
-  `, loader: "ts" }, bundle: true, format: "esm", write: false });
+  `, loader: "ts" }, bundle: true, format: "esm", write: false, loader: { ".css": "empty" } });
   const harnessErrors: unknown[] = [];
   const serve = async (req: IncomingMessage, res: ServerResponse) => {
     if (req.url === "/") { res.setHeader("content-type", "text/html"); res.end('<!doctype html><script type="module" src="/browser.js"></script>'); return; }
@@ -83,7 +96,7 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
       },
       write: async frame => {
         if (frame.includes('"type":"final"')) {
-          expect([...state.records.values()].some(row => row.sk.S?.startsWith("TURN#") && row.payload.S?.includes("completed"))).toBe(true);
+          expect([...state.records.values()].some(row => row.sk.S?.startsWith("TRIP_TURN#") && row.payload.S?.includes("completed"))).toBe(true);
           if (dropFinal) return;
         }
         res.write(frame);
@@ -121,12 +134,14 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
     expect(state.commands).toHaveLength(beforeInvalid);
     expect(modelCalls).not.toHaveBeenCalled();
     await page.evaluate(() => (window as any).test.ask());
-    await page.waitForFunction(() => document.querySelector("#messages")?.textContent?.includes("宿泊候補「宿」"));
+    await page.waitForFunction(() => document.querySelector("#messages")?.textContent?.includes("確認した宿泊候補です") || document.querySelector(".ai-guide-message-failure"));
+    expect(await page.locator("#messages").textContent()).toContain("確認した宿泊候補です");
+    expect(await page.locator(".public-accommodation-presentation").textContent()).toContain("宿");
     expect(modelCalls).toHaveBeenCalledTimes(2); expect(invoke).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(modelCalls.mock.calls)).toContain("server trip");
-    expect(Object.keys(bodies[0]).sort()).toEqual(["conversationId", "tripId", "turnId", "userRequest"]);
+    expect(JSON.stringify(restoredContexts)).toContain("server trip");
+    expect(Object.keys(bodies[0]).sort()).toEqual(["conversationId", "requestedResearchMode", "tripId", "turnId", "uiContext", "userRequest"]);
     expect(JSON.stringify(bodies)).not.toMatch(/NEVER_SEND|PRIVATE_PROFILE|messages|tools|principal/);
-    expect(await page.evaluate(() => (window as any).action.send())).toContain("宿泊候補"); expect(modelCalls).toHaveBeenCalledTimes(2);
+    expect(await page.evaluate(() => (window as any).action.send())).toMatchObject({ text: expect.stringContaining("宿泊候補"), publicAccommodationPresentation: { cards: [{ name: "宿" }] } }); expect(modelCalls).toHaveBeenCalledTimes(2);
     const conflict = await page.evaluate(async (authorization: string) => {
       const request = {...(window as any).action.request, userRequest:"different"};
       const response = await fetch("/api/agent-stream", {method:"POST",headers:{"content-type":"application/json",Authorization:authorization},body:JSON.stringify(request)});

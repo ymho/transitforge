@@ -6,7 +6,6 @@ import { WikipediaPlaceMediaProvider } from "./adapters/wikipedia-place-media-pr
 import { EnrichedPlaceMediaProvider } from "./adapters/enriched-place-media-provider.js";
 import { MapboxPlaceMediaProvider } from "./adapters/mapbox-place-media-provider.js";
 import { BraveImagePlaceMediaProvider } from "./adapters/brave-image-place-media-provider.js";
-import { BedrockConversationModel } from "./adapters/bedrock-conversation-model.js";
 import { S3JourneyDataRepository } from "./adapters/s3-journey-data.js";
 import { SecretsManagerMapboxSearchCredentials } from "./adapters/secrets-manager-mapbox-search-credentials.js";
 import { SecretsManagerBraveSearchCredentials } from "./adapters/secrets-manager-brave-search-credentials.js";
@@ -24,7 +23,6 @@ import type { GroundRouteCoverage } from "./ports/ground-route-provider.js";
 import { createMapboxHttpClient } from "./adapters/mapbox-http-client.js";
 import { HotPepperRestaurantProvider } from "./adapters/hot-pepper-restaurant-provider.js";
 import { SecretsManagerHotPepperCredentials } from "./adapters/secrets-manager-hot-pepper-credentials.js";
-import { agentSystemPrompt } from "./usecases/agent-system-prompt.js";
 import { agentV2SystemPrompt } from "./usecases/agent-v2-system-prompt.js";
 import { createJourneySearchOperation } from "./usecases/journey-search.js";
 import { createPlaceMediaSearchOperation } from "./usecases/place-media-search.js";
@@ -34,7 +32,7 @@ import { createHazardAlertSearchOperation } from "./usecases/hazard-alert-search
 import { createGroundAccessSearchOperation } from "./usecases/ground-access-search.js";
 import { createRestaurantSearchOperation } from "./usecases/restaurant-search.js";
 
-import { AwsBedrockConverseClient, AwsS3Client, AwsSecretsManagerClient } from "./adapters/aws-sdk-clients.js";
+import { AwsS3Client, AwsSecretsManagerClient } from "./adapters/aws-sdk-clients.js";
 import { createProductionConversationAgent } from "./composition/production-conversation-agent.js";
 import { productionServerTools } from "./composition/production-server-tools.js";
 import { createFixedEgressAccommodationOperation } from "./composition/fixed-egress-accommodation.js";
@@ -42,13 +40,11 @@ import { VerifiedAccommodationSelections } from "./usecases/verified-accommodati
 import { rakutenAccommodationSelectionEvidence } from "./adapters/rakuten-accommodation-selection.js";
 import { serverAgentDeadline } from "./composition/server-agent-deadline.js";
 import type { AgentOperation } from "./ports/agent-operation.js";
-import { bedrockCapabilitiesFromConfiguration } from "./adapters/bedrock-provider-capabilities.js";
 import { WebTravelKnowledgeRetriever } from "./adapters/web-travel-knowledge-retriever.js";
 import { BedrockKnowledgeRetriever } from "./adapters/bedrock-knowledge-retriever.js";
 import { BedrockCandidateReranker } from "./adapters/bedrock-candidate-reranker.js";
 import { createTravelDiscoveryOperation } from "./usecases/discover-travel-candidates.js";
 import type { TravelKnowledgeRetriever } from "@raiquora/agent/travel-discovery";
-import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 import type { ResearchExecutionLedger } from "@raiquora/agent/research-execution";
 import type { JourneySearchResponse } from "@raiquora/journey/journey-search-service";
 import { projectPublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
@@ -59,7 +55,7 @@ import { createStrandsServerRuntime } from "./adapters/strands-server-runtime.js
 export function createProductionServerAgent(executionId: string, environment: Readonly<Record<string, string | undefined>> = process.env) {
  const required = (key: string) => { const value = environment[key]; if (!value) throw new Error("Missing server configuration"); return value; };
  const maxExecutionMs = serverAgentDeadline(environment);
- const strandsEnabled = strictBoolean(environment.AGENT_RUNTIME_V2_ENABLED, false);
+ if (environment.AGENT_RUNTIME !== undefined && environment.AGENT_RUNTIME !== "strands-v2") throw new Error("Invalid server runtime configuration");
  const s3 = new AwsS3Client();
  const journey = new S3JourneyDataRepository(s3, { indexBucket: required("AI_TIMETABLE_BUCKET"),
    indexPrefix: environment.PLANNING_TIMETABLE_PREFIX ?? "timetable", snapshotBucket: required("TRAFFIC_SNAPSHOT_BUCKET"),
@@ -109,16 +105,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    catch { /* A displayable result without complete selection provenance stays read-only. */ }
  } });
  const modelId = environment.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
- const region = environment.AWS_REGION ?? "unknown";
- const conversationModel = new BedrockConversationModel(new AwsBedrockConverseClient(), {
-   modelId, lightweightModelId: environment.LIGHTWEIGHT_MODEL_ID || undefined,
-   decisionModelId: environment.DECISION_MODEL_ID || undefined, systemPrompt: agentSystemPrompt,
-   region,
-   capabilities: candidateId => bedrockCapabilitiesFromConfiguration(candidateId, region, environment.BEDROCK_CAPABILITY_MATRIX_JSON),
-   promptCachingEnabled: environment.BEDROCK_PROMPT_CACHING_ENABLED === "true",
-   log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
- });
- const runRuntime = strandsEnabled ? createStrandsServerRuntime(new StrandsAgentEngine({
+ const runRuntime = createStrandsServerRuntime(new StrandsAgentEngine({
    modelId,
    region: required("AWS_REGION"),
    systemPrompt: agentV2SystemPrompt,
@@ -126,12 +113,11 @@ export function createProductionServerAgent(executionId: string, environment: Re
    maxOutputTokens: 4_096,
    maxInvocationOutputTokens: 4_096,
    ...strandsProductionReasoning(modelId),
- })) : undefined;
+ }));
  return createProductionConversationAgent({
    // Open-ended discovery needs several candidate/source/photo rounds and a
-   // reserved final answer/repair round. Only the production Server budget grows.
+   // bounded final structured answer. The production Server budget is unchanged.
    limits: { maxIterations: 10, maxModelCalls: 14, maxToolCalls: 16, maxExecutionMs },
-   semanticIntentEnabled: environment.SEMANTIC_INTENT_ENABLED === "true",
    detailedResearchAllowed: environment.AGENT_DETAILED_RESEARCH_ENABLED === "true",
    ...(environment.AGENT_DETAILED_RESEARCH_ENABLED === "true" ? { detailedResearchLimits: {
      maxIterations: boundedInteger(environment.AGENT_DETAILED_MAX_ITERATIONS, 6, 1, 12),
@@ -140,7 +126,6 @@ export function createProductionServerAgent(executionId: string, environment: Re
      maxExecutionMs: boundedInteger(environment.AGENT_DETAILED_DEADLINE_MS, Math.min(240_000, maxExecutionMs), 1_000, 270_000),
      maxEvidence: boundedInteger(environment.AGENT_DETAILED_MAX_EVIDENCE, 40, 1, 100),
    } } : {}),
-   modelTokenRates: pricingLookup(environment.BEDROCK_MODEL_PRICING_JSON),
    onResearchLedger: ledger => { turnResearchLedger = ledger; },
    projectResult: result => {
      const published = new Set(result.claims.filter(claim => claim.groundingStatus === "supported").flatMap(claim => claim.evidenceIds));
@@ -156,12 +141,11 @@ export function createProductionServerAgent(executionId: string, environment: Re
      ...selectableAccommodations.itemsFor(result.publicAccommodationPresentation)],
    stateTable: required("SERVER_STATE_TABLE_NAME"), tripTable: required("TRIP_TABLE_NAME"),
    newExecutionId: () => executionId, weather,
-   model: conversationModel,
    searchTripRestaurants: restaurantSearch,
    searchTripPlaces: placeSearch,
    ...(groundRoutes ? { tripGroundRoutes: groundRoutes } : {}),
    onGroundRouteEvidence: (id, output) => { groundRouteEvidence.push({ id, output }); },
-   ...(runRuntime ? { runRuntime } : {}),
+   runRuntime,
    diagnostics: { record: async event => { console.info(JSON.stringify({ event: "agent_diagnostic", ...event })); } },
    log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
    additionalTools: [...productionServerTools({
@@ -227,30 +211,4 @@ function boundedInteger(value: string | undefined, fallback: number, minimum: nu
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) throw new Error("Invalid server configuration");
   return parsed;
-}
-
-/** Exact model IDs only. A missing/unknown rate remains costComplete=false instead of guessing. */
-function pricingLookup(raw: string | undefined): (model: string | undefined) => ModelTokenRates | undefined {
-  if (!raw) return () => undefined;
-  let value: unknown;
-  try { value = JSON.parse(raw); } catch { throw new Error("Invalid server configuration"); }
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid server configuration");
-  const rates = new Map<string, ModelTokenRates>();
-  for (const [model, entry] of Object.entries(value)) {
-    if (!model || !entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("Invalid server configuration");
-    const item = entry as Record<string, unknown>;
-    if (Object.keys(item).some((key) => !["pricingVersion", "inputPerMillionUsd", "outputPerMillionUsd", "cacheReadPerMillionUsd", "cacheWritePerMillionUsd"].includes(key)) ||
-        typeof item.pricingVersion !== "string" || !item.pricingVersion || ![item.inputPerMillionUsd, item.outputPerMillionUsd].every(rate) ||
-        item.cacheReadPerMillionUsd !== undefined && !rate(item.cacheReadPerMillionUsd) || item.cacheWritePerMillionUsd !== undefined && !rate(item.cacheWritePerMillionUsd)) throw new Error("Invalid server configuration");
-    rates.set(model, item as unknown as ModelTokenRates);
-  }
-  return model => model === undefined ? undefined : rates.get(model);
-}
-function rate(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
-
-function strictBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined || value === "") return fallback;
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw new Error("Invalid server configuration");
 }

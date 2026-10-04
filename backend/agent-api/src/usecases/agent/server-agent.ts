@@ -1,19 +1,16 @@
 import type { TrustedPrincipal } from "../../contracts/trusted-principal.js";
-import { MultiStepAgentRuntime, type AgentModelClassPolicy } from "@raiquora/agent/agent-runtime";
-import type { AgentModelProvider } from "@raiquora/agent/model-provider";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { ToolEvidenceRegistry } from "@raiquora/agent/tool-evidence-registry";
 import type { AgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
-import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-decision-context";
+import type { AgentRuntimeContextInput } from "@raiquora/agent/agent-runtime-context";
 import { requireTripPrincipal } from "../../contracts/trip-principal.js";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 import { bindPublicPlanTarget } from "@raiquora/agent/public-plan-presentation";
 import type { ResearchTarget } from "../../contracts/server-state.js";
 import { ResearchExecutionLedger, researchBudgetForRuntimeLimits } from "@raiquora/agent/research-execution";
 import { validateAgentRuntimeLimits } from "@raiquora/agent/runtime-policies";
-import type { ModelTokenRates } from "@raiquora/agent/model-usage-cost";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
 import { ServerAgentRuntimeExecutionError, type ServerAgentRuntimeRunner } from "../../ports/server-agent-runtime.js";
 import { evidenceForCurrentIntent } from "@raiquora/agent/intent-action-policy";
@@ -31,10 +28,8 @@ export interface ServerAgentTurn {
 export interface ServerAgentScope extends ServerAgentTurn { executionId: string; researchMode: { requestedMode: "standard" | "detailed"; effectiveMode: "standard" | "detailed" } }
 export interface ServerAgentDependencies {
   newExecutionId: () => string;
-  createModel: (scope: ServerAgentScope) => AgentModelProvider;
   registerTools: (tools: AgentToolRegistry, evidence: ToolEvidenceRegistry, scope: ServerAgentScope) => void;
   limits?: Partial<AgentRuntimeLimits>;
-  modelClassPolicy?: AgentModelClassPolicy;
   now?: () => Date;
   /** Trusted composition only; never supplied through the turn/request payload. */
   loadContext?: (scope: ServerAgentScope) => Promise<AgentRuntimeContextInput>;
@@ -43,11 +38,9 @@ export interface ServerAgentDependencies {
   /** Server authorization/policy only. Browser may request detailed mode but cannot grant it. */
   detailedResearchAllowed?: boolean;
   detailedResearchLimits?: Partial<AgentRuntimeLimits>;
-  /** Exact provider model ID lookup. Unknown models deliberately produce incomplete cost. */
-  modelTokenRates?: (model: string | undefined) => ModelTokenRates | undefined;
   onResearchLedger?: (ledger: ResearchExecutionLedger) => void;
-  /** Optional execution-engine seam. Omit to use the V1 MultiStepAgentRuntime. */
-  runRuntime?: ServerAgentRuntimeRunner;
+  /** Required, trusted server execution engine. No implicit runtime or fallback. */
+  runRuntime: ServerAgentRuntimeRunner;
   /** Trusted Application projection over validated per-turn results. */
   projectResult?: (result: AgentRuntimeResult, scope: ServerAgentScope) => Partial<AgentRuntimeResult>;
 }
@@ -117,48 +110,36 @@ export function createServerAgentApplication(dependencies: ServerAgentDependenci
     dependencies.onResearchLedger?.(researchLedger);
     const toolExecutor = new AgentToolExecutor(tools, evidence, dependencies.now);
     let result: AgentRuntimeResult;
-    if (dependencies.runRuntime) {
-      try {
-        result = await dependencies.runRuntime({
-          executionId: scope.executionId,
-          userRequest: scope.userRequest,
-          researchMode: scope.researchMode,
-          ...(context ? { context } : {}),
-          tools,
-          evidenceRegistry: evidence,
-          toolExecutor,
-          limits: selectedLimits,
-          researchLedger,
-          reportExecution: diagnostic => safeDiagnostic(dependencies, {
-            version: "agent-diagnostic-v1", executionId: scope.executionId,
-            phase: "execution", reason: diagnostic.reason, stopReason: diagnostic.stopReason,
-            ...(diagnostic.limitReason ? { limitReason: diagnostic.limitReason } : {}),
-            ...(diagnostic.counts ? { counts: { ...diagnostic.counts } } : {}),
-            incomplete: diagnostic.reason !== "completed",
-            occurredAt: (dependencies.now?.() ?? new Date()).toISOString(),
-          }),
-          ...(initialEvidence?.length ? { initialEvidence } : {}),
-          ...(reportProgress ? { reportProgress } : {}),
-        });
-      } catch (error) {
-        const failure = error instanceof ServerAgentRuntimeExecutionError
-          ? `v2:${error.stage}:${error.kind}`
-          : "v2:runner:unknown";
-        await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: scope.executionId,
-          phase: "runtime", reason: "failed", mode: failure, incomplete: true,
-          occurredAt: (dependencies.now?.() ?? new Date()).toISOString() });
-        throw error;
-      }
-    } else {
-      result = await new MultiStepAgentRuntime({ model: dependencies.createModel(scope), tools,
-        toolExecutor,
-        limits: selectedLimits, now: dependencies.now, modelClassPolicy: dependencies.modelClassPolicy,
-        researchLedger, modelTokenRates: dependencies.modelTokenRates,
-        reportProgress,
-      }).run({ executionId: scope.executionId, feature: "concierge", userRequest: scope.userRequest,
+    try {
+      result = await dependencies.runRuntime({
+        executionId: scope.executionId,
+        userRequest: scope.userRequest,
         researchMode: scope.researchMode,
-        ...(context ? { context, omitTraceContent: true } : {}),
-        ...(initialEvidence?.length ? { initialEvidence } : {}) });
+        ...(context ? { context } : {}),
+        tools,
+        evidenceRegistry: evidence,
+        toolExecutor,
+        limits: selectedLimits,
+        researchLedger,
+        reportExecution: diagnostic => safeDiagnostic(dependencies, {
+          version: "agent-diagnostic-v1", executionId: scope.executionId,
+          phase: "execution", reason: diagnostic.reason, stopReason: diagnostic.stopReason,
+          ...(diagnostic.limitReason ? { limitReason: diagnostic.limitReason } : {}),
+          ...(diagnostic.counts ? { counts: { ...diagnostic.counts } } : {}),
+          incomplete: diagnostic.reason !== "completed",
+          occurredAt: (dependencies.now?.() ?? new Date()).toISOString(),
+        }),
+        ...(initialEvidence?.length ? { initialEvidence } : {}),
+        ...(reportProgress ? { reportProgress } : {}),
+      });
+    } catch (error) {
+      const failure = error instanceof ServerAgentRuntimeExecutionError
+        ? `v2:${error.stage}:${error.kind}`
+        : "v2:runner:unknown";
+      await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: scope.executionId,
+        phase: "runtime", reason: "failed", mode: failure, incomplete: true,
+        occurredAt: (dependencies.now?.() ?? new Date()).toISOString() });
+      throw error;
     }
     result = { ...result, researchExecution: researchLedger.outcome({ remainingScopes: [],
       ...(result.status === "failed" || result.status === "limit_reached" ? { failed: true, stopReason: result.status === "limit_reached" ? "budget_exhausted" as const : "provider_failure" as const } : {}) }) };

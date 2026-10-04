@@ -1,10 +1,9 @@
 import { expect, it } from "vitest";
 import { createTrip } from "@raiquora/trip/trip";
 import { createAgentContextSnapshot } from "@raiquora/agent/agent-context-snapshot";
-import { agentDecisionContextText, buildAgentDecisionContext } from "@raiquora/agent/agent-decision-context";
 import { multiCityTrip, placeActivity, resolvedPlace, placesTripId, placesAt } from "../../trip/domain/trip-places.fixture";
 
-it("keeps requested, actual, summary, candidates and realtime separate in model context", () => {
+it("keeps requested and adopted places separate in the Application snapshot", () => {
   const base = multiCityTrip(), trip = { ...base, request: { constraints: [{ id: "wishes", strength: "soft" as const, source: "user" as const,
     scope: { type: "trip" as const }, requirement: { type: "destinations" as const, order: "fixed" as const, places: [resolvedPlace("Zermatt")] } }], assumptions: [] } };
   const snapshot = createAgentContextSnapshot(undefined, trip).trip!;
@@ -16,17 +15,7 @@ it("keeps requested, actual, summary, candidates and realtime separate in model 
   expect(snapshot.dailyItinerary?.sourceRevision).toBe(trip.revision);
   expect(snapshot.tripStructure?.segments.map(({ kind }) => kind)).toContain("stay-base");
   expect(snapshot.workload?.tripTravelMinutes.completeness).toBe("unknown");
-  const context = buildAgentDecisionContext({ executionId: "multi", feature: "concierge", userRequest: "自由時間を追加したい", context: {
-    currentTrip: { ...snapshot }, travelCandidates: [{ name: "Paris" }], realtimeFacts: [{ status: "unknown" }],
-  } }, []);
-  expect(JSON.stringify(context.currentTrip)).not.toMatch(/Zermatt|Paris/);
-  expect(JSON.stringify(context.persistedTripRequest)).toContain("Zermatt");
-  expect(context.currentTrip).not.toHaveProperty("destination");
-  expect(context.currentTrip).toHaveProperty("dailyItinerary");
-  expect(context.currentTrip).toHaveProperty("tripStructure");
-  expect(context.currentTrip).toHaveProperty("workload");
-  expect(context.travelCandidates).toEqual([{ name: "Paris" }]);
-  expect(JSON.stringify(context)).not.toContain("source-Zürich");
+
 });
 it("explicitly marks list/text omission and never manufactures an opaque identity", () => {
   const trip = createTrip(placesTripId, "many", placesAt, Array.from({ length: 30 }, (_, i) => placeActivity(`p${i}`,
@@ -44,28 +33,5 @@ it("keeps the chosen reference date in Agent context without treating the memo a
   expect(snapshot.schedule[0]).toMatchObject({ placeName: "青葉庭園", researchSourceUrl: "https://example.org/garden",
     researchObservedAt: "2026-09-26T10:00:00Z" });
   expect(snapshot.schedule[0]).not.toHaveProperty("selectionStatus", "verified");
-  const context = buildAgentDecisionContext({ executionId: "research", feature: "concierge", userRequest: "今も開いていますか",
-    context: { currentTrip: snapshot } }, []);
-  expect(agentDecisionContextText(context)).toContain("2026-09-26T10:00:00Z");
-});
-it("retains exact IDs and omission semantics through all context compression stages", () => {
-  // Full-width / whitespace in opaque IDs must not be normalized into another provider ID.
-  const trip = createTrip(placesTripId, "many", placesAt, Array.from({ length: 24 }, (_, i) => placeActivity(`p${i}`, resolvedPlace(`P${i}`, ` Ａ:${i} `))),
-    undefined, undefined, "表示だけ");
-  const snapshot = createAgentContextSnapshot(undefined, trip).trip!;
-  expect(snapshot.placesTruncated).toBe(false);
-  const context = buildAgentDecisionContext({ executionId: "compressed", feature: "concierge", userRequest: "整理して", context: {
-    currentTrip: { ...snapshot }, currentJourney: { journeys: Array.from({ length: 20 }, () => ({ legs: Array.from({ length: 20 }, () => ({ description: "detail".repeat(100) })) })) },
-  } }, []);
-  expect(context.currentTrip?.placesTruncated).toBe(true); // 24 -> 20 at the general context boundary
-  const encoded = agentDecisionContextText(context), parsed = JSON.parse(encoded.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
-  expect(parsed.currentTrip.itineraryPlaces.visitedPlaces.length).toBeLessThan(20);
-  expect(parsed.currentTrip.itineraryPlaces.visitedPlaces.map((p: { itemId: string }) => p.itemId))
-    .toEqual(Array.from({ length: parsed.currentTrip.itineraryPlaces.visitedPlaces.length }, (_, i) => `p${i}`));
-  expect(parsed.currentTrip.itineraryPlaces.visitedPlaces[0].place.ref.providerPlaceId).toBe(" Ａ:0 ");
-  expect(parsed.currentTrip.placesTruncated).toBe(true);
-  expect(parsed.currentTrip.summaryDestination).toBe("表示だけ");
-  expect(parsed.currentTrip.placeSemantics).toContain("incomplete");
-  expect(parsed.currentTrip).not.toHaveProperty("destination");
-  expect(encoded).not.toContain("[depth-limited]");
+
 });

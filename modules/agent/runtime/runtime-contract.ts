@@ -1,6 +1,5 @@
 import type { AssessedEvidenceClaim, Evidence } from "./evidence-model";
 import type { AgentTrace } from "./agent-trace";
-import type { AgentRuntimeContextInput } from "./agent-decision-context";
 import type { AgentTurnObservation } from "./agent-turn-outcome";
 
 export type AgentRuntimeFeature =
@@ -9,18 +8,6 @@ export type AgentRuntimeFeature =
   | "train_guidance"
   | "operational_analysis"
   | "travel_planning";
-
-export interface AgentRuntimeRequest {
-  executionId: string;
-  feature: AgentRuntimeFeature;
-  userRequest: string;
-  researchMode?: { requestedMode: "standard" | "detailed"; effectiveMode: "standard" | "detailed" };
-  context?: AgentRuntimeContextInput;
-  /** Trusted host privacy policy, never model/transport input. Keeps diagnostic counts and timing. */
-  omitTraceContent?: boolean;
-  /** Trusted Application boundary only, never general/model Context or public request body. */
-  initialEvidence?: Evidence[];
-}
 
 export type AgentRuntimeStatus =
   | "completed"

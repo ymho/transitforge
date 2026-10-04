@@ -5,7 +5,6 @@ import { evaluateAreaTripImpact } from "@raiquora/trip/area-trip-impact";
 import { buildInTripContext } from "@raiquora/trip/in-trip-context";
 import { inTripApplicationEvidence } from "@raiquora/agent/in-trip-application-evidence";
 import { validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
-import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 
 describe("InTrip Application Evidence", () => {
   it("projects adopted next itinerary and saved rail typed facts, without recalculation or mutation", () => {
@@ -60,28 +59,5 @@ describe("InTrip Application Evidence", () => {
     expect(() => inTripApplicationEvidence({ ...snapshot, ownerSubject: "PRIVATE" } as never)).toThrow();
     const poisoned = structuredClone(snapshot); Object.assign(poisoned.impacts.items[0]!, { raw: "PRIVATE" });
     expect(() => inTripApplicationEvidence(poisoned)).toThrow();
-  });
-  it("prioritizes initial Evidence over place summaries and preserves verifiedFacts through compression", () => {
-    const f = inTripFixture(), initialEvidence = inTripApplicationEvidence(f.snapshot);
-    const context = buildAgentDecisionContext({ executionId: "test", feature: "concierge", userRequest: "次は？", initialEvidence,
-      context: { inTrip: f.snapshot, verifiedFacts: Array.from({ length: 22 }, (_, i) => ({
-        evidenceId: i ? `place-${i}` : initialEvidence[0]!.id, category: "place", subject: "地点", summary: "未採用候補" })),
-      travelProfile: { preference: "自然" }, conversation: { summary: "未検証の要約", messages: Array.from({ length: 30 }, () => ({ role: "user" as const, text: "長い履歴".repeat(200) })) } } }, []);
-    expect(context.verifiedFacts).toHaveLength(20);
-    expect(context.verifiedFacts.slice(0, initialEvidence.length).map((f) => f.evidenceId)).toEqual(initialEvidence.map((e) => e.id));
-    expect(new Set(context.verifiedFacts.map((f) => f.evidenceId)).size).toBe(20);
-    const text = agentDecisionContextText(context), compressed = JSON.parse(text.match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
-    expect(compressed.verifiedFacts.slice(0, initialEvidence.length)).toEqual(context.verifiedFacts.slice(0, initialEvidence.length).map((f) => ({ evidenceId: f.evidenceId, sourceType: f.sourceType })));
-    expect(text).toContain("<verified_evidence>");
-    expect(text.split(context.verifiedFacts[0]!.summary).length - 1).toBe(1);
-    expect(text).toContain("inTripAnswerPlan");
-    expect(text).toContain("Application renderer"); expect(text).toContain("最大6件");
-    expect(text.match(/<verified_evidence>([\s\S]*?)<\/verified_evidence>/u)![1]!.length + JSON.stringify(compressed).length).toBeLessThanOrEqual(24_000);
-    expect(JSON.stringify(initialEvidence)).not.toMatch(/未検証の要約|未採用候補/);
-  });
-  it("does not add an in-trip answer mode or Evidence brief for unverified planning context", () => {
-    const context = buildAgentDecisionContext({ executionId: "planning", feature: "concierge", userRequest: "旅行したい", context: { travelProfile: { likes: "海" } } }, []);
-    const text = agentDecisionContextText(context);
-    expect(text).not.toContain("<verified_evidence>"); expect(text).not.toContain("旅行中の回答契約");
   });
 });

@@ -1,5 +1,3 @@
-import type { AgentDecisionSummary } from "./agent-decision-summary";
-import type { MissingRequirement } from "./semantic-decision";
 import type { EffectiveIntent } from "./effective-intent";
 import type { AgentToolDescriptor, AgentToolError, AgentToolIntentRequirement } from "./tool-contract";
 import type { ConversationIntentFact, IntentTarget, IntentValue } from "@raiquora/trip/conversation-intent";
@@ -49,14 +47,6 @@ export function validateToolIntentUse(
   return { accepted: true, dependencyTargets: [...dependencies] };
 }
 
-/** Optional user-decision questions must not ask again for an already accepted or
- * explicitly undecided/withheld field. Authorization/safety remain independent. */
-export function asksForKnownIntent(summary: AgentDecisionSummary | undefined, effective: EffectiveIntent | undefined): boolean {
-  if (!summary || !effective || summary.selectedAction !== "ask_user") return false;
-  return (summary.missingRequirements ?? []).some((requirement) => requirement.action === "ask" && requirement.resolution === "user_decision" &&
-    targetForQuestion(requirement) !== undefined && answered(effective, targetForQuestion(requirement)!));
-}
-
 /** Retains evidence whose declared semantic inputs are unaffected. Legacy evidence
  * has no reviewable dependency and is conservatively invalidated on a meaning change. */
 export function evidenceForCurrentIntent(
@@ -86,29 +76,6 @@ function matchesInput(value: IntentValue, input: unknown): boolean {
   if (value.kind === "text") return input === value.text;
   if (value.kind === "candidate_ref") return input === value.candidateRef;
   return false;
-}
-
-function answered(effective: EffectiveIntent, target: IntentTarget): boolean {
-  if (effective.actualConversationFacts.some((fact) => fact.target === target)) return true;
-  if (effective.activeBaseFacts.some((fact) => fact.target === target)) return true;
-  if (target === "goal" && effective.activeBaseGoal) return true;
-  if (target === "party_size" && effective.activeBaseParty) return true;
-  return false;
-}
-
-function targetForQuestion(requirement: MissingRequirement): IntentTarget | undefined {
-  const field = requirement.field.toLowerCase();
-  if (["origin", "origin_station", "departure_place"].includes(field)) return "origin";
-  if (["destination", "destination_station", "location"].includes(field)) return "destination";
-  if (["date", "start_date", "departure_date", "service_date"].includes(field)) return "start_date";
-  if (["end_date", "return_date"].includes(field)) return "end_date";
-  if (["duration", "nights", "days"].includes(field)) return "duration";
-  if (["party", "party_size", "travelers", "adults"].includes(field)) return "party_size";
-  if (["budget", "price"].includes(field)) return "budget";
-  if (["travel_style", "experience"].includes(field)) return "experience";
-  if (["accommodation", "lodging"].includes(field)) return "accommodation";
-  if (["transport", "transport_mode"].includes(field)) return "transport";
-  return undefined;
 }
 
 function reject(code: "precondition_missing" | "precondition_failed" | "stale_revision", message: string): ToolIntentPolicyDecision {

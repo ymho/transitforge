@@ -35,8 +35,8 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     id: "V2-SEMANTIC-01",
     kind: "shared_invariant",
     invariant: "accepted meaning survives answer failure and retry does not reinterpret the same turn",
-    testFile: "backend/agent-api/src/usecases/agent/conversation-turn.test.ts",
-    testName: "keeps accepted intent when answer generation fails and does not reinterpret on retry",
+    testFile: "backend/agent-api/src/composition/strands-conversation-production-shaped.test.ts",
+    testName: "persists a V2 intent A-commit across answer failure and retries without reapplying the semantic change",
   },
   {
     id: "V2-INTENT-01",

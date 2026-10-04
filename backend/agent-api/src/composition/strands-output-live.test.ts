@@ -70,7 +70,7 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     trips.seed(createTrip(stateMetadata().tripId, "検討中の旅", "2026-09-18T00:00:00Z"), principal.subject);
     await state.conversations.create(principal, conversationId, metadata);
     const { calls, discovery, readWebPages, searchPlaceMedia } = fixedDestinationProviders();
-    const v1 = { converse: vi.fn(async () => { throw new Error("V1 must not run"); }) };
+
     let execution = 0;
     const engine = new StrandsAgentEngine({ modelId, region: "ap-northeast-1", systemPrompt: agentV2SystemPrompt,
       maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
@@ -99,7 +99,7 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
     } });
     const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
       diagnostics: { record: async ({ phase, reason, mode }) => { console.log(JSON.stringify({ phase, reason, mode })); } },
-      model: v1, weather: { search: vi.fn() }, newExecutionId: () => `native-live-${++execution}`,
+       weather: { search: vi.fn() }, newExecutionId: () => `native-live-${++execution}`,
       limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
       runRuntime: createStrandsServerRuntime(engine),
       // Use the production purpose read and its source/media projection. The
@@ -147,7 +147,6 @@ describe.skipIf(!enabled)("V2 native structured output with real Bedrock", () =>
       }
       if (index === 3) expect.soft(savedTrip?.items, "an unavailable save must not mutate the Trip itinerary").toEqual([]);
     }
-    expect(v1.converse).not.toHaveBeenCalled();
     const history = await state.conversations.history(principal, conversationId);
     expect.soft(successfulTurns).toBe(4);
     expect.soft(history.items).toHaveLength(8);
@@ -187,7 +186,7 @@ describe.skipIf(!enabled)("V2 itinerary proposal conversation with real Bedrock"
       },
     });
     const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-      model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() },
+       weather: { search: vi.fn() },
       newExecutionId: () => `78300000-3333-4000-8000-${String(++execution).padStart(12, "0")}`, runRuntime: createStrandsServerRuntime(engine),
       limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 2, maxExecutionMs: 60000 },
       diagnostics: { record: async event => {

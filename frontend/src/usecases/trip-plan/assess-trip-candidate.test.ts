@@ -1,13 +1,12 @@
 import { expect, it, vi } from "vitest";
 import { candidateAssessmentFixture, assessmentAt } from "../../../../modules/trip/domain/candidate-assessment.fixture";
 import { assessTripCandidate } from "./assess-trip-candidate";
-import { candidateAssessmentContext } from "@raiquora/agent/candidate-assessment-context";
 import { candidateAssessmentView } from "../../presentation/trip-plan/candidate-assessment-view";
+import { candidateAssessmentContext } from "@raiquora/agent/candidate-assessment-context";
 import { candidateAssessmentEvidence, candidateAssessmentDescriptor, registerCandidateAssessmentTool } from "../agent/candidate-assessment-tool";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
 import { validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
-import { buildAgentDecisionContext, agentDecisionContextText } from "@raiquora/agent/agent-decision-context";
 import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
 import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
 
@@ -29,6 +28,8 @@ it("keeps verified candidate endpoints/date in comparison Evidence without promo
   expect(invalid.comparison).toBeUndefined();
 });
 
+
+
 it("uses acquired facts only, preserves inputs, and keeps partial candidates visible", async () => {
   const f = candidateAssessmentFixture();
   const original = structuredClone(f);
@@ -39,12 +40,6 @@ it("uses acquired facts only, preserves inputs, and keeps partial candidates vis
   const context = candidateAssessmentContext(pair);
   expect(context.candidate).toEqual({ id: f.candidate.id }); expect(context.currentTrip).toBeUndefined();
   expect(JSON.stringify(context)).not.toMatch(/sourceUrl|hourly|bookingUrl|delayMinutes/);
-  const modelContext = buildAgentDecisionContext({ executionId: "assessment", feature: "concierge", userRequest: "比較したい",
-    context: { currentTrip: { title: "採用済み", schedule: [] }, travelCandidates: [pair], realtimeFacts: [{ delayMinutes: 10 }] } }, []);
-  const parsed = JSON.parse(agentDecisionContextText(modelContext).match(/<agent_context>([\s\S]*)<\/agent_context>/u)![1]!);
-  expect(parsed.travelCandidates[0].assessment.price.observations[0].price.currency).toBe("EUR");
-  expect(parsed.travelCandidates[0].assessment.hardConstraints[0].constraintId).toBe("region");
-  expect(parsed.currentTrip.assessment).toBeUndefined(); expect(parsed.realtimeFacts[0].delayMinutes).toBe(10);
   const views = candidateAssessmentView(pair.assessment);
   expect(views.find((v) => v.label.startsWith("移動"))).toMatchObject({ tone: "warning" });
   expect(views.map((v) => v.label).join(" ")).toContain("EUR 120.00");

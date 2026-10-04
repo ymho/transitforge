@@ -56,6 +56,15 @@ V1の内部クラス、Prompt repair、planning guard、fallbackの挙動は互�
 旧Semantic IntentはOFF、Agentの業務Toolはread-onlyを維持し、V1への自動fallbackは追加しない。V1は緊急時の明示的な復帰用に一時保持する。
 設定の読み戻し、既知の未完了、復帰と実装順は[Agent v2開発用実環境切替](../architecture/agent-v2-development-cutover.md)を参照する。
 
+### 2026-10-04 V1実行エンジン撤去（#788）
+
+Backendをv2専用にし、旧Runtime選択、旧モデル/Prompt生成、旧Semantic pre-loop、repair/rendererと専用テスト・Live Eval・Actionsを撤去する。
+ServerAgentRuntimeRunnerは必須とし、渡し忘れによる旧Runtime起動をなくす。
+Applicationの条件反映・採用・CAS・owner・Evidence・history/replayは保持し、必要な統合テストはnative SDK fixtureへ移す。
+Bedrockの地点詳細要約とAPI・保存形式の`v1`は旧実行エンジンと別なので残す。
+旧フラグはTerraformから削除し、CDは`AGENT_RUNTIME=strands-v2`、旧フラグの不在、activeなモデル設定を読み戻す。
+フラグでV1へ戻す手順は失効する。復旧は下記運用文書に従う。画面の旧union分離は#721、横断的な製品検証は#758/#751の別課題である。
+
 ## 影響
 
 - Agent loopのライフサイクルとTool dispatchはStrandsに委譲できる。

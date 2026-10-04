@@ -1,18 +1,14 @@
-import { structuredModelClassPolicy } from "@raiquora/agent/structured-model-class-policy";
 import { randomUUID } from "node:crypto";
 import { externalTravelEvidence } from "@raiquora/agent/external-travel-evidence";
 import { weatherToolDescriptor } from "@raiquora/agent/weather-tool-descriptor";
-import { ConversationModelProvider } from "./adapters/conversation-model-provider.js";
-import type { ConversationModel } from "./ports/conversation-model.js";
 import type { WeatherForecastProvider } from "./ports/weather-provider.js";
 import { createWeatherForecastOperation } from "./usecases/weather-forecast.js";
 import { createServerAgentApplication, type ServerAgentDependencies } from "./usecases/agent/server-agent.js";
 import { registerServerTools, type ServerAgentToolBinding } from "./usecases/agent/server-tools.js";
 import type { AgentDiagnosticsSink } from "./ports/agent-diagnostics.js";
 
-/** Internal composition only. Public routes remain on the Browser runtime until #480. */
+/** Server composition: Application owns tools/state; the required engine owns the model loop. */
 export function createServerAgent(options: {
-  model: ConversationModel;
   weather: WeatherForecastProvider;
   additionalTools?: readonly ServerAgentToolBinding[];
   limits?: ServerAgentDependencies["limits"];
@@ -23,23 +19,19 @@ export function createServerAgent(options: {
   log?: ServerAgentDependencies["log"];
   detailedResearchAllowed?: boolean;
   detailedResearchLimits?: Partial<import("@raiquora/agent/runtime-policies").AgentRuntimeLimits>;
-  modelTokenRates?: ServerAgentDependencies["modelTokenRates"];
   onResearchLedger?: ServerAgentDependencies["onResearchLedger"];
   projectResult?: ServerAgentDependencies["projectResult"];
-  /** Trusted composition-only execution engine override. Never sourced from request/env. */
-  runRuntime?: ServerAgentDependencies["runRuntime"];
+  /** Trusted composition-only execution engine. Never sourced from request payloads. */
+  runRuntime: ServerAgentDependencies["runRuntime"];
 }) {
   return createServerAgentApplication({
     newExecutionId: options.newExecutionId ?? randomUUID,
-    createModel: scope => new ConversationModelProvider(options.model, scope.executionId),
-    modelClassPolicy: structuredModelClassPolicy,
     limits: options.limits,
     loadContext: options.loadContext,
     diagnostics: options.diagnostics,
     log: options.log,
     detailedResearchAllowed: options.detailedResearchAllowed,
     detailedResearchLimits: options.detailedResearchLimits,
-    modelTokenRates: options.modelTokenRates,
     onResearchLedger: options.onResearchLedger,
     projectResult: options.projectResult,
     runRuntime: options.runRuntime,

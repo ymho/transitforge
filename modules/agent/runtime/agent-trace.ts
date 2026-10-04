@@ -6,7 +6,7 @@ import type { AgentToolResult } from "./tool-contract";
 import type {
   AgentKnownConstraint,
   AgentKnownPreference,
-} from "./agent-decision-context";
+} from "./agent-runtime-context";
 
 export type AgentTraceStatus = "completed" | "failed" | "cancelled";
 

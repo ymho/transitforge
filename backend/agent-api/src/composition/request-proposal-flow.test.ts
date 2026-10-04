@@ -5,7 +5,7 @@ import type { TripRequest } from "@raiquora/trip/trip-request";
 import { createConversationServerAgent } from "./conversation-server-agent.js";
 import { stateDynamoFixture, stateA, stateB, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
-import type { ConversationModel, ConversationModelRequest } from "../ports/conversation-model.js";
+import { applicationProposalRuntime } from "./proposal-runtime.fixture.js";
 
 const request: TripRequest = { constraints: [{ id: "pace", source: "assumption", strength: "soft", scope: { type: "trip" }, requirement: { type: "pace", value: 0.3 }, assumptionId: "a" }],
   assumptions: [{ id: "a", source: "model", status: "unconfirmed", text: "ゆっくり巡る仮置き", affects: [{ type: "constraint", constraintId: "pace" }] }] };
@@ -14,14 +14,11 @@ async function fixture(_withTrip = true, initialRequest?: TripRequest, items: re
   const trip = createTrip(secondId, "同名の旅程", "2026-09-18T00:00:00Z", items, initialRequest);
   await trips.repository.create(stateA, trip);
   await state.conversations.create(stateA, conversationId, stateMetadata());
-  const model = { converse: vi.fn<ConversationModel["converse"]>() };
-  model.converse.mockImplementation(async (_input: ConversationModelRequest) => model.converse.mock.calls.length === 1 ? {
-    message: { role: "assistant" as const, content: [{ toolUse: { toolUseId: "proposal", name: "propose_request_assumptions", input: { request } } }] },
-    stopReason: "tool_use" as const, metadata: { modelId: "test", latencyMs: 1 },
-  } : { message: { role: "assistant" as const, content: [{ text: "条件の仮置き案を確認してください。まだ保存していません。" }] }, stopReason: "end_turn" as const, metadata: { modelId: "test", latencyMs: 1 } });
-  const options = { stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client, model, weather: { search: vi.fn() }, newExecutionId: () => "execution" };
+  const steps: Array<{ name: string; input: Record<string, unknown> }> = [{ name: "propose_request_assumptions", input: { request } }];
+  const runRuntime = applicationProposalRuntime(() => steps[0]);
+  const options = { stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client, runRuntime, weather: { search: vi.fn() }, newExecutionId: () => "execution" };
   const input = { principal: stateA, conversationId, turnId: secondId, userRequest: "ゆっくり巡りたい" };
-  return { state, trips, trip, model, options, input, app: createConversationServerAgent(options) };
+  return { state, trips, trip, runRuntime, steps, options, input, app: createConversationServerAgent(options) };
 }
 it("binds model proposal to the authorized snapshot, persists/replays it, and leaves Trip/Profile unchanged", async () => {
   const f = await fixture(), before = structuredClone(f.trips.records);
@@ -33,14 +30,12 @@ it("binds model proposal to the authorized snapshot, persists/replays it, and le
   expect(history.items[1].tripUpdateProposal).toEqual(result.tripUpdateProposal);
   expect(JSON.stringify(history)).not.toMatch(/toolUse|executionId|trace|principal/);
   expect(await createConversationServerAgent(f.options).runConversationTurn(f.input)).toEqual(result);
-  expect(f.model.converse).toHaveBeenCalledTimes(2);
+  expect(f.runRuntime).toHaveBeenCalledOnce();
   await expect(f.app.runConversationTurn({ ...f.input, principal: stateB })).rejects.toMatchObject({ code: "not-found" });
 });
 it("keeps an inspiration Trip as the proposal base while history revision changes", async () => {
   const original = { goal: "散策", constraints: [], assumptions: [] }, f = await fixture(true, original);
-  f.model.converse.mockImplementationOnce(async () => ({ message: { role: "assistant", content: [{ toolUse: { toolUseId: "change", name: "propose_request_changes", input: { changes: [
-    { type: "set_goal", goal: "美術館", reason: "目的の変更案" },
-  ] } } }] }, stopReason: "tool_use", metadata: { modelId: "test", latencyMs: 1 } }));
+  f.steps[0] = { name: "propose_request_changes", input: { changes: [{ type: "set_goal", goal: "美術館", reason: "目的の変更案" }] } };
   const result = await f.app.runConversationTurn(f.input);
   expect(result.tripUpdateProposal).toMatchObject({ tripId: secondId, baseRevision: 0 });
   expect(result.consultationRequestProposal).toBeUndefined();
@@ -51,22 +46,20 @@ it("keeps an inspiration Trip as the proposal base while history revision change
 it("persists and replays a reviewed replacement while retaining the original saved Trip", async () => {
   const original: TripRequest = { constraints: [{ id: "pace", source: "user", strength: "soft", scope: { type: "trip" }, requirement: { type: "pace", value: 0.7 } }], assumptions: [] };
   const f = await fixture(true, original);
-  f.model.converse.mockImplementationOnce(async () => ({ message: { role: "assistant", content: [{ toolUse: { toolUseId: "change", name: "propose_request_changes", input: { changes: [
-    { type: "replace_constraint", constraintId: "pace", strength: "soft", requirement: { type: "pace", value: 0.2 }, reason: "ゆっくり巡る案" },
-  ] } } }] }, stopReason: "tool_use", metadata: { modelId: "test", latencyMs: 1 } }));
+  f.steps[0] = { name: "propose_request_changes", input: { changes: [{ type: "replace_constraint", constraintId: "pace", strength: "soft", requirement: { type: "pace", value: 0.2 }, reason: "ゆっくり巡る案" }] } };
   const result = await f.app.runConversationTurn(f.input);
   expect(result.tripUpdateProposal?.patches[0]).toMatchObject({ type: "request", request: { constraints: [{ id: "pace", source: "assumption", requirement: { type: "pace", value: 0.2 } }] } });
   expect((await f.trips.repository.get(stateA, secondId))?.request).toEqual(original);
   expect((await f.state.conversations.history(stateA, conversationId)).items[1].tripUpdateProposal).toEqual(result.tripUpdateProposal);
-  expect(await f.app.runConversationTurn(f.input)).toEqual(result); expect(f.model.converse).toHaveBeenCalledTimes(2);
+  expect(await f.app.runConversationTurn(f.input)).toEqual(result); expect(f.runRuntime).toHaveBeenCalledOnce();
 });
 
 it("retains an item preview in Trip conversation history without modifying the Trip", async () => {
   const shrine: ItineraryItem = { id: "shrine", title: "出雲大社", type: "activity", category: "sightseeing", schedule: { type: "day", date: "2026-10-01" } };
   const f = await fixture(true, undefined, [shrine]);
-  f.model.converse.mockImplementationOnce(async () => ({ message: { role: "assistant", content: [{ toolUse: { toolUseId: "meal", name: "propose_trip_item_change", input: {
+  f.steps[0] = { name: "propose_trip_item_change", input: {
     action: "add-activity", expectedRevision: 0, dayKey: projectDailyItinerary(f.trip).days[0]!.dayKey, afterId: "shrine", title: "昼食", category: "food", placeName: "出雲そば",
-  } } }] }, stopReason: "tool_use", metadata: { modelId: "test", latencyMs: 1 } }));
+  } };
   const result = await f.app.runConversationTurn({ ...f.input, userRequest: "2日目の昼食に出雲そばを追加したい" });
   expect(result.tripUpdateProposal).toMatchObject({ tripId: secondId, baseRevision: 0 });
   expect(result.tripUpdateProposal?.patches[0]).toMatchObject({ type: "add", item: { category: "food", place: { name: "出雲そば", sources: [] } } });

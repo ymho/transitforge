@@ -40,7 +40,7 @@ describe.skipIf(process.env.AGENT_V2_LIVE !== "true")("#758 Bedrock with fixed t
       accommodation: vi.fn(), journey: vi.fn() });
     let executionCounts: { modelCalls?: number; toolCalls?: number; inputTokens?: number; outputTokens?: number } | undefined;
     const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client,
-      tripClient: trips.client, model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) },
+      tripClient: trips.client,
       diagnostics: { record: async event => { if (event.phase === "execution") executionCounts = event.counts; } },
       weather: { search: vi.fn() }, newExecutionId: () => `product-live-${id}`,
       runRuntime: createStrandsServerRuntime(new StrandsAgentEngine({ modelId: process.env.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0",

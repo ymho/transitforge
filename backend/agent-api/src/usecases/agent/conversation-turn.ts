@@ -4,8 +4,6 @@ import type { ConversationTurnContinuity, ConversationTurnIdentity, Conversation
   ConversationTurnResult } from "../../ports/conversation-turn-repository.js";
 import type { ServerAgentTurn } from "./server-agent.js";
 import { presentationFromObservation, presentationFromPublicPlan } from "@raiquora/agent/conversation-working-state";
-import { semanticStateOf } from "@raiquora/agent/conversation-working-state";
-import { acceptedIntentDeltaFromInterpretation, type UtteranceInterpretation } from "@raiquora/agent/semantic-interpretation";
 import type { AgentDiagnosticEvent, AgentDiagnosticsSink } from "../../ports/agent-diagnostics.js";
 import { reserveResearchResultSave } from "@raiquora/agent/research-execution";
 import type { AgentProgressReporter } from "@raiquora/agent/agent-progress";
@@ -27,8 +25,6 @@ export function createConversationTurnApplication(dependencies: {
   runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number, reportProgress?: AgentProgressReporter,
     acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) =>
     Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
-  interpretIntent?: (input: { userRequest: string; calendarDate?: string; overlay: import("@raiquora/trip/conversation-intent").ConversationIntentOverlay;
-    turnId: string; workingState?: import("@raiquora/agent/conversation-working-state").ConversationWorkingState }) => Promise<UtteranceInterpretation>;
   adoptTripProposal?: (identity: ConversationTurnIdentity, lease: ConversationTurnLease, proposal: import("@raiquora/trip/trip").TripUpdateProposal) => Promise<void>;
   diagnostics?: AgentDiagnosticsSink;
   log?: (event: string, fields: Record<string, unknown>) => void;
@@ -51,34 +47,9 @@ export function createConversationTurnApplication(dependencies: {
     let result: ConversationTurnResult;
     let continuity: ConversationTurnContinuity | undefined;
     try {
-      if (begun.state === "started" && dependencies.interpretIntent) {
-        const workingState = await dependencies.turns.getWorkingState(principal, conversationId);
-        const semantic = semanticStateOf(workingState);
-        await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "interpret", reason: "started",
-          occurredAt: new Date().toISOString(), correlation: { turnId, intentRevision: semantic.overlay.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" } });
-        const interpretation = await dependencies.interpretIntent({ userRequest, calendarDate: uiContext?.calendarDate, overlay: semantic.overlay, turnId,
-          ...(workingState ? { workingState } : {}) });
-        await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "interpret",
-          reason: interpretation.outcome === "delta" ? "validated" : interpretation.outcome,
-          occurredAt: new Date().toISOString(), correlation: { turnId, intentRevision: semantic.overlay.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" },
-          counts: { generated: interpretation.operations.length }, incomplete: interpretation.outcome === "ambiguous" || interpretation.outcome === "unsupported" });
-        const delta = acceptedIntentDeltaFromInterpretation({ interpretation, userRequest, turnId,
-          baseIntentRevision: semantic.overlay.intentRevision, calendarDate: uiContext?.calendarDate, ...(workingState ? { workingState } : {}) });
-        if (delta) {
-          await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId, phase: "resolve", reason: "validated",
-            occurredAt: new Date().toISOString(), correlation: { turnId, intentRevision: semantic.overlay.intentRevision, schemaVersion: "semantic-v1", ruleVersion: "intent-v1" },
-            counts: { validated: delta.operations.length }, refs: delta.operations.map(({ operationId }) => operationId) });
-          const receipt = await dependencies.turns.acceptIntent(identity, begun.lease, delta);
-          acceptedReceipt = receipt;
-          await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "reduce", "completed", receipt));
-          await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "accept", "accepted", receipt));
-          await reportIntentAccepted?.(publicSemanticReceipt(receipt));
-          await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", receipt));
-        }
-      }
       // Resuming an operation-aware turn must allow the remaining independent updates.
       // Legacy accepted turns stay sealed; their original receipt remains replayable.
-      const allowConditions = dependencies.conditions && !dependencies.interpretIntent &&
+      const allowConditions = dependencies.conditions &&
         (begun.state === "started" || begun.conditionReceipts !== undefined);
       const applyCondition = allowConditions ? createConversationConditionApplication(dependencies.conditions!, identity, begun.lease, userRequest, uiContext?.calendarDate) : undefined;
       const acceptCondition = applyCondition ? async (change: ConversationConditionInput) => {

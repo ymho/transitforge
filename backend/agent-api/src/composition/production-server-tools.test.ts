@@ -1,10 +1,9 @@
 import { expect, it, vi } from "vitest";
-import { BedrockConversationModel } from "../adapters/bedrock-conversation-model.js";
+import { strandsScriptedRuntime } from "../adapters/strands-scripted-model.fixture.js";
 import { createTrip } from "@raiquora/trip/trip";
 import { createFixedEgressProviderHandler } from "../adapters/fixed-egress-provider-handler.js";
 import { createFixedEgressAccommodationOperation } from "./fixed-egress-accommodation.js";
 import { productionServerTools } from "./production-server-tools.js";
-import { hasStructuredPresentationEvidence } from "@raiquora/agent/grounded-answer";
 import { createProductionConversationAgent } from "./production-conversation-agent.js";
 import { stateDynamoFixture, stateA, conversationId, secondId, stateMetadata } from "../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
@@ -63,9 +62,9 @@ it("materializes discovery leads into verified page evidence in the same tool ro
   const response = await search.operation({}, { requestId: "consultation" });
   const evidence = search.evidence(response.body, evidenceContext);
   expect(readWebPages).toHaveBeenCalledWith({ urls: [url] });
-  expect(evidence.filter(hasStructuredPresentationEvidence)).toHaveLength(1);
+  expect(evidence.filter(item => item.facts.sourcePrecision === "read-page")).toHaveLength(1);
   expect(evidence.find((item) => item.knowledgeKind === "unverified_information")).toBeDefined();
-  expect(evidence.find(hasStructuredPresentationEvidence)?.facts.sourceExcerpt).toContain("白壁の町並み");
+  expect(evidence.find(item => item.facts.sourcePrecision === "read-page")?.facts.sourceExcerpt).toContain("白壁の町並み");
 });
 
 it("finds an attributed photo tied to the fetched destination page", async () => {
@@ -95,7 +94,7 @@ it("never promotes discovery snippets into verified travel plans when the page r
   const response = await search.operation({}, { requestId: "consultation" });
   const evidence = search.evidence(response.body, evidenceContext);
   expect(evidence).toHaveLength(1);
-  expect(evidence.some(hasStructuredPresentationEvidence)).toBe(false);
+  expect(evidence.some(item => item.facts.sourcePrecision === "read-page")).toBe(false);
 });
 
 it("reads search_web hits before presenting them as verified sources", async () => {
@@ -109,8 +108,8 @@ it("reads search_web hits before presenting them as verified sources", async () 
   const search = tools.find((tool) => tool.descriptor.name === "search_web")!;
   const response = await search.operation({ query: "歴史" }, { requestId: "consultation" });
   const evidence = search.evidence(response.body, { ...evidenceContext, toolName: "search_web" });
-  expect(evidence.filter(hasStructuredPresentationEvidence)).toHaveLength(1);
-  expect(evidence.find(hasStructuredPresentationEvidence)?.facts.sourcePrecision).toBe("read-page");
+  expect(evidence.filter(item => item.facts.sourcePrecision === "read-page")).toHaveLength(1);
+  expect(evidence.find(item => item.facts.sourcePrecision === "read-page")?.facts.sourcePrecision).toBe("read-page");
 });
 
 it("compares only a verified journey result from the same server turn", async () => {
@@ -134,21 +133,21 @@ it("restores a Trip without Profile, invokes fixed-egress through the existing o
   const provider = createFixedEgressProviderHandler({ search });
   const invoke = vi.fn(async (input: { Payload: Uint8Array }) => ({ StatusCode: 200,
     Payload: new TextEncoder().encode(JSON.stringify(await provider(JSON.parse(new TextDecoder().decode(input.Payload))))) }));
-  const converse = vi.fn(async () => converse.mock.calls.length === 1
-    ? { output: { message: { role: "assistant", content: [{ toolUse: { toolUseId: "accommodation", name: "search_accommodations",
-      input: { destination: "京都", checkInDate: "2026-10-01", checkOutDate: "2026-10-02" } } }] } }, stopReason: "tool_use" }
-    : { output: { message: { role: "assistant", content: [{ text: JSON.stringify({ kind: "answer", responseText: "候補の宿を確認しました。空室は未確認です。",
-      evidenceIds: ["observation:execution:accommodation:search_accommodations:q-8232276c:accommodation:travel-provider:42"] }) }] } }, stopReason: "end_turn" });
+  const { model, runRuntime } = strandsScriptedRuntime([
+    { name: "search_accommodations", input: { destination: "京都", checkInDate: "2026-10-01", checkOutDate: "2026-10-02" } },
+    { name: "strands_structured_output", input: { reply: { kind: "answer", commentary: "宿泊候補です。空室は未確認です。",
+      references: [{ evidenceId: "observation:execution:fixture-1:search_accommodations:q-8232276c:accommodation:travel-provider:42", field: "accommodationSummary" }] } } },
+  ]);
   const app = createProductionConversationAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
-    model: new BedrockConversationModel({ converse }, { modelId: "test", systemPrompt: "test" }), weather: { search: vi.fn() }, newExecutionId: () => "execution",
+    runRuntime, weather: { search: vi.fn() }, newExecutionId: () => "execution",
     additionalTools: productionServerTools({ external: {}, accommodation: createFixedEgressAccommodationOperation("provider-arn", { invoke }), journey: vi.fn() }),
   });
   const request = { principal: stateA, conversationId, turnId: secondId, tripId: secondId, userRequest: "京都の宿を調べたい" };
   const final = await app.runConversationTurn(request);
-  expect(final.response).toContain("宿泊候補「宿」"); expect(final.response).not.toContain("decision_summary");
+  expect(final.publicAccommodationPresentation?.cards).toEqual(expect.arrayContaining([expect.objectContaining({ name: "宿" })])); expect(final.response).not.toContain("decision_summary");
   expect(invoke).toHaveBeenCalledTimes(1); expect(search).toHaveBeenCalledWith(expect.objectContaining({ destination: "京都", adults: 1 }), "execution");
-  expect(JSON.stringify(converse.mock.calls)).toContain("server trip");
+  expect(model.calls).toBe(2);
   expect(JSON.stringify(invoke.mock.calls)).not.toMatch(/principal|Bearer|profile/);
   expect((await state.conversations.history(stateA, conversationId)).items.map(m => m.role)).toEqual(["user", "assistant"]);
-  expect(await app.runConversationTurn(request)).toEqual(final); expect(invoke).toHaveBeenCalledTimes(1); expect(converse).toHaveBeenCalledTimes(2);
+  expect(await app.runConversationTurn(request)).toEqual(final); expect(invoke).toHaveBeenCalledTimes(1); expect(model.calls).toBe(2);
 });
