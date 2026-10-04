@@ -1,23 +1,23 @@
-import type { ViewerAgentResponse } from "../../domain/viewer-agent-response";
+import type { AssistantTurnArtifacts, AssistantTurnView } from "../../domain/assistant-turn-view";
 
-export interface PublicAssistantTurn {
+export interface PublicAssistantTurn extends AssistantTurnArtifacts {
   response: string;
-  delivery?: NonNullable<import("@raiquora/agent/runtime-contract").AgentRuntimeResult["delivery"]>;
-  tripMutationReceipt?: import("@raiquora/agent/public-trip-mutation-receipt").PublicTripMutationReceipt; semanticReceipt?: import("@raiquora/agent/public-semantic-receipt").PublicSemanticReceipt;
-  publicPlanPresentation?: import("@raiquora/agent/public-plan-presentation").PublicPlanPresentation;
-  publicJourneyPresentation?: import("@raiquora/agent/public-journey-presentation").PublicJourneyPresentation;
-  publicGroundRoutePresentation?: import("@raiquora/agent/public-ground-route-presentation").PublicGroundRoutePresentation;
-  publicPlacePresentation?: import("@raiquora/agent/public-place-presentation").PublicPlacePresentation; publicAccommodationPresentation?: import("@raiquora/agent/public-accommodation-presentation").PublicAccommodationPresentation;
-  tripCostProposal?: import("@raiquora/trip/public-cost-proposal").PublicCostProposal;
-  consultationRequestProposal?: import("@raiquora/trip/consultation-request-proposal").ConsultationRequestProposal;
-  tripUpdateProposal?: import("@raiquora/trip/trip").TripUpdateProposal;
 }
 
 /** One projection for both live SSE and persisted history; accepts public artifacts only. */
-export function projectAssistantTurn(turn: PublicAssistantTurn): ViewerAgentResponse {
-  const artifacts = { ...(turn.delivery ? { delivery: turn.delivery } : {}), ...(turn.tripMutationReceipt ? { tripMutationReceipt: turn.tripMutationReceipt } : {}), ...(turn.semanticReceipt ? { semanticReceipt: turn.semanticReceipt } : {}), ...(turn.publicPlanPresentation ? { publicPlanPresentation: turn.publicPlanPresentation } : {}), ...(turn.publicJourneyPresentation ? { publicJourneyPresentation: turn.publicJourneyPresentation } : {}),
+export function projectAssistantTurn(turn: PublicAssistantTurn): AssistantTurnView {
+  return {
+    text: turn.response,
+    ...(turn.delivery ? { delivery: turn.delivery } : {}),
+    ...(turn.tripMutationReceipt ? { tripMutationReceipt: turn.tripMutationReceipt } : {}),
+    ...(turn.semanticReceipt ? { semanticReceipt: turn.semanticReceipt } : {}),
+    ...(turn.publicPlanPresentation ? { publicPlanPresentation: turn.publicPlanPresentation } : {}),
+    ...(turn.publicJourneyPresentation ? { publicJourneyPresentation: turn.publicJourneyPresentation } : {}),
     ...(turn.publicGroundRoutePresentation ? { publicGroundRoutePresentation: turn.publicGroundRoutePresentation } : {}),
-    ...(turn.publicPlacePresentation ? { publicPlacePresentation: turn.publicPlacePresentation } : {}), ...(turn.publicAccommodationPresentation ? { publicAccommodationPresentation: turn.publicAccommodationPresentation } : {}),
-    ...(turn.tripCostProposal ? { tripCostProposal: turn.tripCostProposal } : {}), ...(turn.consultationRequestProposal ? { consultationRequestProposal: turn.consultationRequestProposal } : {}), ...(turn.tripUpdateProposal ? { tripUpdateProposal: turn.tripUpdateProposal } : {}) };
-  return Object.keys(artifacts).length ? { text: turn.response, ...artifacts } : turn.response;
+    ...(turn.publicPlacePresentation ? { publicPlacePresentation: turn.publicPlacePresentation } : {}),
+    ...(turn.publicAccommodationPresentation ? { publicAccommodationPresentation: turn.publicAccommodationPresentation } : {}),
+    ...(turn.tripCostProposal ? { tripCostProposal: turn.tripCostProposal } : {}),
+    ...(turn.consultationRequestProposal ? { consultationRequestProposal: turn.consultationRequestProposal } : {}),
+    ...(turn.tripUpdateProposal ? { tripUpdateProposal: turn.tripUpdateProposal } : {}),
+  };
 }

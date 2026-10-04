@@ -33,7 +33,7 @@ export function buildConversationFeedback(
       : {
         messageId: message.messageId,
         role: message.role,
-        text: responseText(message.response),
+        text: message.response.text,
         ...(message.requestId ? { requestId: message.requestId } : {}),
       });
   return {
@@ -46,10 +46,4 @@ export function buildConversationFeedback(
       "requestId" in message && message.requestId ? [message.requestId] : []))],
     conversation,
   };
-}
-
-function responseText(
-  response: Extract<ConversationMessage, { role: "assistant" }>["response"],
-): string {
-  return typeof response === "string" ? response : response.text;
 }

@@ -5,7 +5,7 @@ import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-rece
 import { configureAiGuidePanel } from "./ai-guide-panel";
 import { configureConsultationScreen } from "../home/consultation-screen";
 import { createServerTripWorkspaceSource } from "../../usecases/trip-plan/server-trip-workspace-source";
-import type { ViewerAgentResponse } from "../../domain/viewer-agent-response";
+import type { AssistantTurnView } from "../../domain/assistant-turn-view";
 
 const receipt: PublicSemanticReceipt = { version: "public-semantic-receipt-v1", intentRevision: 1,
   speechAct: "inform", outcome: "accepted", changes: [{ changeRef: "change", groupRef: "group", action: "replace",
@@ -17,16 +17,15 @@ async function setup(history = false, candidateSaved = false) {
   let stored = trip, session = "a";
   const get = vi.fn(async () => structuredClone(stored));
   const source = createServerTripWorkspaceSource(trip.id, { get }); await source.refresh();
-  const response: ViewerAgentResponse = candidateSaved ? { text: "選んだ案を保存しました。",
+  const response: AssistantTurnView = candidateSaved ? { text: "選んだ案を保存しました。",
     tripMutationReceipt: { version: "public-trip-mutation-receipt-v1", tripId: trip.id, tripRevision: 1 } } : { text: "行き先の紹介です。", semanticReceipt: receipt };
-  let resolve!: (response: ViewerAgentResponse) => void;
-  const handle = vi.fn(() => new Promise<ViewerAgentResponse>(r => { resolve = r; }));
+  let resolve!: (response: AssistantTurnView) => void;
+  const handle = vi.fn(() => new Promise<AssistantTurnView>(r => { resolve = r; }));
   const panel = document.querySelector("section")!, messages = document.querySelector("ol")!, form = document.querySelector("form")!, input = document.querySelector("input")!;
   const button = () => document.createElement("button"), select = () => document.createElement("select");
   const reload = vi.fn(() => { void source.retry!(); });
   const controller = configureAiGuidePanel({ conversationSessionId: session, panel, messages, form, input,
-    submit: document.querySelector("button")!, toggle: button(), close: button(), suggestions: [], contextChoices: document.createElement("div"),
-    settingsToggle: button(), settingsPanel: document.createElement("div"), transferPace: select(), rankingPreference: select(), storage: localStorage,
+    submit: document.querySelector("button")!, toggle: button(), close: button(), suggestions: [], settingsToggle: button(), settingsPanel: document.createElement("div"), transferPace: select(), rankingPreference: select(), storage: localStorage,
     responseContextKey: () => `${session}:${source.getCurrentTrip()?.revision}`,
     onTripConditionsSaved: reload,
     historyRepository: { list: () => history ? [{ role: "assistant", response, messageId: "old" }] : [],

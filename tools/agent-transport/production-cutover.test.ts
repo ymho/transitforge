@@ -8,7 +8,10 @@ import { productionServerTools } from "../../backend/agent-api/src/composition/p
 import { createFixedEgressAccommodationOperation } from "../../backend/agent-api/src/composition/fixed-egress-accommodation.js";
 import { createFixedEgressProviderHandler } from "../../backend/agent-api/src/adapters/fixed-egress-provider-handler.js";
 import { strandsScriptedRuntime } from "../../backend/agent-api/src/adapters/strands-scripted-model.fixture.js";
-import { stateDynamoFixture, conversationId, secondId, stateMetadata } from "../../backend/agent-api/src/adapters/state-dynamodb.fixture.js";
+import { stateDynamoFixture, conversationId, secondId, stateMetadata, noCandidateResources } from "../../backend/agent-api/src/adapters/state-dynamodb.fixture.js";
+import { createConversationApiHandler } from "../../backend/agent-api/src/server-state-handler.js";
+import { createHttpPrincipalResolver } from "../../backend/agent-api/src/http-auth-composition.js";
+import { ConversationApplication } from "../../backend/agent-api/src/usecases/conversation-application.js";
 import { tripDynamoFixture } from "../../backend/agent-api/src/adapters/trip-dynamodb.fixture.js";
 import { cognitoTokenFixture, token } from "../../backend/agent-api/src/adapters/cognito-token.fixture.js";
 import { createTrip } from "@raiquora/trip/trip";
@@ -20,6 +23,8 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
   await trips.repository.create(principal, createTrip(secondId, "server trip", "2026-09-18T00:00:00Z"));
   await state.conversations.create(principal, conversationId, stateMetadata());
+  const conversationApi = createConversationApiHandler(new ConversationApplication(state.conversations,
+    noCandidateResources, undefined, trips.repository), createHttpPrincipalResolver(verifier, ["raiquora/user"]));
   let release: (() => void) | undefined, hold = false, dropFinal = false, toolFailure = false;
   const provider = createFixedEgressProviderHandler({ search: async () => {
     if (toolFailure) throw new Error("private tool failure");
@@ -60,23 +65,27 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
   const bundle = await build({ stdin: { resolveDir: process.cwd(), contents: `
     import { createConversationStreamSession } from "./frontend/src/adapters/http/agent-stream/session.ts";
     import { configureAiGuidePanel } from "./frontend/src/presentation/concierge/ai-guide-panel.ts";
-    const history = [];
-    const historyRepository = {list:()=>history, append:(_session,message)=>{const row={...message,messageId:crypto.randomUUID()};history.push(row);return row;},delete:()=>{history.length=0;}};
+    import { ConversationUiController } from "./frontend/src/usecases/personal-state/conversation-ui-controller.ts";
+    import { HttpServerConversationClient } from "./frontend/src/adapters/http/server-conversation-client.ts";
     const refs = { conversationId: "${conversationId}", tripId: "${secondId}" };
     let authState = {status:"signed-in", displayName:"A"}; const listeners = new Set();
     let accessToken = ${JSON.stringify(token())};
     const auth = {getState:()=>authState, getAccessToken:async()=>accessToken, refreshAccessToken:async()=>undefined,
       subscribe:l=>{listeners.add(l);l(authState);return()=>listeners.delete(l);}, invalidate:()=>{}, initialize:async()=>{},login:async()=>{},logout:async()=>{}};
+    const ui = new ConversationUiController(new HttpServerConversationClient("/api/conversations/v1", (url, init) =>
+      fetch(url, {...init, headers: {...init.headers, Authorization: "Bearer " + accessToken}})), () => authState.status === "signed-in");
+    const historyRepository = ui.historyRepository;
     const session = createConversationStreamSession({auth,references:()=>refs});
     const el = tag => document.body.appendChild(document.createElement(tag));
     const messages = el("div"), input = el("input"), form = el("form"); messages.id = "messages";
     localStorage.setItem("PRIVATE_PROFILE", "NEVER_SEND");
     const panel = configureAiGuidePanel({ conversationSessionId: refs.conversationId, panel: el("div"), toggle: el("button"), close:el("button"),
-      messages, form, input, submit:el("button"), suggestions:[],contextChoices:el("div"),settingsToggle:el("button"),settingsPanel:el("div"),
+      messages, form, input, submit:el("button"), suggestions:[],settingsToggle:el("button"),settingsPanel:el("div"),
       transferPace:el("select"),rankingPreference:el("select"),storage:localStorage,historyRepository,
       responseContextKey:()=>session.contextVersion()
     }, prompt => { window.action = session.start(prompt); return window.action.send(); });
     window.test = {ask:()=>panel.ask("京都の宿を調べたい"), session, refs,
+      restore:async()=>{await ui.hydrate();ui.selectLocal(refs.conversationId);await ui.loadHistory(refs.conversationId);panel.switchSession(refs.conversationId);},
       switch:(kind)=>{ if(kind==="logout"||kind==="account") {authState={status:kind==="logout"?"signed-out":"signed-in", displayName:"B"};listeners.forEach(l=>l(authState));}
         else if(kind==="conversation")refs.conversationId=crypto.randomUUID();else if(kind==="trip")refs.tripId=crypto.randomUUID();else session.start("next");session.contextChanged(); },
       setToken:token=>{accessToken=token;}, send:()=>{window.action=session.start("京都の宿を調べたい");return window.action.send();}};
@@ -86,6 +95,10 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
     if (req.url === "/") { res.setHeader("content-type", "text/html"); res.end('<!doctype html><script type="module" src="/browser.js"></script>'); return; }
     if (req.url === "/browser.js") { res.setHeader("content-type", "text/javascript"); res.end(bundle.outputFiles[0].text); return; }
     let body = ""; for await (const chunk of req) body += chunk;
+    if (req.url === "/api/conversations/v1") {
+      const result = await conversationApi({ httpMethod: req.method, path: req.url, headers: req.headers as Record<string, string>, body });
+      res.writeHead(result.statusCode, result.headers); res.end(result.body); return;
+    }
     const controller = new AbortController(); res.on("close", () => { if (!res.writableFinished) controller.abort(); });
     await handle({ method: req.method, path: req.url, headers: req.headers as Record<string, string>, body }, {
       signal: controller.signal, start: (status, headers) => {
@@ -148,6 +161,12 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
       return response.text();
     }, "Bearer " + token());
     expect(conflict).toContain("turn_conflict");
+    const liveCard = await page.locator(".public-accommodation-presentation").innerHTML();
+    await load();
+    await page.evaluate(() => (window as any).test.restore());
+    expect(await page.locator(".public-accommodation-presentation").innerHTML()).toBe(liveCard);
+    expect(await page.locator("#messages").textContent()).toContain("確認した宿泊候補です");
+    expect(modelCalls).toHaveBeenCalledTimes(2); expect(invoke).toHaveBeenCalledTimes(1);
     for (const [jwt, code] of [[token({exp:1}), "unauthenticated"], [token({scope:"other"}), "forbidden"]]) {
       const before = state.commands.length;
       await page.evaluate((jwt: string) => (window as any).test.setToken(jwt), jwt);

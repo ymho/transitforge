@@ -65,6 +65,13 @@ Bedrockの地点詳細要約とAPI・保存形式の`v1`は旧実行エンジン
 旧フラグはTerraformから削除し、CDは`AGENT_RUNTIME=strands-v2`、旧フラグの不在、activeなモデル設定を読み戻す。
 フラグでV1へ戻す手順は失効する。復旧は下記運用文書に従う。画面の旧union分離は#721、横断的な製品検証は#758/#751の別課題である。
 
+### 2026-10-04 V2表示契約の独立（#721）
+
+Browserは`AssistantTurnView`へpublic artifactだけを投影し、live・履歴・replayを同じrendererへ渡す。
+旧ViewerAgentResponse union、ConversationGuidance、TripContextのBrowser引継ぎ、raw外部カードと専用テストを撤去する。
+回答・delivery・条件/保存receipt、地点/宿泊/旅程案/鉄道/地上経路カード、費用/条件/予定のProposalと保存後の再取得は維持する。
+入力・進捗・feedbackは再利用し、モデル本文から候補や保存対象を推測しない。Server writer/owner/CAS/保存形式は変更しない。
+
 ## 影響
 
 - Agent loopのライフサイクルとTool dispatchはStrandsに委譲できる。

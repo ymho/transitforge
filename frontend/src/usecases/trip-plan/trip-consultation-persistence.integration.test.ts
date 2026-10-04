@@ -65,7 +65,7 @@ it("runs HTTP clients → authenticated applications → atomic storage → Agen
   expect((await trips.list()).trips).toHaveLength(1);
   const messages = await ui.loadHistory(tripId);
   expect(messages).toHaveLength(2); expect(messages[0]).toMatchObject({ role: "user", text: "出雲大社に行きたい" });
-  expect(messages[1]).toMatchObject({ role: "assistant", response: "画面接続検証用の回答" });
+  expect(messages[1]).toMatchObject({ role: "assistant", response: { text: "画面接続検証用の回答" } });
   // Persist an explicit user change via the normal revision-bound Trip writer.
   const saved = await trips.mutate({ tripId, baseRevision: current!.revision, mutationId: "75300000-0000-4000-8000-000000000020",
     proposal: { tripId, baseRevision: current!.revision, summary: "旅程名を変更", patches: [{ type: "title", title: "出雲の旅" }] } });

@@ -1,17 +1,17 @@
-import type { ViewerAgentResponse } from "../../domain/viewer-agent-response";
+import type { AssistantTurnView } from "../../domain/assistant-turn-view";
 
 export type ConversationMessage =
   | { messageId: string; role: "user"; text: string }
   | {
     messageId: string;
     role: "assistant";
-    response: ViewerAgentResponse;
+    response: AssistantTurnView;
     requestId?: string;
   };
 
 export type NewConversationMessage =
   | { role: "user"; text: string }
-  | { role: "assistant"; response: ViewerAgentResponse; requestId?: string };
+  | { role: "assistant"; response: AssistantTurnView; requestId?: string };
 
 export interface ConversationHistoryRepository {
   list(sessionId: string): ConversationMessage[];

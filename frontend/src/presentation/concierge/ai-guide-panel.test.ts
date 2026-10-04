@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   loadJourneySearchPreferences,
   journeyDelayLabel,
-  nextTripConversationState,
   normalizedFeedbackComment,
   shouldFocusAiGuideInputOnOpen,
   staleResponseNotice,
@@ -19,37 +18,6 @@ it("derives a public semantic status without internal references", () => {
   }] });
   expect(label).toBe("今回の希望に反映: 行き先");
   expect(label).not.toMatch(/private|revision|changeRef/);
-});
-
-describe("AI guide trip conversation state", () => {
-  it("updates only the trip context supplied by a follow-up question", () => {
-    const next = { destinationWish: "宮島", startDate: "2026-09-01", nights: 2 };
-    expect(nextTripConversationState({ destinationWish: "宮島" }, {
-      text: "日程を確認します",
-      conversation: {
-        question: "何泊しますか",
-        expectedInput: "stay-length",
-        quickReplies: [],
-        tripContext: next,
-      },
-    })).toEqual({
-      guidance: expect.objectContaining({ tripContext: next }),
-      tripContext: next,
-    });
-  });
-
-
-  it("keeps a model-interpreted distance preference across ordinary responses", () => {
-    const tripContext = {
-      planningStage: "inspiration" as const,
-      destinationWish: "城崎温泉",
-      relativeDistancePreference: "farther" as const,
-    };
-    expect(nextTripConversationState(undefined, {
-      text: "もう少し遠い候補を探しました",
-      tripContext,
-    })).toEqual({ guidance: undefined, tripContext });
-  });
 });
 
 describe("AI guide journey preferences", () => {

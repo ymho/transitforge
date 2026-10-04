@@ -28,9 +28,9 @@ it("keeps all hotel comparisons through SSE, the viewer projection and restored 
   const live = projectAssistantTurn(event), restored = projectAssistantTurn({ ...saved, response: saved.text });
   expect(restored).toEqual(live);
   const item = document.createElement("li"); item.scrollIntoView = vi.fn();
-  resolveAssistantMessage(item, live, undefined, undefined, undefined, undefined, false);
+  resolveAssistantMessage(item, live, { animate: false });
   const initial = item.innerHTML;
-  resolveAssistantMessage(item, restored, undefined, undefined, undefined, undefined, false);
+  resolveAssistantMessage(item, restored, { animate: false });
   expect(item.innerHTML).toBe(initial);
   expect(item.querySelectorAll(".public-place-card")).toHaveLength(3);
   expect(item.querySelectorAll("script, img")).toHaveLength(0);
