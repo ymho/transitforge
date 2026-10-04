@@ -4,6 +4,7 @@ import { proposeDayActivity } from "../../usecases/trip-plan/propose-day-activit
 import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
 import { tripWorkspaceProjection, itemAssumptions } from "./trip-workspace-projection";
 import { renderWorkspaceCard, refreshMoveTargets } from "./trip-workspace-card";
+import { tripAddConsultation } from "./trip-add-consultation";
 import { renderWorkspaceCandidates } from "./trip-workspace-candidates";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
 import { element, control, option } from "./trip-workspace-elements";
@@ -106,7 +107,14 @@ export function configureTripWorkspace(options: {
       report("追加案を表示しました。現在の旅程はまだ変更していません。");
     } catch { report("追加する予定の名称と対象を確認してください。"); }
   });
-  const consult = control("相談して追加", () => { if (addContext?.afterId) controller.focus(addContext.afterId); chat(addContext?.afterId ? "この予定の後に追加する予定を相談したい" : "旅程に追加する予定を相談したい"); });
+  const consult = control("相談して追加", () => {
+    const trip = controller.current();
+    if (!trip || !addContext || trip.id !== addContext.tripId || trip.revision !== addContext.revision || controller.sessionId() !== addContext.session) {
+      report("最新の旅程から追加し直してください。"); return;
+    }
+    const context = tripAddConsultation(trip, addDay.value, addContext.afterId, addTitle.value);
+    controller.focus(context.itemId); chat(context.prompt);
+  });
   add.append(consult, control("取消", () => { add.hidden = true; addContext = undefined; }));
   const startAdd = (trip: Trip, dayKey: string, afterId?: string, anchor?: HTMLElement) => {
     addContext = { tripId: trip.id, revision: trip.revision, session: controller.sessionId(), ...(afterId ? { afterId } : {}) };

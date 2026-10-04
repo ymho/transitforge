@@ -10,7 +10,7 @@ const identifier = (maximum: number) => z.string().min(1).max(maximum)
   .regex(/^(?!\s)(?![\s\S]*\s$)[^\u0000-\u001f\u007f<>]+$/u);
 const reference = z.strictObject({ evidenceId: identifier(240), field: z.string().min(1).max(80).regex(/^[a-zA-Z][a-zA-Z0-9_]*$/u) });
 export type ReplyReference = z.infer<typeof reference>;
-const commentary = z.string().min(1).max(1200).describe("Selected Evidenceに基づく説明・比較・推薦。未確認の時刻・料金・操作結果を作らない。");
+const commentary = z.string().min(1).max(1200).describe("Selected Evidenceに基づく説明・比較・推薦。経路・宿の候補はパネルに表示するため、本文は40〜100字程度の案内・選ぶ理由だけ。候補名・時刻・乗換・料金・評価の一覧を繰り返さない。未確認の時刻・料金・操作結果を作らない。");
 const conversationalText = z.string().min(1).max(600)
   .describe("短い自然な会話文。利用者発言とApplicationの現在条件を説明・確認するためだけに使い、外部事実や未検証の操作成功を作らない。");
 const questionTarget = z.enum(replyQuestions).describe("保存依頼で表示候補がない場合はitinerary_targetを選び、保存する候補がないことと旅程画面の相談・追加導線を案内する。goalへ一般的な旅行質問を返さない。複数の表示候補から選択が必要ならcandidate_selection。その他は今回不足する条件だけ。");
