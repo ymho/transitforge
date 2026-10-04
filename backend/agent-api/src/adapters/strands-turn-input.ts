@@ -1,6 +1,9 @@
 import type { MessageData } from "@strands-agents/sdk";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
 
+/** Application data budget in characters; separate from the model token window. */
+export const strandsTurnInputMaxCharacters = 64_000;
+
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
 export class StrandsTurnInputError extends Error {
@@ -56,42 +59,31 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
   const serialize = () => JSON.stringify({ userMessage: input.userRequest, application });
   let serialized = serialize();
   // Stored source excerpts and old dialogue can outgrow a valid current Trip.
-  // Bound only this transport copy. Current conditions, Trip items, focus, candidate
+  // Bound only this transport copy. Current conditions, Trip, focus, candidate
   // identities and the two most recent messages remain intact. Applications keep
   // the complete admitted Evidence and persisted history for read-back/grounding.
   const evidence = application.evidence as Json[];
   const conversation = application.conversation as { [key: string]: Json } | null;
   const history = Array.isArray(conversation?.messages) ? conversation.messages : [];
   let omittedEvidence = 0, omittedHistoryMessages = 0;
-  const omittedDerivedTripFields: string[] = [];
   const coverage = () => {
-    application.contextCoverage = { reason: "transport_budget", omittedEvidence, omittedHistoryMessages,
-      ...(omittedDerivedTripFields.length ? { omittedDerivedTripFields } : {}) };
+    application.contextCoverage = { reason: "transport_budget", omittedEvidence, omittedHistoryMessages };
     serialized = serialize();
   };
-  while (serialized.length > 24_000 && evidence.length) {
+  while (serialized.length > strandsTurnInputMaxCharacters && evidence.length) {
     evidence.shift(); omittedEvidence++; coverage();
   }
-  while (serialized.length > 24_000 && history.length > 2) {
+  while (serialized.length > strandsTurnInputMaxCharacters && history.length > 2) {
     history.shift(); omittedHistoryMessages++; coverage();
   }
-  // Daily metrics repeat item/day identities for provenance and can dominate a
-  // small Trip after dated rail/lodging adoption. They are a derived read model,
-  // not the schedule or selection authority. Omit this whole transport field
-  // explicitly, never interpret missing metrics as zero or cut individual facts.
-  const trip = (application.state as { [key: string]: Json }).trip as { [key: string]: Json } | undefined;
-  if (serialized.length > 24_000 && trip?.workload !== undefined) {
-    delete trip.workload;
-    omittedDerivedTripFields.push("workload"); coverage();
-  }
-  // Never cut a condition, current utterance, candidate identity or Trip item.
-  if (serialized.length > 24_000) throw new StrandsTurnInputError("context_budget");
+  // Never cut a condition, current utterance, candidate identity or current Trip.
+  if (serialized.length > strandsTurnInputMaxCharacters) throw new StrandsTurnInputError("context_budget");
   return serialized;
 }
 
 
 /** Preserve the Conversation's public user/assistant roles with the SDK's native
- * history input. The same sanitized projection enforces the combined 24k budget;
+ * history input. The same sanitized projection enforces the combined character budget;
  * messages are removed from application data rather than duplicated in the prompt.
  * This is data transport, not semantic interpretation or another state store. */
 export function strandsConversationInput(input: ServerAgentRuntimeInput): { modelInput: string; applicationReference: string; history: MessageData[] } {
@@ -114,7 +106,7 @@ export function strandsConversationInput(input: ServerAgentRuntimeInput): { mode
   // Escape delimiter characters in JSON values so they cannot close this data block.
   const reference = JSON.stringify({ application: payload.application }).replaceAll("<", "\\u003c").replaceAll(">", "\\u003e");
   const applicationReference = `<application_reference>\n${reference}\n</application_reference>`;
-  if (applicationReference.length + payload.userMessage.length > 24_000) throw new StrandsTurnInputError("context_budget");
+  if (applicationReference.length + payload.userMessage.length > strandsTurnInputMaxCharacters) throw new StrandsTurnInputError("context_budget");
   return { modelInput: payload.userMessage, applicationReference, history };
 }
 
