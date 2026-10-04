@@ -51,7 +51,7 @@ export interface AgentV2ReplyProof {
 }
 export class AgentV2ReplyError extends Error {
   constructor(readonly code: "invalid_proposal" | "missing_evidence" | "ineligible_evidence" |
-    "invalid_field" | "known_condition" | "operation_available" | "invalid_receipt" | "unsafe_content") {
+    "invalid_field" | "known_condition" | "invalid_question_target" | "operation_available" | "invalid_receipt" | "unsafe_content") {
     super(`Agent v2 reply rejected: ${code}`);
     this.name = "AgentV2ReplyError";
   }

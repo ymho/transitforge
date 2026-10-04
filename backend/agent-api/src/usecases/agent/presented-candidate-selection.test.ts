@@ -52,10 +52,11 @@ describe("Application-owned presented candidate selection", () => {
     const g = await fixture(); g.adoptPlan.mockRejectedValue(new TripResourceError("unavailable"));
     await expect(g.controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "保存して", reference: { kind: "sole" as const } })).rejects.toThrow();
   });
-  it("has no candidate when only an assistant sentence mentioned saving", () => {
+  it("has no candidate when only an assistant sentence mentioned saving", async () => {
     const controller = createPresentedCandidateController({ messages: [{ role: "assistant", text: "保存できます", sequence: 2, createdAt: at }],
       trip, conversationId, userSequence: 3, executionId: "execution", userRequest: "保存して", adoptPlan: vi.fn(), show: vi.fn() });
     expect(controller.context).toEqual({ groups: [], itineraryItemCount: 0, canSave: false });
+    await expect(controller.review()).resolves.toMatchObject({ status: "missing", navigation: { target: "itinerary_target" } });
   });
   it("refuses an unmentioned alternative and a sole-candidate claim in a multi-candidate group", async () => {
     const f = await fixture(["案1", "案2"]);

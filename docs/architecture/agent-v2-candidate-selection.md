@@ -4,11 +4,13 @@
 
 SDKの会話履歴には従来どおり利用者発言と公開回答本文を渡す。これとは別に、同じownerの確定済み公開表示から直近の候補を取得し、種別・表示順・候補ID・名前をApplication referenceへ渡す。直近12メッセージの範囲で種別ごとに最新の候補群を使う。本文から候補や保存内容を復元しない。
 
-- 候補なしの「この条件を保存して」には`clarification / itinerary_target`で保存対象がないことと旅程画面の相談・追加導線を案内する。条件は既存の条件受理で反映済みである。
+- 候補なしの「この条件を保存して」には引数なしの`review_presented_candidates`で対象を確認し、Applicationのmissing/navigationに基づく`clarification / itinerary_target`で旅程画面の相談・追加導線を案内する。条件は既存の条件受理で反映済みである。
 - 複数候補への「保存して」には`review_presented_candidates`で同じ公開表示を再送し、`clarification / candidate_selection`で選択を尋ねる。再検索・保存は行わない。再表示にも元の保持済み採用参照を付け、次の会話から選べるようにする。
 - 「経路1でお願いします」「案2でお願いします」など一意な採用依頼では`select_presented_candidate`が今回の引用と確定済みIDだけをApplicationへ渡す。複数群・同名候補・追加先が曖昧なら選択を求める。比較・仮定・否定は採用ではない。
 
 ## 副作用の境界
+
+保存対象なしのinspection結果はApplicationのnavigationとして応答の受理にも結び付ける。別の質問targetはSDKの構造化出力検証で拒否し、正しいtargetが選ばれた場合だけApplicationの相談導線を表示する。自由文のfallbackや発話の語句判定ではない。
 
 モデルは保存DTO、候補スナップショット、確認キーを作らない。Applicationが保持済み候補を解決し、ボタンと同じ`PlanCandidateAdoptionApplication`のpreview/confirm、owner、期限、Trip revision、予約保護、Proposal CAS、mutation receiptを通す。期限は初回の実書込み時にも確認する。既に成功した同じmutationの再送は期限後も保存済みreceiptを読み戻し、書込みを増やさない。
 

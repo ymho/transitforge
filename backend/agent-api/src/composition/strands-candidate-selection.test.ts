@@ -18,7 +18,7 @@ const settings = { modelId: process.env.MODEL_ID ?? "jp.anthropic.claude-sonnet-
   maxTurns: 6, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096, ...strandsProductionReasoning(process.env.MODEL_ID ?? "jp.anthropic.claude-sonnet-4-6") };
 const output = (reply: unknown) => ({ name: "strands_structured_output", input: { reply } });
 type Mode = "empty" | "single" | "multiple" | "named" | "negated" | "hypothetical";
-const steps = (mode: Mode) => mode === "negated" || mode === "hypothetical" ? [output({ kind: "conversation", message: "acknowledgement", text: "案は保存せず、相談を続けます。" })] : mode === "empty" ? [output({ kind: "clarification", target: "itinerary_target", text: "保存する候補はまだありません。旅程画面で相談したい予定や追加箇所を選んでください。" })] : mode === "multiple" ? [
+const steps = (mode: Mode) => mode === "negated" || mode === "hypothetical" ? [output({ kind: "conversation", message: "acknowledgement", text: "案は保存せず、相談を続けます。" })] : mode === "empty" ? [{ name: "review_presented_candidates", input: {} }, output({ kind: "clarification", target: "goal", text: "どんな旅にしたいですか" }), output({ kind: "clarification", target: "itinerary_target", text: "保存する候補はまだありません。旅程画面で相談したい予定や追加箇所を選んでください。" })] : mode === "multiple" ? [
   { name: "review_presented_candidates", input: { presentationId: "shown:2:plan" } }, output({ kind: "clarification", target: "candidate_selection", text: "案が複数あります。どの案にしますか？" }),
 ] : [{ name: "select_presented_candidate", input: { presentationId: "shown:2:plan", candidateId: mode === "named" ? "plan-2" : "plan-1", quote: mode === "named" ? "案2でお願いします" : "この案を保存して", reference: mode === "named" ? { kind: "ordinal", ordinal: 2, quote: "2" } : { kind: "sole" } } },
   output({ kind: "operation_result", receiptId: stableSelectionMutation(conversationId, 3) })];

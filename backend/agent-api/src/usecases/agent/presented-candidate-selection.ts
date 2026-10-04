@@ -38,7 +38,9 @@ export function createPresentedCandidateController(input: {
   const mutationId = stableSelectionMutation(input.conversationId, input.userSequence);
   return { context: { groups: structuredClone(bindings.map(({ group }) => group)), itineraryItemCount: input.trip.items.length, canSave: bindings.some(binding => !!binding.message.publicPlanPresentation) || !!input.adoptSearch },
     async review(presentationId) {
-      const binding = bindings.find(value => value.group.presentationId === presentationId);
+      if (!bindings.length) return { status: "missing", navigation: { target: "itinerary_target", text: "保存する候補はまだありません。旅程画面で相談したい予定や『＋ この後の予定を相談』『＋ 予定を相談して追加』を選んで相談してください。" } };
+      if (!presentationId && bindings.length > 1) return { status: "ambiguous" };
+      const binding = presentationId ? bindings.find(value => value.group.presentationId === presentationId) : bindings[0];
       if (!binding) return { status: "missing" };
       input.show(structuredClone(binding.presentation));
       return { status: "shown", group: structuredClone(binding.group) };
@@ -58,7 +60,7 @@ export function createPresentedCandidateController(input: {
             : reference.ordinal !== candidate.ordinal || !/^[0-9０-９]+$/u.test(reference.quote) || Number(reference.quote.normalize("NFKC")) !== candidate.ordinal)) return { status: "invalid_source" };
       // One stable mutation per authenticated user turn. A repeated same choice reuses
       // the pending receipt; a different second choice cannot make another write.
-      if (selected) return JSON.stringify(selected) === JSON.stringify(value) ? pending! : { status: "unknown_candidate" };
+      if (selected) return selected.presentationId === value.presentationId && selected.candidateId === value.candidateId ? pending! : { status: "unknown_candidate" };
       selected = structuredClone(value);
       pending = (async () => {
         let saved: Trip;

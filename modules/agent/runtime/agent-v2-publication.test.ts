@@ -14,6 +14,13 @@ function observation(): Evidence {
 }
 const proposal = { kind: "answer", references: [{ evidenceId: "e-kyoto", field: "sourceExcerpt" }] };
 const context = () => ({ executionId: "turn-1", evidence: [observation()] });
+it("binds a missing-target reply to Application navigation rather than a generic question or model prose", () => {
+  const navigation = { target: "itinerary_target" as const, text: "保存する候補はまだありません。旅程画面から相談してください。" };
+  expect(() => admitAgentV2Reply({ kind: "clarification", target: "goal" }, { ...context(), navigation })).toThrow("invalid_question_target");
+  expect(() => admitAgentV2Reply({ kind: "unavailable", operation: "save" }, { ...context(), navigation })).toThrow("invalid_question_target");
+  const admitted = admitAgentV2Reply({ kind: "clarification", target: "itinerary_target", text: "モデルが書いた別の質問" }, { ...context(), navigation });
+  expect(admitted.text).toBe(navigation.text); expect(admitted.proof).toMatchObject({ kind: "clarification", question: "itinerary_target" });
+});
 function intent(): EffectiveIntent {
   return { version: 1, base: { source: "none", fingerprint: "base" }, intentRevision: 2, fingerprint: "intent-2",
     activeBaseFacts: [], profileHints: [], ignoredProfileSettings: [], hypotheticalFacts: [], retractions: [],

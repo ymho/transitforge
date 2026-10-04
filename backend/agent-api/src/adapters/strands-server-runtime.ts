@@ -57,7 +57,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
       const reply = admitAgentV2Reply(run.replyProposal, {
         executionId: input.executionId, evidence: merged.evidence, effectiveIntent: run.effectiveIntent,
         // Only Application-owned selection receipts authorize success.
-        receipts: run.operationReceipts ?? [], availableOperations: input.candidateController?.context.canSave ? ["save"] : [],
+        receipts: run.operationReceipts ?? [], navigation: run.navigation, availableOperations: input.candidateController?.context.canSave ? ["save"] : [],
       });
       // The model's prose is not a mutation receipt. Show the actual accepted values
       // independently, in the same snapshot used by B commit / history / replay.

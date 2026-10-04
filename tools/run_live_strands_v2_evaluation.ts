@@ -10,6 +10,8 @@ import { ToolEvidenceRegistry, type ToolEvidenceMapper } from "@raiquora/agent/t
 import { StrandsAgentEngine, strandsProductionReasoning } from "../backend/agent-api/src/adapters/strands-agent-engine";
 import { createStrandsServerRuntime } from "../backend/agent-api/src/adapters/strands-server-runtime";
 import { agentV2SystemPrompt } from "../backend/agent-api/src/usecases/agent-v2-system-prompt";
+import { createPresentedCandidateController } from "../backend/agent-api/src/usecases/agent/presented-candidate-selection";
+import { createTrip } from "@raiquora/trip/trip";
 import { classifyStrandsV2LiveError, evaluateStrandsV2LiveCase, strandsV2LiveCases,
   type StrandsV2LiveCase, type StrandsV2LiveObservation } from "./strands-v2-live-evaluation";
 
@@ -62,6 +64,11 @@ for (let attempt = 1; attempt <= repetitions; attempt += 1) {
       const result = await runtime({ executionId, userRequest: testCase.userRequest,
         researchMode: { requestedMode: "standard", effectiveMode: "standard" },
         context: { featureContext: { calendarDate: "2026-09-26" } }, tools, evidenceRegistry,
+        ...(testCase.id === "save-without-candidate" ? { candidateController: createPresentedCandidateController({
+          messages: [], trip: createTrip("78400000-0000-4000-8000-000000000001", "評価用の旅", "2026-09-26T00:00:00Z"),
+          conversationId: "live-no-candidate", userSequence: 1, executionId, userRequest: testCase.userRequest,
+          adoptPlan: async () => { throw Error("No candidate may be adopted"); }, show: () => {},
+        }) } : {}),
         toolExecutor: new AgentToolExecutor(tools, evidenceRegistry), limits, researchLedger: ledger });
       const usage = ledger.outcome({ remainingScopes: [] }).usage;
       observedModelCalls += usage.modelCalls;

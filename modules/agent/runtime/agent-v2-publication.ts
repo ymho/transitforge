@@ -13,6 +13,8 @@ export interface AgentV2ReplyContext {
   /** Supplied only by authenticated Application composition, never model JSON. */
   receipts?: readonly AgentV2OperationReceipt[];
   availableOperations?: readonly ReplyOperation[];
+  /** Application-owned missing-target navigation returned by candidate inspection. */
+  navigation?: { target: "itinerary_target"; text: string };
 }
 export interface AgentV2AdmittedReply {
   text: string;
@@ -41,6 +43,7 @@ const questions: Record<ReplyQuestion, string> = {
  * from prose, and never let a model-declared kind authorize arbitrary payloads. */
 export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext): AgentV2AdmittedReply {
   const proposal = parseAgentV2Reply(value);
+  if (context.navigation && (proposal.kind !== "clarification" || proposal.target !== context.navigation.target)) throw new AgentV2ReplyError("invalid_question_target");
   const proof: AgentV2ReplyProof = { kind: proposal.kind, references: [] };
   const followUp = () => {
     if (!("nextQuestion" in proposal) || !proposal.nextQuestion) return "";
@@ -60,6 +63,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       // can instead clarify which known value/person the user means.
       if (!proposal.text && knownCondition(context.effectiveIntent, proposal.target)) throw new AgentV2ReplyError("known_condition");
       proof.question = proposal.target;
+      if (context.navigation) return reply(escapeMarkdown(boundedText(context.navigation.text)));
       if (proposal.text) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.text))); }
       return reply(questions[proposal.target]);
     case "unavailable":
