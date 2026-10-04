@@ -31,3 +31,21 @@ mutation IDは認証済みconversationとuser sequenceから決定し、1つの�
 `strands-candidate-selection.test.ts`は実SDKを通して候補なし、単一、複数、番号選択、状態・履歴・再送を確認する。`AGENT_V2_LIVE=true`では選択turnだけを実Bedrockで実行し、初期候補とProviderは合成fixtureを使う。`verified-search-selection.test.ts`は元時刻表、再検索・部分公開の関連、保存許可、追加先の曖昧さ、同じ採用処理・期限後receipt再送を確認する。SSEと履歴の契約テストは不正receiptを拒否する。
 
 これは実Provider・実画面を含む本番旅行全体の成功を意味しない。本番ホテルの保持証拠と、focused itemを決める相談導線の利用は別途確認する。
+
+## 2026-10-04の実モデル確認
+
+本番と同じ`jp.anthropic.claude-sonnet-4-6`、Strands SDK、合成状態・固定Providerで評価した。モデル呼出し・出力・Toolの上限とテスト期待を緩めず、失敗を修正してから独立3回を実行した。
+
+途中の検証では、候補なしの`goal`質問、否定から別案を保存する解釈、番号引用の不正な形式が失敗した。保存対象のinspection、Application navigationの応答受理、選択対象と現在発言の引用照合を追加した。条件保存の丁寧な発言ではinspectionを省略するケース、既存相談では未指定の出発時刻を推測するケースもあり、候補なしの条件保存と時刻未定の仮旅程の指示を補強した。これらの途中runを成功とは数えない。
+
+挙動の最終変更`5c568640afcd4a294e26eec70d85678924ffc527`の[Actions run 37170064368](https://github.com/ymho/transitforge/actions/runs/37170064368)で、次を確認した。
+
+| 範囲 | 結果 |
+| --- | --- |
+| 候補なし・単一・複数・番号指定・否定・仮定・検索済み経路選択 | 7ケース × 独立3回すべて成功 |
+| 既存の旅程作成確認、宿比較・出発駅反映・経路検索・採用・再送 | 2ケース × 独立3回すべて成功 |
+| Evidence回答・未対応予約・履歴なしの条件保存 | 3ケース × 3回すべて成功 |
+
+同じ挙動の`3a5bf10f147dec8f7543eddcb3705ab9f783c5e0`の[Actions run 37170356201](https://github.com/ymho/transitforge/actions/runs/37170356201)では、#784の「挨拶→出雲大社→清水寺への訂正とカード→この候補を保存して」も選択turnを実モデルで独立3回確認した。3回とも上限内で完了し、Trip itemの追加・条件の再更新・再検索・再送時のモデル呼出しはなかった。初期3turnは実SDKの固定model、観光Providerと状態は合成fixtureである。
+
+実データの旅行検索、実画面操作、本番ホテルの選択保存はこのLive確認に含めていない。否定・仮定のあらゆる表現が保証されたとも扱わない。評価のためのbranch限定push workflowはマージ差分から外す。
