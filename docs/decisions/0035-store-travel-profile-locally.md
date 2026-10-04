@@ -1,10 +1,11 @@
 # ADR 0035: 旅行プロフィールを端末内へ保存する
 
-- ステータス: Accepted
+- ステータス: Superseded
+- 置換: [Server state保存](../architecture/server-state-persistence.md)、[ADR 0086](0086-resolve-profile-as-versioned-reference-only-preferences.md)、[Profile V3](../architecture/travel-profile.md)。端末保存・旧field・送信境界は履歴であり現行契約ではない。
 - 日付: 2026-08-16
 
 今回条件のTripContext正本は[ADR 0052](0052-establish-trip-v2-contract-and-migration.md)の
-TripRequestへ移行する設計を採用した（#387で実装）。Profileの端末保存とprivacy境界は維持する。
+TripRequestへ移行する設計を採用した（#387で実装）。Profileの端末保存とprivacy境界を維持した当時の判断は、上記Current契約で置換済み。
 
 ## 背景
 

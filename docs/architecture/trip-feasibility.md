@@ -1,4 +1,18 @@
-# Trip Feasibility (#402)
+# Trip Feasibility（Current）
+
+採用済みTripのrevisionへ束縛した派生評価。feasible / infeasible / unknownを区別し、欠測を成立にしない。
+readyへの変更はTripApplicationが変更後Tripを評価し、CAS / receiptと同じ保存境界を通す。
+本番Trip writer・認証は接続済み。Reservation / Checklistの公開CRUDや共有・通知の501 gateとは別の状態である。
+最新UIでは集約パネルを撤去したが、itemの問題表示・変更確認・予約保護・ready判定は保持する。
+一次根拠: `modules/trip/domain/trip-feasibility.ts`と関連test、`backend/agent-api/src/usecases/trip-application.ts`。
+[最新UI差分](product-timeline-design.md)を参照する。
+
+保存・認可は[Trip保存](trip-server-persistence.md)、型契約は[Trip lifecycle](trip-lifecycle.md)を参照する。
+
+## Historical: #402の成立性導入
+
+> 以下は導入時点の実装範囲・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 当時の未有効gate・旧型・旧パス・コマンド・後続予定は現行手順ではない。現在の契約は上のCurrent節を参照する。
 
 正本方針は #382/#415、判断は ADR 0052〜0055 と [ADR 0056](../decisions/0056-evaluate-adopted-trip-feasibility.md)。
 対象は**採用済みTrip**。候補比較 (#406)、予約事実 (#398)、リアルタイム影響 (#401等) と混在させない。

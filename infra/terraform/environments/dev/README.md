@@ -6,9 +6,10 @@
 
 - 非公開S3とCloudFront
 - Cloudflare AOPで保護する独自ドメイン配信
-- AI駅員のLambda Function URLとBedrock権限
+- 認証済みRegional RESTのServer Agent stream / Conversation / Profile V3 / Trip V2と専用Lambda・限定IAM
+- 残存UI read operationのLambda Function URL / OAC。汎用会話・feedback・traceは410
 - 旅行提供者へ固定IPで接続するAI LambdaのNATインスタンスとElastic IP
-- 明示的フィードバックとbounded Agent Traceを短期保存する非公開S3
+- 過去のfeedback / Trace契約用の非公開S3。旧公開送信operationは410で、resource残存を送信機能の稼働と扱わない
 - 混雑と遅延の収集Lambda EventBridge Scheduler S3 DynamoDB
 - GitHub Actions用OIDCロール（デプロイ用とBedrockモデル評価専用）
 - data-builderデプロイ用OIDCロール
@@ -174,7 +175,7 @@ mainでは確認成功後にOIDCの一時認証情報でTerraformをapplyし 静
 ## CognitoとSPA認証（#451第二段階）
 
 `cognito.tf`がEssentials User Pool、secretなしSPA Client、`raiquora/user` Resource Server、
-Managed Login v2と標準brandingを管理する。料金条件を確認してから通常のCDで適用する。
+Managed Login v2と標準brandingを管理する。公開APIへの接続は`agent-stream.tf`と各専用hostが所有する。
 callbackは`https://${viewer_domain_name}/index.html`、logoutは同originの`/`へ限定する。
 localhostを許可するdev環境だけ`cognito_local_development_enabled = true`を指定する。
 
@@ -187,9 +188,9 @@ mkdir -p ../../../../frontend/public
 terraform output -json cognito_frontend_config > ../../../../frontend/public/auth-config.json
 ```
 
-`cognito_api_auth_config`の`userPoolId`/`clientId`を#484のverifierへ、`requiredScopes`を共通認証Applicationへ
-渡すことを後続server wiringの契約とする。本段階ではLambda environment/handler/Runtimeを変更しない。
-ID TokenはAPIへ送らない。OACと既存の公開writer gateも維持する。
+`cognito_api_auth_config`のpool / client / requiredScopesは専用Lambdaの共通verifierへ接続済み。
+Trip公開writerは認証済み専用hostから有効。共有・通知・in-tripの未公開gateは別境界で維持する。
+ID TokenはAPIへ送らない。残存Function URLのOACはorigin保護であり、利用者認証を代替しない。
 
 アカウント入口の「ログイン」から日本語Managed Loginへ進む。User Poolの自己登録は無効で、
 新規登録リンクを表示せず、公開App ClientのSignUp APIも拒否する。新しい利用者はCognito管理者だけが作成する。
@@ -201,17 +202,17 @@ Refresh TokenをsessionStorageへタブ単位で保持して失効前と401時�
 ## Fixed-egress Provider（#480 Phase B）
 
 `fixed-egress-provider.tf`は宿泊Provider専用Lambdaを既存private subnet/HTTPS SGへ追加する。
-`enable_fixed_egress_provider=false`が既定で、現在のAI Lambda・NAT/EIP・production trafficは変更しない。
-`fixed_egress_agent_role_name`は統合時にVPC外Server roleを指定するための任意入力であり、未指定ではInvoke権限を付けない。
-専用Secretの器だけを作り値は管理しない。共有Secretからの宿泊credentials移行・Tool接続・実plan確認は
-[#480統合手順](../../../../docs/architecture/fixed-egress-provider.md)に従う。今回apply/deployは行わない。
+Terraform単体の`enable_fixed_egress_provider`既定はfalseだが、Server構成はtrueを必須とし、CDで明示する。
+Agent roleからProvider LambdaへのIAM Invokeを接続し、既存NAT / EIPを使う。専用Secretの値はTerraformで管理しない。
+導入記録は[固定egress Provider](../../../../docs/architecture/fixed-egress-provider.md)、
+Current構成は[Server Agent](../../../../docs/architecture/server-agent-cutover.md)を参照する。
 
 ## Server Agent Streaming
 
 Regional REST、Server Agent、personal-state、Trip APIとCloudFront behaviorは`agent-stream.tf`が管理する。
 既存resource addressを保つためfor_each keyは`"stream"`で固定する。短命の`agent_stream_enabled` gateは撤去済みである。
 正本は`agent-stream.tf`で、experiment rootのfixture構成には依存しない。
-AWS applyせず確認する手順と#451/#479後の有効化条件は
+AWS applyせず確認する手順と公開経路のCurrent / Historical区別は
 [Streaming実装記録](../../../../docs/architecture/agent-streaming-production.md)を参照。
 `terraform test -filter=tests/agent-stream.tftest.hcl`はmock providerのoffline planだけを実行する。
 
@@ -239,4 +240,4 @@ resource action一覧をstep summaryへ出す。AWS lockfileも作らず、apply
 
 stream Lambdaの`SERVER_AGENT_MAX_EXECUTION_MS`はTerraformの`server_agent_max_execution_ms`
 から生成する。推奨・既定150000ms、許容範囲は整数1000〜180000ms。Lambda240秒とは別のbusiness
-実行上限で、共有Browser Runtimeの15秒設定は変更しない。35/90/180秒のtransport fixtureとは分ける。
+実行上限で、旧Browser Runtimeは撤去済み。35/90/180秒のtransport fixtureとは分ける。

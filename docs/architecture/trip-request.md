@@ -1,4 +1,18 @@
-# TripRequest / PlanAssumption導入 (#387)
+# TripRequest / PlanAssumption（Current）
+
+今回の条件・人数・仮定はServer Trip V2のrequestが正本。Profile V3は3項目のreference-only hintで別resource。
+会話の受理条件はServer working state / Applicationで解決し、本文やBrowser TripContextから正本を復元しない。
+条件の変更で採用済みitems.scheduleを暗黙変更しない。user / assumption等の出所、hard / soft、scope、確認状態を保持する。
+一次根拠: `modules/trip/domain/trip-request.ts` / `trip-request.test.ts`、`modules/agent/runtime/effective-intent.ts`、
+`backend/agent-api/src/usecases/agent/conversation-condition-application.ts`と隣接test。
+旧Profile field保持・converter・legacy実行経路は現行契約ではない。
+
+保存・認可は[Trip保存](trip-server-persistence.md)、型契約は[Trip lifecycle](trip-lifecycle.md)を参照する。
+
+## Historical: #387のRequest導入
+
+> 以下は導入時点の実装範囲・検証記録。2026-10-05のmain `32d51f6`で履歴として分離した。
+> 当時の未有効gate・旧型・旧パス・コマンド・後続予定は現行手順ではない。現在の契約は上のCurrent節を参照する。
 
 正本設計は[#382](https://github.com/ymho/transitforge/issues/382)、[#415](https://github.com/ymho/transitforge/issues/415)、
 [ADR 0052](../decisions/0052-establish-trip-v2-contract-and-migration.md)、[最終契約](trip-lifecycle.md)。

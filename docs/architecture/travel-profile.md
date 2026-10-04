@@ -1,4 +1,6 @@
-# Profile V3
+# Profile V3（Current）
+
+基準: 2026-10-05、main `32d51f6`。UI表示は「普段の出発地／好きなこと／いつも配慮してほしいこと」。
 
 ## 目的
 
@@ -37,3 +39,10 @@ Tripの会話からProfileへ自動昇格しない。
 旧version 2の同行傾向、子ども年代、ペース、移動許容、予算、宿泊/食事別メモ、AI同意fieldはV3へ移行しない。
 旧Profileに依存するProfile→Trip条件コピーAPI/Browser操作も撤去する。
 TripParty等のDomain型はProfile保存とは独立して維持する。
+
+## 一次根拠と履歴
+
+`modules/trip/domain/travel-profile.ts`、`backend/agent-api/src/adapters/dynamodb-profile-repository.ts`、
+`frontend/src/presentation/concierge/travel-profile-panel.ts`と隣接test、Server Context Loader / Effective Intentのtestを参照する。
+[ADR 0035](../decisions/0035-store-travel-profile-locally.md)の端末保存は置換済み。
+[ADR 0086](../decisions/0086-resolve-profile-as-versioned-reference-only-preferences.md) / [0087](../decisions/0087-autosave-compact-reference-profile-settings.md)はreference-only / 自動保存の判断を維持し、v2のfield保持部分をHistoricalとして読む。

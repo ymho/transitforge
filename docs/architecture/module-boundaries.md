@@ -5,21 +5,21 @@
 コードを技術ではなく責務から探せる状態にし 変更理由の異なるモジュールを分離する
 この文書は現在の構成とimport方向の正本である
 
-Trip V2の移行先契約と責務分担は [Tripライフサイクル](trip-lifecycle.md)（#382/#415）を参照する。
+Trip V2の現行契約と責務分担は [Tripライフサイクル](trip-lifecycle.md)（#382/#415）を参照する。
 Trip/TripRequest/Itineraryのpure契約は`modules/trip/domain`、BackendのTripRepository portは
-既存規則に従い`backend/agent-api/src/ports`、CRUD/取込は`usecases`、DB/Browser/HTTPは各Adapterへ置く。
+既存規則に従い`backend/agent-api/src/ports`、CRUD / CAS / 採用は`usecases`、DB/Browser/HTTPは各Adapterへ置く。
 本設計採用だけでは新しいpackageやRepository実装を追加せず、旧型とV2を二重正本にしない。
 
 Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)と
 [TypeScript構成移行台帳](typescript-migration-inventory.md)を参照する。この文書は現在稼働している境界を説明する。
 
-## 目標構成
+## 現行構成
 
 ```text
 frontend/src/
-  domain/          鉄道 運行 経路 旅行のモデルと決定論的な規則
+  domain/          Viewer・UI状態・表示契約（共有計算はmodules/*/domain）
   usecases/        Agent Viewer 旅程のユースケースとPort
-  adapters/        Browser HTTP Bedrock Mapbox Storageの実装
+  adapters/        Browser HTTP Mapboxと端末UI状態のStorage
   presentation/    機能別View CSS Mapbox Three.js描画
   composition/     外部実装 View Usecaseの依存組成
   observability/   実行時の計測
@@ -50,7 +50,7 @@ BackendはFrontendをimportせず、coreはBrowser API、Vendor、HTTP eventへ�
 `backend/agent-api/src/usecases/agent`がtransport非依存turn入口とTool登録、
 `server-agent-composition.ts`が必須のServerAgentRuntimeRunnerとweatherを接続する。productionの組成は常にStrands v2を渡す。
 固定IP ProviderはTool operation Portの先へ分離し、Runtime全体をVPCへ固定しない。
-Browserのproduction組成とHTTP bridgeは#480まで残す。UI取得・表示・端末状態はBrowserに置く。
+Browserは入力・表示・認証済みHTTPと端末UI状態だけを組成する。Browser Runtime / Bedrock bridgeは撤去済み。
 
 ## Trip public writer の配置
 
@@ -82,12 +82,11 @@ v2の会話表示は`frontend/src/domain/assistant-turn-view.ts`の`AssistantTur
 SSEとServer履歴は`usecases/concierge/assistant-turn-projection.ts`で許可したpublic artifactだけを投影し、
 `presentation/concierge/public-*-presentation-view.ts`がカードを描画する。旧ViewerAgentResponse、
 ConversationGuidance、TripContextのBrowser引継ぎと生のExternalTravelInformationカードは#721で撤去した。
-観光候補は`presentation/place-explorer`がカードを所有し `adapters/mapbox/place-media-layer.ts`が
-同じPlace IDを地図へ投影する。チャット本体は外部Providerの応答構造やMapbox操作を解釈しない。
+観光候補はpublic presentationが相談・旅程へ表示する。運行地図へ観光・宿泊・飲食候補を投影しない。チャット本体は外部Providerの応答構造やMapbox操作を解釈しない。
 
 Backendでは宿泊 天気 Placeを別々のPortとAdapterとして組成する。同じSecrets Manager JSONを
 互換性のため共有する場合も 宿泊 Mapbox SearchのCredentials Repositoryは分け
-一方の必須項目を他方へ要求しない。PlaceはMapbox POIを地点の正本とし Wikipediaは説明と画像を補完する。
+一方の必須項目を他方へ要求しない。PlaceはMapbox POIを地点の正本とし、未設定時のWikipediaは地点同定だけのfallbackで、写真・説明を会話へ表示しない。
 Web検索とページ読解も別PortとAdapterとして組成し Agent RuntimeやDomainへ検索ベンダー
 HTML DNS Secrets Managerの具体型を漏らさない。Webで発見した候補はPlace検索へ名称を渡して照合する。
 
@@ -118,7 +117,7 @@ Viewer UIは`presentation`の機能別ディレクトリに置く
 
 - `presentation/concierge`: 会話 プロフィール Landmark操作
 - `presentation/concierge/public-*-presentation-view.ts`: 検証済みpublic artifactの会話内表示
-- `presentation/place-explorer`: 検証済みPlaceの地図下部カードと選択状態
+- `presentation/place-explorer`: 相談・旅程の検証済みPlaceカード。運行地図へ候補を投影しない
 - `presentation/trip-plan`: 旅程表示と編集提案
 - `presentation/train-viewer`: 列車選択 詳細 時刻表 Three.js描画
 - `presentation/shared`: Sheet遷移やLoading Screenなど複数画面で共有する小さなUI
@@ -146,17 +145,17 @@ npm run build
 
 ## 宿泊Providerの固定出口（#480 Phase B）
 
-[専用Provider境界](fixed-egress-provider.md)をdefault-offで追加した。
+Currentの[専用Provider境界](fixed-egress-provider.md)はServer Toolから接続済み。
 Serverは既存AccommodationProvider PortをLambdaAccommodationProviderへ差し替えられる。
 宿泊入力検証はBackend contractsを共用し、Invoke DTO/HTTP検証/AWS SDKはadaptersへ閉じる。
 専用Lambdaだけが宿泊credentialsとHttpAccommodationProviderを所有し、Tool/Evidence/Stateは移さない。
-既存production組成は統合まで維持する。
+AgentはVPC外、Provider Lambdaだけが既存NAT / EIPを使う。
 
 ## Regional REST Streaming構成（#480 Phase A）
 
-ADR 0070の採用判断をdefault-offの環境構成へ接続した。
+ADR 0070のRegional REST Streamingはproductionへ接続済み。短命cutover gateは撤去した。
 `agent-stream-lambda.ts`はVPC外のStreaming入口とし、transport adapterがHTTP/SSEの配送を所有する。
 Server Agent Runtimeはtransport非依存のturn実行とTool組成を所有し、固定IPが必要な宿泊通信は
 AccommodationProvider Portの先の専用Provider Lambdaへ分離する。Streaming Lambdaへ宿泊credentialsや
-VPC依存を持ち込まない。両Lambdaのpackageは別artifactとしてbuild・検証し、接続とproduction切替は統合時に行う。
-[Streaming構成と後続gate](agent-streaming-production.md)にTerraform、Lambda組成、認証、監視とcutover前の残作業を記録する。
+VPC依存を持ち込まない。両Lambdaのpackageは別artifactとしてbuild・検証し、production compositionはこの境界を使う。
+[Streaming構成](agent-streaming-production.md)にCurrentの公開経路とHistoricalの導入・検証記録を分離して記録する。

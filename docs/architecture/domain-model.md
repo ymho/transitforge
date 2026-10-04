@@ -1,546 +1,82 @@
-# 標準データモデル
+# 標準データモデル（Current）
 
-この文書はRaiquoraが扱う主要なデータモデルの案内である。
+基準: main `32d51f68487a1cdc8aa56d9d732738cc90024eb9`、2026-10-05。
+型・validator・Application・Terraformを正本とし、この文書は保存先と所有境界への入口とする。
+旧型の導入経緯は[Trip lifecycleのHistorical節](trip-lifecycle.md#9-段階migrationとownership)と[ADR索引](../decisions/README.md)に残す。
 
-稼働中の型とスキーマの実装について、この文書は責務 保存先 生成元 結合キーを説明する。型を変更するときは
-対応する実装 テスト この文書を同時に見直す。ER図が必要な範囲だけ 将来`domain-model.dbml`を補助資料として追加する。
+## 正本と保存先
 
-旅行の永続正本は Server Trip V2 である。Browser は `conversation.tripId` を参照して
-`/api/trips/v1` から取得したread viewだけをメモリに保持し、Trip本文・revision・採用状態を
-LocalStorageに保存または復元しない。旧TripPlanとmigration compatibilityは撤去済みである。
-
-計算の正本と実行境界は[Domainの所有権](domain-ownership.md)を参照する。
-
-## 境界
-
-| 区分 | 役割 | 正本 |
+| モデル | 正本・保存先 | Browserの役割 |
 | --- | --- | --- |
-| 時刻表入力 | 列車 停車時刻 経路 駅 路線の計画データ | data-builder生成の`viewer-input` |
-| リアルタイム入力 | 混雑 遅延 行き先変更 停車状態 | data-builder収集の交通スナップショット |
-| 検索ドメイン | 入力をもとにした経路候補と制約 | `modules/journey/domain` |
-| 旅行相談 | 普段の好みと今回の条件 旅行候補 旅程 | `modules/trip/domain` |
-| 会話状態 | セッション 履歴と端末内保存 | `frontend/src/domain/`とブラウザLocalStorage |
-| AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `frontend/src/domain/assistant-turn-view.ts` |
-| フィードバック | 利用者が明示送信した会話と評価 | private S3 |
-| Agent Trace | 上限付き実行eventと関連request ID | private S3 |
-
-ブラウザの画面状態やMapbox Three.jsの描画オブジェクトはドメインモデルではない。AWS認証情報
-外部提供者の秘密値 現在地座標もこのモデルへ含めない。
-
-## 時刻表と運行
-
-### `TrainIndex` `Train` `TrainStop`
-
-- Domain契約: `modules/train/domain/train.ts`
-- 入力Adapter: `frontend/src/adapters/http/viewer-input/train-index.ts`
-- 保存先: `viewer-input/train_index.json`
-- 生成元: transitforge-data-builder
-- 用途: 列車表示 経路検索 駅と路線のカタログ
-
-`Train`は営業日内の列車を表す。識別子は`service_uid`であり `train_no`は遅延 混雑との結合と
-表示に使う。停車時刻は`TrainStop`で保持し 時刻計算には`route_time_minutes`を使う。
-
-### `PathCatalog`
-
-- Domain契約: `modules/train/domain/path.ts`
-- 入力Adapter: `frontend/src/adapters/http/viewer-input/path-catalog.ts`
-- JSON契約: `docs/data/viewer-input.md`
-- 保存先: `viewer-input/path_catalog.json`
-- 結合キー: `Train.path_id` → `PathCatalog.paths[].path_id`
-
-経路は列車と分離して座標列として保持する。同じ線路を走る列車は同じ`path_id`を参照できる。
-
-### `TrainDelaySnapshot` `TrainOperation`
-
-- Domain契約: `modules/operation/domain/operation.ts`
-- 状態適用: `modules/operation/domain/train-operation-state.ts`
-- 入力Adapter: `frontend/src/adapters/http/traffic/train-delay.ts`
-- 保存先: `/api/traffic/delays.json`
-- 結合キー: `Train.train_no` → `operationsByTrainNumber`
-
-`TrainOperation.destination`は当日の行き先の正本である。スナップショットが完全かつ新鮮なときだけ
-デジタルツイン表示へ適用する。スナップショットに存在しない列車は運休として扱う。
-
-### `TrainCongestionSnapshot`
-
-- Domain契約: `modules/operation/domain/operation.ts`
-- 入力Adapter: `frontend/src/adapters/http/traffic/train-congestion.ts`
-- 保存先: `/api/traffic/congestion.json`
-- 結合キー: 列車番号
-
-車両ごとの混雑値はブラウザで列車単位に集約して描画する。混雑はリアルタイムの補助情報であり
-時刻表や経路検索の正本ではない。
-
-詳細なJSONスキーマと時刻の表現は[ビューワー入力仕様](../data/viewer-input.md)を参照する。
-
-### 駅名と業務時刻の値表現
-
-- 駅名比較の正本: `modules/train/domain/station-name.ts`
-- 経路時刻表示の正本: `modules/train/domain/route-time.ts`
-
-入力に含まれる駅名表記は保持し 比較と索引を作るときだけNFKC 空白 末尾の`駅`と
-`ヶ` `ケ`の表記揺れを正規化する。画面用の駅名を比較用の値で上書きしない。
-
-`route_time_minutes`は4時を境界にした業務日付内の値であり 24時以降を許容する。
-時刻表は`24:20`のように業務時刻を維持し 経路カードや会話上の時計時刻は`00:20`のように
-翌日の時計へ折り返す。呼び出し元で剰余計算を再実装せず 用途に合う共通関数を選ぶ。
-
-## 経路検索
-
-### `JourneyRouteLeg` `JourneyRouteResult`
-
-- 定義: `modules/journey/domain/direct-route-search.ts`
-- 生成元: 日付別接続インデックスを使う経路検索
-
-`JourneyRouteLeg`は1列車で移動する区間 `JourneyRouteResult`は複数区間を含む候補である。
-区間には予定時刻と 適用可能な場合だけ実測または推定の遅延を含める。乗換は独立した列車ではなく
-隣り合う区間の駅と時刻差から表現する。
-
-### `DirectRouteSearchResponse`
-
-- 定義: `modules/journey/domain/direct-route-search.ts`
-- 境界: ブラウザからAI Lambdaへの経路検索結果
-
-検索条件と候補を1つにまとめる応答である。日付 `departureDate`と業務日付 `serviceDate`は別の値として
-保持する。除外 必須 種別限定の条件は検索後の表示処理ではなく検索契約として保持する。
-
-会話・旅程側の`TripJourneyPlan`（`modules/trip/domain/travel-plan.ts`）には任意の
-`originIsProvisional`を持てる。trueは現地の駅を例として使った検索であり、本人の出発地や自宅を
-意味しない。時刻表による経路の事実性とは別のメタデータで、会話履歴・旅程保存・Agent Contextへ
-引き継ぐ。未指定は従来互換とし、既知の出発地があるときは仮起点で置き換えない。
-
-### `JourneySearchService` `search_journeys`
-
-- ドメイン契約: `modules/journey/domain/journey-search-service.ts`
-- Agent Adapter: `frontend/src/usecases/agent/search-journeys-tool.ts`
-- 現在の実装: `/api/agent`の`journey_search`を呼ぶHTTP client
-
-`JourneySearchService`は`modules/journey`のCSAや直通インデックス実装を利用側から隠し 日付 乗換上限
-乗換ペース 順位条件 列車の除外と必須条件を構造化して渡す。`search_journeys`はこのServiceを
-呼ぶ薄いAdapterであり 経路や順位をLLMで再計算しない。
-
-決定論的なCSAと直通検索は`modules/journey/domain`が所有する。
-Browserとのwire形式は`journey-search-v1`を明示し FrontendとNode Backendでversionを検証する。
-Providerに依存しない旅行候補モデルと費用集計は`modules/trip/domain`が所有する。
-
-Agentへ返す候補は最大3件 直列化後64KiBまでに制限する。予定時刻 遅延適用後の時刻
-遅延の観測または推定区分 制約結果はService応答を変更せず保持する。
-
-### `NetworkInspectionService`
-
-- ドメイン実装: `frontend/src/domain/network-inspection-service.ts`
-- Agent Adapter: `frontend/src/usecases/agent/network-inspection-tools.ts`
-- 入力: `TrainIndex`と`StationLineCatalog`
-
-列車 駅 1列車内の経路詳細を読み取り専用で照会する。`inspect_train`はserviceUidが完全一致する
-列車の概要だけを返し 全停車駅は含めない。`inspect_station`は共通駅名正規化による完全一致だけを
-採用し 前方一致候補が複数ある入力を曖昧な駅として拒否する。LLMや外部APIによる駅名補正は行わない。
-
-`get_route_details`はserviceUidと任意の発着駅で検証した区間を返す。停車記録は1回20件まで
-ページングし 3つのToolはいずれも直列化後48KiBを上限とする。応答には取得できる場合だけ
-業務日付 代表ダイヤ区分 カタログの生成元を含める。
-
-### 運行分析Tool
-
-- Adapter: `frontend/src/usecases/agent/operational-analysis-tools.ts`
-- 集計: `backend/agent-api/src/usecases/operation-analysis.ts`
-- 列車メタデータ結合: `frontend/src/domain/delay-analysis.ts`
-  `frontend/src/domain/congestion-analysis.ts`
-
-`analyze_delay`と`analyze_congestion`は4時切替の業務日付を受け取り DynamoDBの
-operating day summaryをTypeScriptで決定論的に集計した結果を利用する。Adapterで集計式を
-再実装せず 時刻表との結合 入力検証 出力制限だけを担当する。
-
-応答には観測期間 sample countと`operating-day-summary`のsource metadataを付ける。
-sample countが0の場合は`observationStatus: unobserved`とし 未観測値を0で補完しない。
-ランキングは既存境界どおり上位5件に限定し Tool応答は直列化後48KiBを上限とする。
-
-### `compare_journeys`
-
-- 比較ロジック: `modules/journey/domain/journey-comparison-service.ts`
-- Agent Adapter: `frontend/src/usecases/agent/compare-journeys-tool.ts`
-
-同一Agent実行内で`search_journeys`が検証した検索結果だけをIDで解決し 最大3候補を比較する。
-モデルから経路本体を入力させず 存在しない検索結果IDや候補番号を拒否するため 比較処理が新しい経路を
-推測または生成することはない。
-
-比較値は発着時刻 所要時間 乗換数 各列車へ適用した遅延 明示制約の充足状態とする。
-最早到着 最遅出発 最短時間 最少乗換 最少遅延などの理由は列挙値で返し 同じ入力では常に
-同じ候補と理由を返す。運賃 空席 景色や旅行の主観的魅力度は比較しない。
-
-`search_journeys`と`compare_journeys`を同じAgent実行で使う場合は
-`VerifiedJourneySearchResultStore`へ検索結果をboundedに保持する。Tool応答にはopaqueな
-`searchResultId`を含め 比較Toolは同じ`executionId`で保存された結果だけを解決する。
-processをまたぐ永続状態や会話履歴としては扱わない。
-
-### EvidenceとGrounded Claim
-
-- モデル: `frontend/src/usecases/agent/evidence-model.ts`
-- Tool結果変換: `frontend/src/usecases/agent/tool-result-evidence.ts`
-
-Evidenceは`deterministic_fact` `derived_value` `model_interpretation`
-`unverified_information`を区別する。情報源は`sourceType` `sourceRef` `retrievedAt`
-`freshness` `summary`を持ち 時刻表 経路 列車 駅 遅延 混雑 比較結果から共通形式へ変換する。
-
-事実Claimは1件以上の存在するEvidence IDを必要とする。参照がない または存在しないIDを参照する
-事実Claimは`unsupported`として検出する。情報不足はEvidenceを捏造せず`unknown` Claimとして表す。
-Grounding判定はモデルの自己申告ではなく`validateEvidenceAndClaims`が決定論的に行う。
-
-最終応答は本文とClaimを持ち、Runtimeは全Claimを検証する。unsupportedな事実が1件でもあれば
-本文を安全側の失敗応答へ置き換える。Viewer Actionは#477で撤去した。判断記録は[ADR 0026](../decisions/0026-ground-agent-responses-before-viewer-actions.md)を参照する。
-
-### Structured Agent Trace
-
-- モデルとRecorder: `frontend/src/usecases/agent/agent-trace.ts`
-
-1回のAgent実行は`executionId`に紐づく順序付きeventとして記録する。eventは利用者の依頼
-正規化した意図 plan Tool呼び出しと結果 Evidence 再計画判断 モデルmetadata 応答
-完了状態を区別する。これにより会話文や巨大なTool結果を丸ごと保存せず
-後続のRuntimeとEvaluationが同じ実行過程を再現できる。
-
-Recorderは既定200件で追記を停止し 超過件数を`droppedEventCount`へ記録する。
-payloadは件数 深さ 文字数を制限して要約し 秘密値 Authorization cookie
-現在地の緯度経度を記録前に除去する。Tool errorのcodeと再試行可否は残すが 例外そのものやProviderへ送った未加工payloadは残さない。
-通常のTraceは実行中のメモリだけに保持し 自動的な全量保存と分析UIは対象外とする。
-
-評価と不具合調査へ利用するTraceだけは`agent_trace` operationで明示送信できる。
-Lambdaが同じschemaと秘匿情報除去を再検証してからprivate S3へ30日間保存する。
-
-### Multi-step Agent Runtime
-
-- Runtime: `frontend/src/usecases/agent/agent-runtime.ts`
-- 契約: `frontend/src/usecases/agent/runtime-contract.ts`
-- 制限: `frontend/src/usecases/agent/runtime-policies.ts`
-- 判断記録: [ADR 0023](../decisions/0023-build-bounded-multi-step-agent-runtime.md)
-
-構造化Context Builder Tool RegistryとExecutor Evidence Responseを別責務として接続する。
-利用者のgoalやTool順序を決める独立したProblem FramerとPlannerは置かず Bedrock Tool Useを
-意思決定の正本とする。Runtime内の定型plan eventはBedrockと決定論的Policyの責任境界だけを示す。
-直前の検索済み経路はboundedな`currentJourney`としてContextへ渡し、照会や制約変更の必要性は
-Bedrockが判断する。列車種別や列車名などの制約はTool入力で受け、経路計算そのものは引き続き
-決定論的なJourney Domainが担う。
-RuntimeはProvider固有形式を扱わず 既定で反復6回 model call 8回 Tool 8回
-実行15秒 Evidence 20件を上限とする。複数Toolは順番に実行し 結果をTool call IDで
-次のmodel callへ返す。不足情報がある場合はToolを実行せずfollow-upを返す。
-
-旧rollout routerは#477で撤去した。現在の本番モデル実行は
-`MultiStepAgentRuntime`へ一本化し Bedrock AdapterはProvider DTOとTool Adapterを組成する。
-機能固有の`finalResponsePolicy`は 未検証の文章回答を完了扱いにせず Tool実行へ再計画させる。
-PolicyはDomain計算を代替せず 必要なEvidenceが揃ったかだけを判定する。
-判断記録は[ADR 0038](../decisions/0038-use-one-production-agent-runtime.md)を参照する。
-
-Viewer Action専用E2E・Policy・Executorは#477で撤去した。検索・比較Tool、Evidence/Claim検証、
-本番Runtimeを通す一般回答Groundingテストを維持する。手動の表示時刻・列車選択・レイヤー切替はViewer UIが所有する。
-
-### Agent Evaluation
-
-- 契約: `frontend/src/usecases/agent/evaluation/evaluation-contract.ts`
-- 判定: `frontend/src/usecases/agent/evaluation/agent-evaluator.ts`
-- dataset: `tests/fixtures/agent-eval-cases.json`
-- 判断記録: [ADR 0027](../decisions/0027-evaluate-agent-quality-with-objective-metrics.md)
-
-version付きdatasetとProvider非依存のobservationを入力し Tool選択 制約充足 Grounded Claim
-Unsupported Claim Task完了の5指標をコードで判定する。Runtime結果は
-Structured Trace Claimからobservationへ正規化する。42ケースのうち経路fixtureを
-利用できるものは既存の
-journey search scenario IDを参照し 鉄道fixtureを重複定義しない。
-
-reportは機械処理用JSONとレビュー用Markdownを同じ結果から生成する。
-datasetにないobservationや不足するobservationは失敗として扱い 評価対象の取り違えを隠さない。
-曖昧要求 運休 遅延 制約 情報不足 複数Toolを固定カテゴリとして
-全5指標をJSONとMarkdownへ出す。事実Claimが存在しない情報不足カテゴリではGroundedと
-Unsupportedを`N/A`とし 0件を成功率100%として偽装しない。
-
-runnerの`--case`はcase IDでdatasetとobservationを同時に1件へ絞り込む。
-存在しないIDは全件実行へフォールバックせず明示的に失敗する。
-
-### Re-planとReflectionの戦略実験
-
-- 実験契約: `frontend/src/usecases/agent/evaluation/strategy-experiment.ts`
-- fixture: `tests/fixtures/agent-strategy-experiment.json`
-- 判断記録: [ADR 0031](../decisions/0031-retain-result-driven-replan-without-always-on-reflection.md)
-
-38件Benchmarkから回復可能な失敗と成功controlを含む8件を固定し single pass
-結果駆動再計画 常時ReflectionのON/OFF比較を再現する。各戦略は同じEvaluation Frameworkで
-品質を判定し model call Tool call latency tokenを別に集計する。
-
-latencyとtokenは固定Provider相当の決定論的コストモデルによる相対値で AWS料金ではない。
-結果駆動再計画は品質改善が確認できたため既存Runtimeで維持する。常時Reflectionは追加改善がなく
-相対コストだけが増えたため本番Runtimeへ追加しない。
-
-Evaluation profileは`smoke`と`full`を持つ。Smokeはtagで選んだ軽量集合 Fullは全datasetを使う。
-run reportは5指標の実測値 閾値 判定とcase結果を含み case失敗または閾値未達で失敗する。
-CI分離の判断は[ADR 0029](../decisions/0029-separate-smoke-and-full-agent-evaluation.md)を参照する。
-
-### Read-only MCP Adapter
-
-- 共通Registry: `frontend/src/usecases/agent/readonly-transit-tool-registry.ts`
-- Protocol Adapter: `frontend/src/adapters/mcp/readonly-transit-mcp.ts`
-- stdio transport: `frontend/src/adapters/mcp/stdio.ts`
-- 判断記録: [ADR 0030](../decisions/0030-expose-read-only-domain-tools-through-mcp.md)
-
-MCPはDomain Serviceを外部Agentへ公開するProtocol Adapterであり 鉄道ロジックを持たない。
-内部Agentと同じTool Registryから`search_journeys` `inspect_train` `inspect_station`
-`analyze_delay` `analyze_congestion`だけを公開する。Tool Contractの入力SchemaをMCP用Schemaへ
-変換した後も 各Toolの`parseInput`を正本として検証する。
-
-Viewer Action `get_route_details` 書き込み操作は公開しない。stdio serverは具体的な
-Domain Serviceを注入済みのRegistryをComposition Rootから受け取る。remote transport 認証
-公開デプロイはこのAdapterの責務に含めない。
-
-### `JourneySearchPreferences`
-
-- 定義: `modules/journey/domain/journey-search-preferences.ts`
-- 保存先: ブラウザLocalStorage
-
-乗換ペース 経路優先 最大乗換回数を表す。これは検索時の好みであり 旅行プロフィールには含めない。
-
-## 旅行相談
-
-### Trip V2（採用済み設計・段階実装予定）
-
-将来の正本は`Trip`である。`TravelPlan`は検索結果の応答束、`TripPlan`は現行編集モデルであり、
-後続#385以降でTripへ移行する。`TripRequest`はTripの子value objectで、旧TripContextと並行保存しない。
-
-| 概念 | 正本・責務 | 実装担当 |
-| --- | --- | --- |
-| Trip | id/schemaVersion/revision、title/summary、request、採用済みitems、planning/lifecycle | #385 / #383 / #389 |
-| TripRequest | 今回のtyped hard/soft条件、出所、PlanAssumption、TripParty | #387 / #411 |
-| ItineraryItem | transport/stay/activity、fixed/window/day/unscheduled、選択済みSnapshot | #385 / #386 / #410 / #413 |
-| SelectedRailJourney | serviceDate/安定した列車識別子・区間・scheduled時刻・乗換・採用元provenance。生のJourneyRouteResultや遅延等は保存しない | #385 / #386 |
-| Place / Money | Provider非依存identity・保存許諾付きSnapshot（[Place導入記録](trip-place-snapshot.md)）、原通貨の整数minor unit | Place基礎は#414で導入、Moneyは#412 |
-| Candidate / Offering | 比較前の外部候補。採用済みTripとは別 | #385 / #400 / #406 |
-| Reservation | 予約状態を所有する独立resource、独立revision/CAS・private detail・owner scope。宿選択はbookedではない。公開writer未有効 | [#398導入記録](trip-reservation.md) |
-| TripWatch / TripImpact | Trip revisionと外部観測に紐づく派生索引・影響 | #393 / #394 / #407 / #408 |
-| Hazard / Notification | 外部の公的事実とユーザーへの配信状態を分離 | #401 / #395 |
-| ConversationSession.tripId | 1会話に任意1Trip参照、複数会話から同じTrip。会話削除はTripを削除しない | #388 |
-
-正本型の骨格、aggregate図、invariant、DTO/Domain境界、LocalStorage→server取込の手順と
-各fieldのmigration担当は[Trip V2契約](trip-lifecycle.md)へ集約する。
-Domain schemaVersion 2、wire `trip-api-v1`、Adapter storageVersion、編集revisionは別概念である。
-新しいV2 writerは変換と#388/#389の安全な保存・競合対策が揃ってから有効化する。
-
-鉄道は検索結果`JourneyRouteResult`、Tripの計画専用`SelectedRailJourney`、現在の
-TrainOperation/TravelEventとTripImpactを分離する。既存検索結果の型を保存型として流用せず、
-scheduled事実だけを明示変換する。現在の遅延や補正済み時刻は表示時に外部観測と関連付ける。
-
-### `UserProfile`
-
-- 定義: `modules/trip/domain/travel-profile.ts`
-- Repository: `backend/agent-api` のProfile Application（Browserは`HttpServerProfileClient`）
-- 保存先: owner-scoped DynamoDB Profile
-- 更新元: 初回オンボーディングとプロフィール編集
-
-普段の出発地 同行者 好み 旅行ペース 許容移動時間を表す。個人を直接特定する情報や子どもの
-生年月日は保存しない。旅行推薦の個別化に使い、キャラクターの選定には使わない。
-旅行検索で出発駅が明示されていないときは`home.station`を普段の出発駅として使う。
-
-### `TripContext`
-
-現行legacy契約。移行後は[TripRequest](trip-lifecycle.md#3-trip--triprequestの最終形)と
-Trip.planningStateへ分離し、AgentDecisionや履歴のContextを永続正本として再利用しない。
-
-- 定義: `modules/trip/domain/travel-profile.ts`
-- 保持範囲: 現在の旅行相談
-
-今回の行き先 希望日 泊数 興味 同行者 移動条件などを表す。一回限りの「海に行きたい」はここへ入り
-普段の「山が好き」は`UserProfile`へ入る。両者を混在させない。
-`planningStage`は写真と雰囲気を見る`inspiration`と 具体的な日程を組む`planning`を区別する。
-`relativeDistancePreference`は、Bedrockが直前候補に対する「もっと近く／遠く」を
-`nearer`または`farther`として解釈した場合だけ保持する。Applicationは発話を分類せず、
-Decision Traceの外部化可能な判断結果をTripContextへ写して次ターンへ引き継ぐ。
-目的地だけの相談では前者から始め 利用者が旅程化を望むか日程を明示した後にだけ後者へ進む。
-
-### 旧質問ガイドの撤去（#721）
-
-旧ConversationGuidance/ConversationSubmissionとBrowserのTripContext引継ぎは撤去した。
-条件の意味解釈・受理・正本はServer Applicationが持つ。Browserは利用者の発話とboundedな参照だけを送り、
-公開receipt・回答・カードを表示する。質問本文は自由入力の同じturnで扱い、Browserで条件を発話regexから補完しない。
-
-### `ConversationHistoryEntry`
-
-- 定義: `frontend/src/domain/conversation-history.ts`
-- 保存先: owner-scoped DynamoDB Conversation message
-
-Browserは選択中の会話をServerから最大50件取得してメモリへ描画する。LocalStorageへの保存・fallbackは行わない。
-Server Agent Contextは同じ会話のboundedなtext履歴を読み、別会話を混ぜない。
-
-### `ConversationSession` `TravelMemory`
-
-ConversationはServer metadataとmessageを正本とし、Trip削除とは独立する。
-
-- Browser read model: `frontend/src/usecases/personal-state/conversation-ui-controller.ts`
-- 保存先: owner-scoped DynamoDB Conversation metadata/message
-
-Conversation metadataはUUID、title、scope、summary、topic、任意tripIdを持つ。Browserのactive selectionはメモリだけに保持する。
-create/update/deleteはServer CAS commandの成功後にprojectionへ反映する。会話削除はTripを削除しない。
-
-`TravelMemory`は会話から得た継続的な好みである。一回限りの`TripContext`と分離し 高確度の記憶だけを
-別セッションのAI文脈へ渡す。現在の明示的な依頼と`UserProfile`を上書きしない。
-
-### `ContextWorkspaceState`
-
-- 定義: `frontend/src/domain/context-workspace.ts`
-- Controller: `frontend/src/usecases/context-workspace/context-workspace-controller.ts`
-- Browser Adapter: `frontend/src/adapters/browser/context-workspace-repository.ts`
-- 保存先: LocalStorage `raiquora.context-workspaces.v1`
-
-会話を起点として 地図 `map` 旅程 `trip-plan` 経路詳細 `journey-details`のどれを
-前面にするかを表す。表示対象Entityは会話Sessionに紐付き ViewとEntity種別の
-組合せを検証する。画面の表示切替はこの状態だけを変更し Mapbox 会話 旅程のインスタンスを作り直さない。
-最大20会話分を端末に保存し 会話Sessionを戻したときに直前の表示を復元する。
-Desktopでは左を折りたためる会話履歴 中央を会話または旅程 右を地図とし
-独立したパネルではなく境界線で分かれた1つの連続画面として扱う。
-旅程は中央で会話と切り替え 地図の広さを維持する。経路詳細は地図下部へ小型パネルとして重ねる。
-DOMとControllerは表示切替の前後で維持し CSS Grid上の配置と`ContextWorkspaceState`だけを変更する。
-Mobileでは会話を通常画面とし 左側の会話操作レールから地図モードや会話履歴へ移動する。
-地図 旅程 経路詳細は同じDOM上の全面コンテキストとして表示し 戻る操作では会話の入力値と
-スクロール位置を復元する。ページ全体や各表示Controllerを再初期化しない。
-
-## AIと旅行候補の応答
-
-### `TravelCandidate` `TravelExpenseSummary`
-
-以下は現行の鉄道・JPY限定契約。#385/#413/#412で候補の種類と通貨を一般化する。
-鉄道運賃の非推測と不明価格の明示は引き継ぐ。
-
-- 定義: `modules/trip/domain/travel-candidate.ts`
-
-鉄道経路へ宿泊と体験を組み合わせるProvider非依存の候補である。費用はJPYの既知価格だけを合計し
-価格がない項目は`hasUnpricedItems`で明示する。鉄道運賃は取得も推定もせず常に集計対象外とする。
-
-### `TripJourneyPlan`
-
-- 定義: `modules/trip/domain/travel-plan.ts`
-- 共有計算型を直接参照する。旧Viewer応答aliasは#721で撤去した。
-- 内容: 検索条件と`JourneyRouteResult[]`
-
-AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult`をそのまま再解釈せず タブと
-タイムラインへ描画する。
-
-### 宿泊候補の共有契約
-
-- 定義: `modules/trip/domain/travel-plan.ts`
-- 共有計算型を直接参照する。旧Viewer応答aliasは#721で撤去した。
-- 内容: 行きの経路 帰りの経路 日帰り区分 宿泊候補
-
-旅行の鉄道運賃は含めない。宿泊候補は座標 総合評価 評価件数 画像を保持できる。料金は通常検索の
-`reference-minimum`と日付別空室検索の`selected-dates`を区別し 日付別照会で確認できた候補だけ
-`availability: available`として保持する。正本データがない値は保持も表示もしない。
-
-### 運行地図への候補投影
-
-観光・宿泊・飲食のruntime候補は相談・旅程のpresentationで扱い、運行地図専用の共通候補型・ピン・詳細シートへ変換しない。
-Placeのidentity・Evidence・保存契約は各Domain/Application契約を正本とし、運行画面の都合で別の保存形式を作らない。
-
-### `AssistantTurnView`
-
-- 定義: `frontend/src/domain/assistant-turn-view.ts`
-- 投影: `frontend/src/usecases/concierge/assistant-turn-projection.ts`
-
-v2の本文・delivery・条件/保存receipt・publicカード・採用に必要なProposalだけを持つ表示契約である。
-本文だけでも同じobject型になり、live SSE・Server履歴・replayを同じ許可リストから投影する。
-旧ViewerAgentResponse union、raw外部情報・質問ガイド・TripContextの表示分岐は#721で撤去した。
-カードの候補ID・順序・保存用参照を維持し、Provider payload・Trace・内部状態を渡さない。
-UIは本文から状態や保存対象を推測せず、Serverの検証とreceiptを経由する。
-
-## 明示的なフィードバック
-
-### `conversation-feedback-v1`
-
-- Server定義: `backend/agent-api/src/usecases/conversation-feedback.ts`
-- 保存先: private S3 `conversation-feedback/YYYY/MM/DD/<feedbackId>.json`
-- 保持期間: 90日
-- 暗号化: S3管理キーによるサーバー側暗号化 `AES256`
-- 内容: `schemaVersion` `feedbackId` `createdAt` 評価 `rating`
-  会話 `conversation` APIリクエストID `requestIds`
-
-`rating`は`good | bad` 会話は`user | assistant`の1〜50件 各本文は1〜4000文字とする。
-`requestIds`は最大50件 各IDは1〜128文字とする。保存失敗は成功として扱わず
-request ID付き503と本文を含まない構造化ログを返す。
-
-### `conversation-feedback-v2`
-
-- TypeScript定義: `frontend/src/usecases/concierge/conversation-feedback.ts`
-- Server検証: `backend/agent-api/src/usecases/conversation-feedback.ts`
-- 追加項目: `sessionId` `targetMessageId` 任意の`comment` 各会話の`messageId`
-
-画面のDOMから本文を再構成せず Conversation History Repositoryに保存された会話の先頭から
-評価対象の回答までを送る。対象回答より後の会話は含めない。Bad評価だけ1000文字以内の任意コメントを
-付けられる。保存前にメッセージIDの一意性 対象回答が末尾のassistantであること
-会話内request IDと`requestIds`の対応を検証する。256KiBを超える場合は黙って欠落させず413を返す。
-v1入力は既存クライアントとの互換用に引き続き受け付ける。
-Goodは1操作で送信し Badだけ対象回答の直下でコメント付き コメントなし キャンセルを選べる。
-送信中は二重操作を無効化し 成功または再試行可能な失敗状態を読み上げ可能なstatusとして表示する。
-
-利用者が👍または👎を押したときだけ保存する。会話分析やIssue化は別の処理として扱い 本モデルは
-画面表示とAIプロンプトへ自動再投入しない。
-
-## Agent Trace保存
-
-### `agent-trace-submission-v1`
-
-- TypeScript定義: `frontend/src/usecases/agent/agent-trace.ts`
-- Server検証: `backend/agent-api/src/usecases/agent-trace.ts`
-- 保存先: private S3 `agent-traces/YYYY/MM/DD/<taskId>/<traceId>.json`
-- 保持期間: 30日
-- 判断記録: [ADR 0025](../decisions/0025-store-bounded-agent-traces-privately.md)
-
-`taskId` `executionId` 関連するAPI `requestIds`と最大100件のeventを保存する。
-本文は1MiB、各文字列は省略記号を含め512文字を上限とし Lambdaでevent schema 順序 field型を再検証する。
-`model_started`は`modelCallId` message数 Tool名 model classを持ち、同じIDの
-モデル呼び出しTraceと対応付ける。秘密値 Authorization cookieと現在地座標は
-ブラウザ側のRecorderに加え保存直前にも除去する。
-S3書込失敗は成功として扱わず request ID付き503と構造化ログを返す。
-
-### `agent-model-call-trace-v1`
-
-- 旧Server保存実装は#799で撤去済み。現行Strands診断は`backend/agent-api/src/adapters/strands-runtime-diagnostics.ts`と`usecases/agent/server-agent-diagnostics.ts`を参照する。以下の形式は過去の保存契約の記録。
-- 保存先: private S3 `agent-traces/model-calls/YYYY/MM/DD/<modelCallId>/<apiRequestId>.json`
-- 保持期間: 30日
-- 1件の上限: 3MiB
-
-Bedrock Adapterが実際に送るmodel ID System Prompt message Tool定義 inference設定を
-呼び出し単位で保存する。成功時はstop reason token latency、失敗時は例外名 message
-HTTP status Provider request ID retryableを保存する。認証情報と正確な現在地座標は除去する。
-上限超過時は入力本文の代わりにbyte数とSHA-256を保存する。S3保存失敗はAgent結果を変更しない。
-
-## 外部旅行情報と再確認
-
-天気 観光地 写真など変動する情報は`ExternalTravelInformation<T>`へ正規化する
-状態`available` `unavailable` `unknown`と鮮度`fresh` `stale` `unknown`を分け Source Evidenceへprovider source URL 取得時刻 有効期限 attribution confidenceを保持する
-
-- `WeatherForecast`: 時間別 日別予報と地点 タイムゾーン
-- `WeatherGridSnapshot`: Viewer表示範囲を最大9セルへ分けた現在または指定日時の天候 降水量 雲量
-- `PlaceMediaSearchResult`: Place ID 名称 座標 写真 利用条件 attribution
-- `HazardAlertSearchResult`: 地域について気象庁から直近に発表された公的な警報 台風 地震 津波 火山情報。[契約と境界](hazard-alert.md)を参照。Trip影響・通知ではない
-- `RestaurantRequirements`: 子ども可 禁煙 バリアフリー 駐車場など今回必要な飲食店条件
-- `RestaurantSearchResult`: Providerが確認した飲食店の写真 営業時間 予算 定休日 設備と地点
-- `GroundAccessRoute` `GroundAccessMatrix` `GroundAccessArea`: 検証済み駅とPlace間の徒歩 車 自転車移動
-- `RestaurantSearchResult`: 地域と希望条件に合う飲食店候補。空席や未取得価格は含めない
-
-チャットカード 地図 旅程は同じProvider Entity IDを使う
-Providerレスポンス本文や認証情報はAgent Traceへ保存しない
-
-Agentから利用する外部旅行Toolは`search_weather_forecast` `search_place_media`
-`search_travel_alerts` `search_ground_access` `search_restaurants`
-`schedule_trip_recheck`をProvider非依存のApplication契約として定義する。Bedrock Adapterはこの契約を
-共通Tool Registryへ組み込み 外部情報の構造化状態は会話カード 地図 旅程へ同じEntity IDのまま投影する。
-カードの描画はApplication Toolから分離し Provider障害時も`unavailable`や`unknown`を表示契約へ残す。
-局地天気の`weather_grid_search`はAgentの推論を介さずViewerがBackendへ問い合わせる。
-Backendは日本全国の固定地点とズームに応じた表示範囲の複数座標を一括検索する。
-Viewerは地図中心に最も近い結果をMapboxのRain Snow Fogへ自動反映し 利用者やAgentによる上書きを許可しない。
-
-空港アクセスは`airportRailAccess`で対応駅が既知の場合だけ既存Journey Toolを実行する
-対応駅がない場合は鉄道アクセスを推測せず不足情報として説明する
-
-利用者が明示した場合だけ`TravelRecheckRequest`を端末へ保存する
-旅程 情報種別 Entity 実行希望日時 タイムゾーン 有効期限で識別し 同じ対象の重複予定を置換する
-再取得に失敗した結果は古い値を最新として扱わない
-
-## 変更時の確認
-
-1. 型またはスキーマの正本を変更する
-2. 境界をまたぐ変換とバリデーションを更新する
-3. 該当するTypeScriptまたはPythonテストを追加する
-4. この文書と`docs/data/viewer-input.md`の記述を見直す
+| TrainIndex / PathCatalog | data-builder生成のviewer-input。Domainは`modules/train/domain` | 入力Adapterと描画 |
+| 遅延・混雑・運休 | data-builderの交通スナップショット。計算は`modules/operation/domain` | 完全性・鮮度を検証して表示 |
+| JourneySearchRequest / JourneyRouteResult | `modules/journey/domain`の検索計算、Backendの日付別index | 候補表示。LLMもBrowserも経路を再計算しない |
+| Conversation metadata / message / turn / working state | `/api/conversations/v1`とServer turn保存、owner-scoped DynamoDB server-state | HTTP読取、一覧・履歴・active selectionのメモリread model |
+| UserProfile V3 | `/api/profile/v1`、同tableの`PROFILE_V3` | 3項目のCAS自動保存、失敗時のdraft保持 |
+| Trip V2 / TripRequest / ItineraryItem | `/api/trips/v1`、owner-scoped DynamoDB trips | `conversation.tripId`を参照して取得。表示コピーは正本ではない |
+| 候補 / Offering / Evidence / Reservation / Watch / Impact | 各Domain / Applicationの独立resource・観測 | 採用状態・予約・空室を混同せず投影 |
+| JourneySearchPreferences | LocalStorage `transitforge.journey-search-preferences.v1` | 乗換ペース・順位の端末設定。今回条件の正本ではない |
+| ContextWorkspaceState | LocalStorage `raiquora.context-workspaces.v1`、最大20会話の表示状態 | map / trip-plan / journey-detailsの表示対象。会話・Trip本文を含めない |
+| 認証session | タブ単位sessionStorage | token・PKCE・絶対期限。業務データ保存と別境界 |
+
+Conversation / Profile / TripをLocalStorageへ保存・復元するwriter、legacy migration、dual-write、障害時fallbackはない。
+Profileや会話を変更・削除してもTripを暗黙更新・削除しない。
+ContextWorkspaceの状態を保存するAdapterの存在と、現在の画面配置は分ける。専用旅程一覧・日別タイムラインが
+現行UIであり、旧3ペイン配置を保存仕様から推定しない。[workspace](trip-workspace.md)を参照する。
+
+## 時刻表・運行・検索
+
+Trainは`service_uid`、Pathは`path_id`、運行スナップショットとの結合は`train_no`。
+計画位置は`route_meter`で補間し、時刻計算は4時境界の業務日付と`route_time_minutes`を使う。
+24時超の値と暦日を区別し、表示だけで日付を落とさない。
+完全かつ新鮮な当日スナップショットに存在しない列車は運休として扱う。未取得の遅延・混雑を0へ補完しない。
+
+`JourneySearchService`とCSA / 比較は`modules/journey/domain`が所有し、Server ToolがBackendの検索operationへ接続する。
+Browserの残存`/api/agent` read clientと、相談用Server Toolの組成は別である。
+入力形式は[Viewer入力](../data/viewer-input.md)、Tool登録は[Server Agent](server-agent-cutover.md)を参照する。
+
+## Trip・Profile・会話
+
+Tripは独立UUID、`schemaVersion: 2`、revision、request、planningState、lifecycleState、itemsを持つ。
+Domain schema、wire `trip-api-v1`、DB storageVersion、編集revisionは別概念。
+採用Snapshotには検証済みの予定値を保存し、現在の遅延・空室・予約事実は別resource / 観測で扱う。
+原通貨を保持し、未知の料金・日付・タイムゾーンを作らない。
+
+`UserProfile version: 3`は`usualOrigin` / `interests` / `considerations`と更新metadataだけ。
+同行者・ペース・予算・AI同意field等の旧v2を読込・round-tripしない。旧recordの一括削除もしない。
+ProfileはEffective Intentのreference-only soft hintで、今回の明示条件が優先する。[Profile V3](travel-profile.md)を参照する。
+
+Server Context Loaderは同ownerのTrip、Profile、直近最大12件のtext履歴とworking stateを復元する。
+TripRequestと受理済み条件・仮定・Profile hintを分離し、本文から正本を再構築しない。
+`TripContext`等の残る計算・表示用型をBrowserの永続正本や旧Runtimeと扱わない。
+別会話へ自動的に好みを昇格するTravelMemory writerはない。
+
+## Agentと表示契約
+
+[ADR 0096](../decisions/0096-use-strands-for-agent-v2-execution.md)のStrands v2専用。
+`modules/agent/runtime`はProvider非依存のContext / Tool / Evidence / Trace契約を、
+`backend/agent-api/src/adapters/strands-agent-engine.ts`はSDK loopを所有する。
+旧MultiStepAgentRuntime、旧Prompt・Semantic pre-loop、旧decision Live Evalは撤去済み。
+
+`AssistantTurnView`へ本文・delivery・条件/保存receipt・publicカード・Proposalをallowlist投影する。
+live SSE・履歴・replayを同じrendererへ渡し、raw Provider payload・内部推論・Traceは渡さない。
+候補IDと公開参照をApplicationで解決して採用し、履歴描画で保存を再実行しない。
+
+Trace / feedbackの過去の保存契約と残存schemaはproductionの送信口と区別する。
+旧`/api/agent`のconversation / feedback / traceは410。現行Server診断は
+`strands-runtime-diagnostics.ts` / `server-agent-diagnostics.ts`で機微情報を抑制する。
+[Security / Privacy](agent-security-privacy.md)と[旧ingress閉鎖](server-agent-legacy-ingress-closure.md)を参照する。
+
+## 実装と検証への導線
+
+| 境界 | 一次根拠（repository root相対） |
+| --- | --- |
+| Profile | `modules/trip/domain/travel-profile.ts`、`backend/agent-api/src/adapters/dynamodb-profile-repository.ts`と隣接test |
+| Server復元 | `backend/agent-api/src/usecases/agent/server-state-context-loader.ts`と隣接test |
+| 公開writer・CAS | `backend/agent-api/src/trip-api-composition.ts`、`trip-handler.ts`、`usecases/trip-application.ts`と隣接test |
+| Browser例外 | `frontend/src/presentation/concierge/journey-preferences-storage.ts`、`frontend/src/adapters/browser/context-workspace-repository.ts` |
+| 認証・route | `infra/terraform/environments/dev/cognito.tf` / `agent-stream.tf`、`backend/agent-api/src/adapters/api-route-policy.ts` |
+| v2表示 | `frontend/src/domain/assistant-turn-view.ts`、`frontend/src/usecases/concierge/assistant-turn-projection.ts`と隣接test |
+
+詳細は[Domain所有権](domain-ownership.md)、[Module境界](module-boundaries.md)、[Server state](server-state-persistence.md)、
+[Trip保存](trip-server-persistence.md)、[テストガイド](../../tests/README.md)を参照する。

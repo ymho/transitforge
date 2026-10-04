@@ -1,6 +1,7 @@
 # ADR 0086: Profileをversion付きreference-onlyの普段の好みとして解決する
 
-- ステータス: Accepted
+- ステータス: Accepted（保存schema・field範囲は部分置換）
+- Current: [Profile V3](../architecture/travel-profile.md)。reference-only / Effective Intentの判断は維持するが、v2保持・非表示field round-trip・個別AI同意は置換済み。以下は2026-09-25当時の判断。
 - 日付: 2026-09-25
 - 関連: Epic #631、#634、#640、#641、#642、#647、#648、#658、#659、ADR 0084
 

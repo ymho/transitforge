@@ -41,6 +41,7 @@ Agent APIとDomainの実装やテストをPythonへ追加しない
 ## 実行
 
 ```bash
+npm run docs:check
 npm run architecture:check
 npm test
 npm run test:trip:v2:gate
@@ -73,3 +74,10 @@ npm run test:agent-cutover:browser
 Browser E2Eは`PLAYWRIGHT_MODULE`と必要に応じて`PLAYWRIGHT_EXECUTABLE_PATH`で
 repo外のPlaywright/Chromiumを指定する。401/403、空body/不完全JSON、final欠落、stream error、
 abort/世代変更を検査し、test HTTP serverの想定外例外もgate失敗として扱う。
+
+## 文書整合の確認
+
+`npm run docs:check`は通常CIで1回実行する。READMEのnpm script、主要Current文書のpreview flag接続口、
+撤去済みproduction契約の限定した再流入、全追跡Markdownの相対ファイルリンク（fragmentを除く）、ADR索引を確認する。
+Historical節は旧コマンド・gateを保持するため意味検査から除外し、ファイルリンクは検査する。
+これは完全な意味整合やリンク先の見出し・外部URLの検証ではない。PR checklistでCurrent / Historicalの判断を補う。
