@@ -1,3 +1,4 @@
+import { VerifiedJourneySelections } from "./usecases/verified-journey-selection.js";
 import { S3RepresentativeTimetableRepository } from "./adapters/s3-representative-timetable.js";
 import { createRepresentativeTimetableOperation } from "./usecases/representative-timetable.js";
 import { OpenMeteoWeatherProvider } from "./adapters/open-meteo-weather-provider.js";
@@ -99,7 +100,11 @@ export function createProductionServerAgent(executionId: string, environment: Re
  const groundRoutes = otp ? new OtpGroundRouteProvider(otp.endpoint, otp.coverage, http) : otpBridge
    ? new LambdaGroundRouteProvider(otpBridge.functionArn, new S3OtpGraphManifestRepository(s3,
      required("AI_TIMETABLE_BUCKET"), otpBridge.manifestKey, otpBridge.version, otpBridge.otpImage, otpBridge.graphSha256)) : undefined;
- const railSearch = createJourneySearchOperation(journey);
+ const selectableJourneys = new VerifiedJourneySelections();
+ const railSearch = createJourneySearchOperation(journey, { onVerifiedResult: (result, index, retrievedAt) => {
+   try { selectableJourneys.record(result, index, retrievedAt); }
+   catch { /* A displayable result without complete selection provenance stays read-only. */ }
+ } });
  const modelId = environment.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
  const region = environment.AWS_REGION ?? "unknown";
  const conversationModel = new BedrockConversationModel(new AwsBedrockConverseClient(), {
@@ -144,6 +149,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
      return { ...(presentation ? { publicJourneyPresentation: presentation } : {}),
        ...(groundRoute ? { publicGroundRoutePresentation: groundRoute } : {}) };
    },
+   verifiedSearchSelectionItems: result => selectableJourneys.itemsFor(result.publicJourneyPresentation),
    stateTable: required("SERVER_STATE_TABLE_NAME"), tripTable: required("TRIP_TABLE_NAME"),
    newExecutionId: () => executionId, weather,
    model: conversationModel,

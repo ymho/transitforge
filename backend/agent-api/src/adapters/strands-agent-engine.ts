@@ -9,12 +9,15 @@ import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import { mergeEvidenceObservations, type Evidence } from "@raiquora/agent/evidence-model";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
-import { AgentV2ReplyError, agentV2StructuredOutputSchema, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
+import { AgentV2ReplyError, agentV2StructuredOutputSchema, type AgentV2OperationReceipt, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
 import { admitAgentV2Reply, agentV2CandidateReferences, agentV2ReplyReferences } from "@raiquora/agent/agent-v2-publication";
 import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, budgetConditionUpdateInputSchema,
   tripScenarioInputSchema, admitTripScenario, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
+
+import { z } from "zod";
+import { presentedCandidateSelectionSchema, type PresentedCandidateController } from "../contracts/presented-candidate-selection.js";
 
 export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "update_current_budget", "consider_trip_scenario"] as const;
 export interface StrandsAgentEngineOptions {
@@ -55,6 +58,7 @@ export interface StrandsAgentRunInput {
   limits?: { maxTurns?: number; maxToolCalls?: number; maxExecutionMs?: number; maxTotalTokens?: number; maxOutputTokens?: number };
   reserveToolCall?: () => boolean;
   conditionController?: ServerAgentConditionController;
+  candidateController?: PresentedCandidateController;
 }
 export interface StrandsAgentRunResult {
   /** Not public text. The Application admits the typed proposal separately. */
@@ -62,6 +66,9 @@ export interface StrandsAgentRunResult {
   /** Latest Application-owned snapshot, also used at the reply publication boundary. */
   effectiveIntent?: EffectiveIntent;
   stopReason: string;
+  operationReceipts?: AgentV2OperationReceipt[];
+  savedTrip?: { tripId: string; tripRevision: number };
+  navigation?: { target: "itinerary_target"; text: string };
   evidence: Evidence[];
   trace: AgentTrace;
   limitReason?: "tool_calls" | "deadline";
@@ -98,8 +105,11 @@ export class StrandsAgentEngine {
   }
   async run(input: StrandsAgentRunInput): Promise<StrandsAgentRunResult> {
     if (!input.executionId.trim() || !input.userRequest.trim()) throw new Error("Strands Agent requires executionId and userRequest");
-    if (input.tools.descriptors().some(({ name }) => (strandsConditionToolNames as readonly string[]).includes(name))) throw new Error("Reserved Agent v2 tool name");
+    if (input.tools.descriptors().some(({ name }) => [...strandsConditionToolNames, "review_presented_candidates", "select_presented_candidate"].includes(name))) throw new Error("Reserved Agent v2 tool name");
     const evidence: Evidence[] = [];
+    const operationReceipts: AgentV2OperationReceipt[] = [];
+    let savedTrip: { tripId: string; tripRevision: number } | undefined;
+    let navigation: StrandsAgentRunResult["navigation"];
     let currentEffectiveIntent = input.effectiveIntent, intentUnavailable = false;
     const trace = new AgentTraceRecorder(input.executionId, { omitContent: true });
     trace.taskStarted(input.userRequest);
@@ -172,6 +182,34 @@ export class StrandsAgentEngine {
           } }),
       );
     }
+    if (input.candidateController) {
+      const candidates = input.candidateController;
+      const reserveSelectionCall = () => {
+        if (intentUnavailable) throw new Error("candidate_selection_unavailable");
+        if (input.limits?.maxToolCalls !== undefined && budgetState.toolCalls >= input.limits.maxToolCalls || input.reserveToolCall && !input.reserveToolCall()) {
+          budgetState.toolLimitReached = true; throw new Error("tool_budget");
+        }
+        budgetState.toolCalls += 1;
+      };
+      tools.push(tool({ name: "review_presented_candidates", inputSchema: z.strictObject({ presentationId: z.string().min(1).max(160).optional() }),
+        description: "会話履歴の保存対象を確認し、表示した候補を同じ順序で再表示する。候補なしの保存依頼では引数を省略し、missingのnavigation.target/textで旅程画面の相談導線を案内する。複数候補への『保存して』なら群のIDを指定し、どれにするか確認する。新しい検索や保存は行わない。",
+        callback: async (value, context) => {
+          if (context?.cancelSignal.aborted) throw new Error("execution_cancelled"); reserveSelectionCall();
+          const result = await candidates.review(value.presentationId);
+          if (result.navigation) navigation = structuredClone(result.navigation);
+          return jsonValue(result);
+        } }),
+        tool({ name: "select_presented_candidate", inputSchema: presentedCandidateSelectionSchema,
+          description: "利用者が今回明示した候補の採用・保存をApplicationへ渡す。履歴のpresentationId/candidateIdをそのまま使う。経路1やホテル名など一意な選択、または唯一の候補への保存依頼が対象。複数候補で対象不明ならreview_presented_candidatesで再表示して質問する。対象候補がなければ旅程画面の追加・相談導線を案内する。候補内容や確認keyを生成しない。成功receiptが返った場合だけ保存済みと伝える。",
+          callback: async (value, context) => {
+            if (context?.cancelSignal.aborted) throw new Error("execution_cancelled"); reserveSelectionCall();
+            try {
+              const result = await candidates.select(value);
+              if (result.status === "saved") { operationReceipts.splice(0, operationReceipts.length, result.receipt); savedTrip = { tripId: result.tripId, tripRevision: result.tripRevision }; }
+              return jsonValue(result);
+            } catch { intentUnavailable = true; throw new Error("candidate_selection_unavailable"); }
+          } }));
+    }
     const baseModel = this.model ?? new BedrockModel({ modelId: this.options.modelId, region: this.options.region,
       maxTokens: this.options.maxOutputTokens ?? 2_048,
       ...(this.options.anthropicAdaptiveEffort ? {} : { temperature: 0 }), stream: false,
@@ -191,11 +229,11 @@ export class StrandsAgentEngine {
       }
       try {
         admitAgentV2Reply(reply, { executionId: input.executionId, evidence: merged.evidence,
-          effectiveIntent: currentEffectiveIntent, receipts: [], availableOperations: [] });
+          effectiveIntent: currentEffectiveIntent, receipts: operationReceipts, navigation, availableOperations: input.candidateController?.context.canSave ? ["save"] : [] });
       } catch (error) {
         if (!(error instanceof AgentV2ReplyError)) throw error;
         context.addIssue({ code: "custom", path: ["reply"],
-          message: `${error.code}: select an exact reference from the latest Tool replyReferences for facts; otherwise use a supported conversation, clarification, uncertainty or unavailable reply. Never invent fields, IDs or operation receipts.` });
+          message: error.code === "invalid_question_target" ? "Application review found no save candidate. Return kind=clarification, target=itinerary_target. Application displays its itinerary-screen navigation. Do not ask goal/origin/destination for this save request." : `${error.code}: select an exact reference from the latest Tool replyReferences for facts; otherwise use a supported conversation, clarification, uncertainty or unavailable reply. Never invent fields, IDs or operation receipts.` });
       }
     });
     const agent = this.createAgent({
@@ -230,6 +268,7 @@ export class StrandsAgentEngine {
       return {
         ...(replyProposal ? { replyProposal } : {}), stopReason: result.stopReason,
         ...(currentEffectiveIntent ? { effectiveIntent: structuredClone(currentEffectiveIntent) } : {}),
+        operationReceipts, ...(savedTrip ? { savedTrip } : {}), ...(navigation ? { navigation } : {}),
         evidence: evidence.map((item) => structuredClone(item)), trace: trace.snapshot(),
         ...(budgetState.toolLimitReached ? { limitReason: "tool_calls" as const } : {}),
         ...(result.stopReason === "cancelled" && deadlineSignal?.aborted ? { limitReason: "deadline" as const } : {}),

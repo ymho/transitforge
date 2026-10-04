@@ -153,7 +153,7 @@ it("publishes and replays a no-evidence greeting without calling Domain Tools or
     .toEqual([input.userRequest, result.response]);
 });
 
-it("reports unavailable save through the Application boundary and replays it without side effects", async () => {
+it("reports unavailable booking through the Application boundary and replays it without side effects", async () => {
   const { verifier } = cognitoTokenFixture();
   const principal = await verifier.verify(token());
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
@@ -164,18 +164,18 @@ it("reports unavailable save through the Application boundary and replays it wit
   const v1Model = { converse: vi.fn(async () => { throw new Error("V1 model must not run"); }) };
   const engine = new StrandsAgentEngine({
     modelId: "unused", region: "ap-northeast-1", systemPrompt: "Submit a typed reply.", maxTurns: 3,
-  }, { model: new ReplyOnlyModel({ kind: "unavailable", operation: "save" }, "保存しておきます。") });
+  }, { model: new ReplyOnlyModel({ kind: "unavailable", operation: "book" }, "保存しておきます。") });
   const app = createConversationServerAgent({
     stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model: v1Model, weather, newExecutionId: () => "strands-save-unavailable", runRuntime: createStrandsServerRuntime(engine),
   });
-  const input = { principal, conversationId, turnId: secondId, userRequest: "この条件を保存しておいて" };
+  const input = { principal, conversationId, turnId: secondId, userRequest: "このホテルを予約しておいて" };
 
   const result = await app.runConversationTurn(input);
 
   expect(result).toMatchObject({ status: "completed" });
-  expect(result.response).toContain("保存を実行できません");
-  expect(result.response).toContain("保存は行っていません");
+  expect(result.response).toContain("予約を実行できません");
+  expect(result.response).toContain("予約は行っていません");
   expect(result.response).not.toContain("保存しておきます");
   expect(weather.search).not.toHaveBeenCalled();
   expect(v1Model.converse).not.toHaveBeenCalled();

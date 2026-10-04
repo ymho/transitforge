@@ -6,9 +6,7 @@ import { jsonResponse, type LambdaContext, type LambdaHttpEvent } from "./contra
 import type { AccessTokenVerifier } from "./ports/access-token-verifier.js";
 import { DynamoDbItineraryCandidateRepository } from "./adapters/dynamodb-itinerary-candidate-repository.js";
 import { PlanCandidateAdoptionApplication } from "./usecases/plan-candidate-adoption.js";
-import { createHash } from "node:crypto";
-import type { DraftPlanItem } from "@raiquora/trip/itinerary-candidates";
-import type { ItineraryItem } from "@raiquora/trip/trip";
+import { trustedCandidateItem } from "./usecases/retained-candidate-item.js";
 
 /** Dedicated public host for the owner-scoped Trip writer. It exposes no sharing or worker routes. */
 export function createTripApiPublicHandler(options: {
@@ -24,7 +22,7 @@ export function createTripApiPublicHandler(options: {
   const applications = createAuthorizedTripApplications(options.tripTable, options.stateTable);
   const candidates = new DynamoDbItineraryCandidateRepository(options.tripTable);
   const adoption = new PlanCandidateAdoptionApplication(candidates, applications.repository, candidates, applications.trips,
-    (draft, context) => trustedCandidateItem(draft, context.candidateSetId, context.variantId));
+    (draft, context) => trustedCandidateItem(draft, context.candidateSetId, context.variantId, context.retainedItem, context.selectedAt));
   const handler = createTripApiHandler(Object.assign(applications.trips, { executeAdoption: adoption.execute.bind(adoption) }), { authenticate });
   return (event: LambdaHttpEvent, context?: LambdaContext) => {
     if (event.rawPath && event.path && event.rawPath !== event.path) return Promise.resolve(jsonResponse(404, { error: "not-found" }));
@@ -32,12 +30,4 @@ export function createTripApiPublicHandler(options: {
       ? handler(event, context)
       : Promise.resolve(jsonResponse(404, { error: "not-found" }));
   };
-}
-
-function trustedCandidateItem(draft: DraftPlanItem, candidateSetId: string, variantId: string): ItineraryItem {
-  const id = `candidate:${createHash("sha256").update(JSON.stringify([candidateSetId, variantId, draft.componentId])).digest("hex").slice(0, 32)}`;
-  const base = { id: draft.baseItemId ?? id, title: draft.title, schedule: structuredClone(draft.schedule), ...(draft.logicalDayId ? { logicalDayId: draft.logicalDayId } : {}) };
-  if (draft.kind === "transport") return { ...base, type: "transport", detail: { status: "unresolved" } };
-  if (draft.kind === "stay") return { ...base, type: "stay", selection: { status: "unselected" } };
-  return { ...base, type: "activity", category: "other" };
 }

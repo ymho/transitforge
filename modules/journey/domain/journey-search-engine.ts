@@ -23,7 +23,7 @@ interface SearchContext { request: NormalizedRequest; servicesByStation: Map<str
 
 export function searchJourneyIndex(request: JourneySearchRequest, input: JourneySearchRuntimeInput): JourneySearchResponse & { trace: JourneySearchTrace } {
   const strategy = input.index.schema_version === "direct-service-index-v1" ? "direct-service-index" : "multi-criteria-connection-scan";
-  const { services, defaultTransferMinutes, stationTransferMinutes, connectionCount } = servicesFromIndex(input.index);
+  const { services, defaultTransferMinutes, stationTransferMinutes, connectionCount } = scheduledSearchServices(input.index);
   const normalizedRequest: NormalizedRequest = { ...request, limit: request.limit ?? 3, maxTransfers: request.maxTransfers ?? 3, transferPace: request.transferPace ?? "standard", rankingPreference: request.rankingPreference ?? "balanced" };
   const eligible = services.filter((service) => !excluded(service, normalizedRequest) && allowed(service, normalizedRequest));
   const trace: JourneySearchTrace = {
@@ -127,7 +127,7 @@ function toLeg(service: SearchService, from: number, to: number, delay: DelayInf
   return { serviceUid: service.serviceUid, trainNumber: service.trainNumber, serviceType: service.serviceType, trainName: service.trainName, serviceDestination: service.destinationStation, originStation: origin.stationName, destinationStation: destination.stationName, departureTimeMinutes: origin.departureTimeMinutes! + delay.delayMinutes, arrivalTimeMinutes: destination.arrivalTimeMinutes! + delay.delayMinutes, scheduledDepartureTimeMinutes: origin.departureTimeMinutes!, scheduledArrivalTimeMinutes: destination.arrivalTimeMinutes!, delayMinutes: delay.delayMinutes, ...(delay.delayStatus ? { delayStatus: delay.delayStatus } : {}), ...(delay.delaySampleCount === undefined ? {} : { delaySampleCount: delay.delaySampleCount }), ...(delay.delayBasis === undefined ? {} : { delayBasis: delay.delayBasis }), stops: service.calls.slice(from, to + 1).map((call, index, calls) => ({ stationName: call.stationName, ...(index > 0 && call.arrivalTimeMinutes !== undefined ? { arrivalTimeMinutes: call.arrivalTimeMinutes + delay.delayMinutes } : {}), ...(index < calls.length - 1 && call.departureTimeMinutes !== undefined ? { departureTimeMinutes: call.departureTimeMinutes + delay.delayMinutes } : {}) })) };
 }
 
-function servicesFromIndex(index: Record<string, unknown>) {
+export function scheduledSearchServices(index: Record<string, unknown>) {
   if (index.schema_version === "direct-service-index-v1" && isRecord(index.services)) {
     const services = Object.entries(index.services).flatMap(([id, value]) => isRecord(value) ? [serviceFromCalls(id, value)] : []);
     return { services, defaultTransferMinutes: 5, stationTransferMinutes: {}, connectionCount: services.reduce((sum, item) => sum + Math.max(0, item.calls.length - 1), 0) };

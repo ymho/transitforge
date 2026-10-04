@@ -1,3 +1,11 @@
+import { searchSelectionDraft } from "../usecases/retain-search-selection.js";
+import { createPresentedCandidateController, type CandidatePresentation } from "../usecases/agent/presented-candidate-selection.js";
+import { PlanCandidateAdoptionApplication } from "../usecases/plan-candidate-adoption.js";
+import { TripApplication } from "../usecases/trip-application.js";
+import { ReservationApplication } from "../usecases/reservation-application.js";
+import { DynamoDbReservationRepository } from "../adapters/dynamodb-reservation-repository.js";
+import { trustedCandidateItem } from "../usecases/retained-candidate-item.js";
+import type { ConversationMessage } from "../contracts/server-state.js";
 import { withMeasuredResearchOutcome } from "@raiquora/agent/public-plan-presentation";
 import { registerCostProposalTool } from "../usecases/agent/cost-proposal-tool.js";
 import type { PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
@@ -43,6 +51,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   searchTripRestaurants?: AgentOperation;
   searchTripPlaces?: AgentOperation;
   tripGroundRoutes?: GroundRouteProvider;
+  verifiedSearchSelectionItems?: (result: import("@raiquora/agent/runtime-contract").AgentRuntimeResult) => readonly import("@raiquora/trip/trip").ItineraryItem[];
   onGroundRouteEvidence?: (evidenceId: string, output: Record<string, unknown>) => void;
 }) {
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
@@ -50,6 +59,14 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
     let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, tripUpdateProposal: TripUpdateProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
+    let turnExecutionId: string | undefined;
+    let previousMessages: ConversationMessage[] = [], shown: CandidatePresentation | undefined;
+    const tripRepository = new DynamoDbTripRepository(options.tripTable, options.tripClient);
+    const candidateRepository = new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient);
+    const tripApplication = new TripApplication(tripRepository, tripRepository, undefined,
+      new ReservationApplication(tripRepository, new DynamoDbReservationRepository(options.tripTable, options.tripClient)));
+    const adoption = new PlanCandidateAdoptionApplication(candidateRepository, tripRepository, candidateRepository, tripApplication,
+      (draft, context) => trustedCandidateItem(draft, context.candidateSetId, context.variantId, context.retainedItem, context.selectedAt));
     const turnStates = new DynamoDbConversationTurnRepository(options.stateTable, options.stateClient);
     const contextLoader = createServerStateContextLoader({
       conversations: new ConversationApplication(new DynamoDbConversationRepository(options.stateTable, options.stateClient),
@@ -57,12 +74,19 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       profiles: new ProfileApplication(new DynamoDbProfileRepository(options.stateTable, options.stateClient)),
       trips: new DynamoDbTripRepository(options.tripTable, options.tripClient),
       workingStates: turnStates,
-    }, { historyBeforeSequence: options.historyBeforeSequence, onTrip: value => { trip = value; },
+    }, { historyBeforeSequence: options.historyBeforeSequence, onConversationMessages: messages => { previousMessages = messages; }, onTrip: value => { trip = value; },
       onEffectiveIntent: value => { effectiveIntent = value.effectiveIntent; currentIntentReceipt = value.currentReceipt; } });
     const runtime = options.runRuntime;
-    const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) =>
-      runtime({
+    const runRuntime = runtime ? async (runtimeInput: Parameters<typeof runtime>[0]) => {
+      turnExecutionId = runtimeInput.executionId;
+      return runtime({
         ...runtimeInput,
+        ...(trip && input.conversationId && options.historyBeforeSequence ? { candidateController: createPresentedCandidateController({
+          messages: previousMessages, trip, conversationId: input.conversationId, userSequence: options.historyBeforeSequence,
+          executionId: runtimeInput.executionId, userRequest: input.userRequest,
+          adoptPlan: (request, authority) => adoption.execute(input.principal, request, authority),
+          show: presentation => { shown = presentation; },
+        }) } : {}),
         ...(acceptCondition ? { conditionController: {
           apply: async (change: ConversationConditionInput) => {
             const receipt = await acceptCondition(change);
@@ -76,9 +100,11 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
             return { receipt: publicSemanticReceipt(receipt), effectiveIntent: refreshed.effectiveIntent };
           },
         } } : {}),
-      }) : undefined;
+      });
+    } : undefined;
     const result = await createServerAgent({ ...options,
       registerAdditionalTools: (tools, evidence, scope) => {
+        turnExecutionId = scope.executionId;
         options.registerAdditionalTools?.(tools, evidence, scope);
         if (trip) {
           registerTripReadTools(tools, evidence, trip);
@@ -113,12 +139,20 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
       const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent, receipt: currentIntentReceipt });
       if (verified) tripUpdateProposal = parsePublicRequestProposal(verified);
     }
+    if (!retainedCandidatePlan && trip && input.conversationId && options.verifiedSearchSelectionItems && result.status === "completed") {
+      const selectionItems = options.verifiedSearchSelectionItems(result);
+      const draft = searchSelectionDraft(selectionItems, trip, input.uiContext?.itemId);
+      if (draft) retainedCandidatePlan = await new PlanCandidateRetentionApplication(candidateRepository).retain({
+        principal: input.principal, executionId: turnExecutionId!, conversationId: input.conversationId,
+        userRequest: input.userRequest, tripId: trip.id, baseTripRevision: trip.revision + (tripUpdateProposal?.patches.every(patch => patch.type === "request") ? 1 : 0),
+      }, draft, []);
+    }
     if (retainedCandidatePlan && result.researchExecution) {
       const { usage, requestedMode, effectiveMode } = result.researchExecution;
       retainedCandidatePlan = { ...retainedCandidatePlan, presentation: withMeasuredResearchOutcome(retainedCandidatePlan.presentation,
         { modelCalls: usage.modelCalls, toolCalls: usage.toolCalls, wallClockMs: usage.wallClockMs, requestedMode, effectiveMode }) };
     }
-    return { ...result, ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
+    return { ...result, ...(shown && (result.status === "completed" || result.status === "follow_up") ? shown : {}), ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
       ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}) };
   } };
 }

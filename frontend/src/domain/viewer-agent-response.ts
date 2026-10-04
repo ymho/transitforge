@@ -50,7 +50,7 @@ export interface ViewerAgentContextResponse {
 export interface ViewerAgentTurnResponse {
   text: string;
   delivery?: NonNullable<import("@raiquora/agent/runtime-contract").AgentRuntimeResult["delivery"]>;
-  semanticReceipt?: import("@raiquora/agent/public-semantic-receipt").PublicSemanticReceipt;
+  tripMutationReceipt?: import("@raiquora/agent/public-trip-mutation-receipt").PublicTripMutationReceipt; semanticReceipt?: import("@raiquora/agent/public-semantic-receipt").PublicSemanticReceipt;
   publicPlanPresentation?: PublicPlanPresentation;
   publicJourneyPresentation?: PublicJourneyPresentation;
   publicGroundRoutePresentation?: PublicGroundRoutePresentation;

@@ -111,6 +111,7 @@ export function createConversationTurnApplication(dependencies: {
         counts: { validated: 1 }, refs: [presentationReceipt.presentationId] });
       result = { status: runtime.status, response: runtime.response,
         ...(runtime.delivery ? { delivery: runtime.delivery } : {}),
+        ...(runtime.tripMutationReceipt ? { tripMutationReceipt: runtime.tripMutationReceipt } : {}),
         ...(acceptedReceipt ? { semanticReceipt: publicSemanticReceipt(acceptedReceipt) } : {}),
         ...(runtime.publicPlanPresentation ? { publicPlanPresentation: runtime.publicPlanPresentation } : {}),
         ...(runtime.publicJourneyPresentation ? { publicJourneyPresentation: runtime.publicJourneyPresentation } : {}),

@@ -29,6 +29,7 @@ export type AgentRuntimeStatus =
   | "failed";
 
 export interface AgentRuntimeResult {
+  tripMutationReceipt?: import("@raiquora/agent/public-trip-mutation-receipt").PublicTripMutationReceipt;
   /** Public quality axis independent from transport/runtime completion. */
   delivery?: { status: "full" | "partial" | "degraded"; basis: "model" | "verified_projection" };
   turnObservation?: AgentTurnObservation;

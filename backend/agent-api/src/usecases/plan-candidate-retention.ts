@@ -10,7 +10,7 @@ import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validat
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { failedAgentToolResult, successfulAgentToolResult } from "@raiquora/agent/tool-contract";
 
-export interface CanonicalPlanCandidateDraft { variants: readonly PlanVariant[]; coverage: PlanCoverage }
+export interface CanonicalPlanCandidateDraft { selectionItems?: readonly import("@raiquora/trip/trip").ItineraryItem[]; variants: readonly PlanVariant[]; coverage: PlanCoverage }
 export interface CandidateRetentionScope {
   principal: TripPrincipal;
   executionId: string;
@@ -114,6 +114,7 @@ export class PlanCandidateRetentionApplication {
       candidateSet = createItineraryCandidateSet({ id: scope.executionId, revision: 0,
       contextRef: { conversationId: scope.conversationId, requestFingerprint: createHash("sha256").update(scope.userRequest).digest("hex"),
         tripId: scope.tripId, baseTripRevision: scope.baseTripRevision }, variants: structuredClone(draft.variants), coverage: structuredClone(draft.coverage),
+      ...(draft.selectionItems ? { selectionItems: structuredClone(draft.selectionItems) } : {}),
       issuedAt: now.toISOString(), expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString() });
       // Validate the derived read model before the immutable candidate write.
       presentation = bindPublicPlanTarget(projectCandidatePresentation(candidateSet, unknowns),

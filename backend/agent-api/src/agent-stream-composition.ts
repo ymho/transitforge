@@ -47,7 +47,7 @@ export function createProductionAgentStream(options: {
       // Project an allowlist on both fresh completion and persisted replay.
       await emit({ type: "final", status: result.status, response: result.response,
         ...(result.delivery ? { delivery: result.delivery } : {}),
-        ...(result.semanticReceipt ? { semanticReceipt: result.semanticReceipt } : {}),
+        ...(result.tripMutationReceipt ? { tripMutationReceipt: result.tripMutationReceipt } : {}), ...(result.semanticReceipt ? { semanticReceipt: result.semanticReceipt } : {}),
         ...(result.publicPlanPresentation ? { publicPlanPresentation: result.publicPlanPresentation } : {}),
         ...(result.publicJourneyPresentation ? { publicJourneyPresentation: result.publicJourneyPresentation } : {}),
         ...(result.publicGroundRoutePresentation ? { publicGroundRoutePresentation: result.publicGroundRoutePresentation } : {}),

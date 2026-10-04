@@ -270,9 +270,9 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
   {
     id: "V2-AUTHORITY-02",
     kind: "v2_specific",
-    invariant: "an unavailable save request is reported as unavailable and replayed without claiming or performing a write",
+    invariant: "an unavailable booking request is reported as unavailable and replayed without claiming or performing a write",
     testFile: "backend/agent-api/src/composition/strands-conversation-production-shaped.test.ts",
-    testName: "reports unavailable save through the Application boundary and replays it without side effects",
+    testName: "reports unavailable booking through the Application boundary and replays it without side effects",
   },
   {
     id: "V2-REPLAY-01",
@@ -305,13 +305,14 @@ export const agentV2AcceptanceCatalog: readonly AgentV2AcceptanceEntry[] = [
     id: "V2-CURRENTNESS-01",
     kind: "deferred",
     invariant: "a stale write/proposal cannot continue with later side effects in the same turn",
-    reason: "Write/proposal Tools are intentionally not exposed to Strands yet.",
+    reason: "Presented-candidate selection rejects stale candidates; broader post-rejection side-effect behavior remains a separate gate.",
   },
   {
     id: "V2-WRITE-01",
-    kind: "deferred",
-    invariant: "proposal adoption remains Application-bound, CAS-protected, and exactly-once",
-    reason: "Keep existing Application adoption tests; add a v2 execution-path test only when write/proposal Tools are connected.",
+    kind: "v2_specific",
+    invariant: "shown plan adoption is Application-bound and replayed without another SDK execution or write",
+    testFile: "backend/agent-api/src/composition/strands-candidate-selection.test.ts",
+    testName: "selection %s preserves state/history/replay",
   },
   {
     id: "V2-OUTPUT-NATIVE-01", kind: "v2_specific",

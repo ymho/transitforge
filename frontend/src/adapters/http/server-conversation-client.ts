@@ -1,3 +1,4 @@
+import { parsePublicTripMutationReceipt } from "@raiquora/agent/public-trip-mutation-receipt";
 import { parsePublicAccommodationPresentation } from "@raiquora/agent/public-accommodation-presentation";
 import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
@@ -29,9 +30,10 @@ function page<T>(value: unknown, item: (value: unknown) => value is T): ServerPa
 }
 function validMessage(value: unknown): value is ServerConversationMessage {
   const v = value as Partial<ServerConversationMessage>;
-  if (!v || typeof v !== "object" || Object.keys(v).some(key => !["role", "text", "sequence", "createdAt", "delivery", "semanticReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicGroundRoutePresentation", "publicPlacePresentation", "publicAccommodationPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(key))) return false;
+  if (!v || typeof v !== "object" || Object.keys(v).some(key => !["role", "text", "sequence", "createdAt", "delivery", "semanticReceipt", "tripMutationReceipt", "publicPlanPresentation", "publicJourneyPresentation", "publicGroundRoutePresentation", "publicPlacePresentation", "publicAccommodationPresentation", "tripUpdateProposal", "consultationRequestProposal", "tripCostProposal"].includes(key))) return false;
   try {
     if (v.delivery !== undefined && (v.role !== "assistant" || !validDelivery(v.delivery))) return false;
+    if (v.tripMutationReceipt !== undefined) { if (v.role !== "assistant") return false; parsePublicTripMutationReceipt(v.tripMutationReceipt); }
     if (v.semanticReceipt !== undefined) { if (v.role !== "assistant") return false; parsePublicSemanticReceipt(v.semanticReceipt); }
     if (v.publicPlanPresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicPlanPresentation(v.publicPlanPresentation); }
     if (v.publicJourneyPresentation !== undefined) { if (v.role !== "assistant") return false; parsePublicJourneyPresentation(v.publicJourneyPresentation); }

@@ -380,6 +380,7 @@ export function configureAiGuidePanel(
         if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
+        if (typeof response !== "string" && "tripMutationReceipt" in response && response.tripMutationReceipt) elements.onTripConditionsSaved?.();
         if (typeof response !== "string" && !("publicPlanPresentation" in response && response.publicPlanPresentation) && "semanticReceipt" in response && response.semanticReceipt?.changes.some(
           change => change.status === "accepted" && change.frame === "actual")) elements.onTripConditionsSaved?.();
       })
