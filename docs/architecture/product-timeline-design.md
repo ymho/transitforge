@@ -14,7 +14,7 @@
 | 観光・手入力移動の時刻 | 新しいuser operation `set-planned-time`から既存fixed scheduleへ。日付・タイムゾーンを明示。relativeのlogicalDayIdを保持しbinding矛盾を拒否 |
 | 宿の予定時刻 | **モデル追加**: stayのoptional `plannedTiming.checkIn/checkOut: ZonedInstant`。下記参照 |
 | 鉄道時刻 | 選択済みprovider区間は任意時刻変更を拒否。既存経路全体再選択を使う |
-| 費用・準備 | costsは「費用」に折りたたむ。準備・確認の集約パネルを撤去し、reservation / checklistのモデルと成立性評価は保持 |
+| 費用・準備 | 概算費用は各予定に表示し、鉄道を除いて入力できる。準備・確認の集約パネルを撤去し、reservation / checklistのモデルと成立性評価は保持 |
 | 設定 | 出発地・興味・配慮事項、経路検索、通知、ログアウトを保持。外部サービスの帰属表示も保持 |
 
 ## 宿の予定時刻（UI変更とは別のモデル差分）
@@ -49,7 +49,7 @@ DomainとDOMテストで日別投影、未定後の追加、時刻登録、DST�
 
 旅程一覧は各行の末尾の「⋯」に名称変更と削除を格納する。「削除」は既存archive APIのsoft-deleteを使う。通常の復元UIがないことを確認前に示し、予約を取り消す操作ではないことを説明する。実アカウントのデータは検証のために削除しない。
 
-確認ポイント・次に決めること・準備の集約パネルをWorkspaceから撤去する。成立性評価、予約保護、adoption/CASは継続し、該当itemと変更確認時に必要な問題を表示する。既存費用は「費用」の折りたたみで保持する。
+確認ポイント・次に決めること・準備の集約パネルをWorkspaceから撤去する。成立性評価、予約保護、adoption/CASは継続し、該当itemと変更確認時に必要な問題を表示する。概算費用は予定ごとに表示する。
 
 同一replyに検索経路と採用案が含まれる場合、全candidateが単一transport、固定時刻、同一日、公開sourceRefとJourney IDが一意に一致する場合だけ、既存の採用buttonを各JourneyCardに配置する。一般の複合旅行案は独立表示を維持し、結び付けられないtransport案は「旅程に追加・変更」に折りたたむ。選択のordinalやタイトルだけから保存対象を作らない。既存preview/confirmのconversation・trip/revisionチェックを通す。
 

@@ -45,3 +45,14 @@ it("refuses duplicate results, generic product IDs, model-supplied permissions a
   const disallowed = new VerifiedAccommodationSelections(); disallowed.record([hotel], [{ ...proof, storageAllowed: false }], evidence);
   expect(disallowed.itemsFor(cards(evidence))).toEqual([]);
 });
+
+it("retains only the verified Rakuten reference price with its original currency, time and basis", () => {
+  const priced: AccommodationOffering = { ...hotel, price: { price: { currency: "JPY", amountMinor: 9800 }, observedAt: at, basis: "reference-minimum" } };
+  const proof = rakutenAccommodationSelectionEvidence(priced, at)!, evidence = observe(priced);
+  const selections = new VerifiedAccommodationSelections(); selections.record([priced], [proof], evidence);
+  const item = selections.itemsFor(cards(evidence))[0]!;
+  expect(item).toMatchObject({ selection: { accommodation: { observedPrice: priced.price } } });
+  expect(JSON.stringify(item)).not.toContain("bookingUrl");
+  const missing = new VerifiedAccommodationSelections(); missing.record([hotel], [rakutenAccommodationSelectionEvidence(hotel, at)!], observe());
+  expect(JSON.stringify(missing.itemsFor(cards(observe())))).not.toContain("observedPrice");
+});

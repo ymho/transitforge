@@ -7,8 +7,6 @@ import { DynamoDbReservationRepository } from "../adapters/dynamodb-reservation-
 import { trustedCandidateItem } from "../usecases/retained-candidate-item.js";
 import type { ConversationMessage } from "../contracts/server-state.js";
 import { withMeasuredResearchOutcome } from "@raiquora/agent/public-plan-presentation";
-import { registerCostProposalTool } from "../usecases/agent/cost-proposal-tool.js";
-import type { PublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
 import { parsePublicRequestProposal } from "@raiquora/trip/public-request-proposal";
 import type { ServerAgentTurn } from "../usecases/agent/server-agent.js";
@@ -56,7 +54,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
 }) {
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
     acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) {
-    let tripCostProposal: PublicCostProposal | undefined, retainedCandidatePlan: RetainedCandidatePlan | undefined;
+    let retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, tripUpdateProposal: TripUpdateProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
     let turnExecutionId: string | undefined;
@@ -114,7 +112,6 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
           if (options.tripGroundRoutes) registerServerTools(tools, evidence, [tripGapGroundRouteTool(trip, options.tripGroundRoutes, options.onGroundRouteEvidence)]);
           registerRequestProposalTool(tools, trip, proposal => { tripUpdateProposal = proposal; });
           registerTripItemProposalTool(tools, trip, proposal => { tripUpdateProposal = proposal; });
-          registerCostProposalTool(tools, trip, proposal => { tripCostProposal = proposal; });
           if (scope.conversationId) {
             const candidateRepository = new DynamoDbItineraryCandidateRepository(options.tripTable, options.tripClient);
             registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(candidateRepository), () => ({
@@ -150,6 +147,6 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         { modelCalls: usage.modelCalls, toolCalls: usage.toolCalls, wallClockMs: usage.wallClockMs, requestedMode, effectiveMode }) };
     }
     return { ...result, ...(shown && (result.status === "completed" || result.status === "follow_up") ? shown : {}), ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
-      ...((result.status === "completed" || result.status === "follow_up") && tripCostProposal ? { tripCostProposal } : {}), ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}) };
+      ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}) };
   } };
 }

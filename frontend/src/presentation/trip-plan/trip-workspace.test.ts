@@ -7,7 +7,6 @@ import { tripWorkspacePreviewSource } from "../../dev/trip-workspace-preview";
 import { createTripWorkspaceController, type TripWorkspaceSource } from "../../usecases/trip-plan/trip-workspace-controller";
 import { configureTripWorkspace } from "./trip-workspace";
 import { createServerTripWorkspaceSource } from "../../usecases/trip-plan/server-trip-workspace-source";
-import { costForecast } from "../../../../modules/trip/domain/trip-costs.fixture";
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
@@ -67,7 +66,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.ui.panel.querySelector(".trip-workspace-readiness")).toBeNull();
     expect(f.ui.panel.querySelector(".trip-workspace-checklist")).toBeNull();
     expect(f.ui.panel.querySelector(".trip-workspace-feasibility")).toBeNull();
-    expect(details.open).toBe(false); expect(details.textContent).toContain("費用");
+    expect(details).toBeNull();
     expect(f.controller.current()).toEqual(multiCityTrip());
   });
   it("derives day tabs from authored schedules and keeps unscheduled items separate", () => {
@@ -142,17 +141,6 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.controller.proposal()).toBeUndefined();
     expect(trip.items[0]?.decision).toMatchObject({ confirmedAt: "2026-09-26T10:00:00Z" });
   });
-  it("does not discard an unsubmitted cost edit while switching detail tabs", () => {
-    const base = multiCityTrip();
-    const trip = applyTripProposal(base, { tripId: base.id, baseRevision: base.revision, summary: "概算", patches: [
-      { type: "cost_forecast", forecast: costForecast(base.id, base.revision) },
-    ] });
-    const f = setup({ getCurrentTrip: () => trip, confirmProposal: async () => undefined });
-    const details = f.ui.panel.querySelector<HTMLDetailsElement>(".trip-extra-details")!; details.open = true; button(f.ui.panel, "交通の金額を編集").click();
-    const input = f.ui.panel.querySelector<HTMLInputElement>(".trip-cost-editor input")!; input.value = "12345";
-    details.open = false; expect(input.isConnected).toBe(true);
-    details.open = true; expect(f.ui.panel.querySelector<HTMLInputElement>(".trip-cost-editor input")?.value).toBe("12345");
-  });
   it("opens a bounded travel mode and drops a delayed response after Trip switch", async () => {
     const first = inTripFixture(); let resolve!: (value: InTripContextSnapshot | undefined) => void;
     const load = vi.fn(() => new Promise<InTripContextSnapshot | undefined>((done) => { resolve = done; }));
@@ -164,7 +152,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.ui.panel.textContent).toContain("別の旅");
     button(f.ui.panel, "旅行モードを開く").click();
     expect(load).toHaveBeenCalledTimes(1); expect(f.ui.panel.textContent).toContain("プレビュー");
-    button(f.ui.panel, "旅程詳細へ戻る").click(); expect(f.ui.panel.textContent).toContain("費用");
+    button(f.ui.panel, "旅程詳細へ戻る").click(); expect(f.ui.panel.querySelector(".trip-detail-panel")).not.toBeNull();
   });
   it("keeps server ownership while loading/unavailable, retries and only previews changes", async () => {
     const trip = multiCityTrip(), get = vi.fn(async () => trip);

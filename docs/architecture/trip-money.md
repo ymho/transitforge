@@ -63,7 +63,7 @@ trusted AccommodationSelectionEvidenceにpriceRetention?: permitted/forbidden/un
 商品identity・日付・施設の許諾と価格の許諾は別。モデル/UIは引き続きIDだけを渡す。
 その候補商品に対する価格保持許諾、validな観測、observedAt <= source.retrievedAt <= selectedAtが揃ったときだけ、
 allowlistでobservedPriceを構築する。欠落/不明/不可/不正な価格は省略し、宿の採用自体は継続する。
-実Providerの権利をこのPRで新たに許可したわけではない。fixtureだけが架空の許諾を持つ。
+楽天のtrusted Adapterは施設検索の参考最安料金を保持対象とする。その他のProviderは明示的な許諾なしに保持しない。予定ごとの表示・手入力は[概算費用](trip-cost-estimates.md)を参照。
 
 DomainもobservedPriceの構造・原通貨・日時と少なくとも1つの保持済み商品sourceのretrievedAtとの順序を検証する。
 Evidenceは既存ExternalSourceEvidenceを再利用し、別の価格Evidence正本を作らない。

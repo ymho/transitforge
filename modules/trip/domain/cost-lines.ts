@@ -78,7 +78,11 @@ export function validateCostLine(line: CostLine): void {
       line.coverage === "complete" && line.basis.dimensions.some((dimension) => !line.quantities.some((quantity) => quantity.dimension === dimension && quantity.count !== undefined)))) throw new Error("Unit cost requires every dimension quantity");
   if (line.amountRole === "total" && line.quantities.length) throw new Error("Total cost cannot also multiply quantities");
   if (line.coverage === "complete" && line.amount === undefined) throw new Error("Complete cost requires amount");
-  for (const refs of Object.values(line.targetRefs)) validateRefs(refs);
+  for (const [key, refs] of Object.entries(line.targetRefs)) {
+    if (key === "itemIds") {
+      if (!Array.isArray(refs) || new Set(refs).size !== refs.length || refs.some(id => typeof id !== "string" || !id.trim() || id.length > 160 || /[\u0000-\u001f\u007f]/u.test(id))) throw new Error("Invalid item references");
+    } else validateRefs(refs);
+  }
   validateTexts(line.included, 24); validateTexts(line.excluded, 24); validateTexts(line.assumptions, 16);
   if (line.evidenceRefs !== undefined) validateRefs(line.evidenceRefs);
   if (line.supersedesLineIds !== undefined) validateRefs(line.supersedesLineIds);

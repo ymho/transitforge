@@ -1,57 +1,21 @@
-# TripのAI費用概算（#458）
+# 予定ごとの概算費用
+
+## 表示と入力
+
+費用は旅程タイムラインの各予定に「概算費用」として表示する。旅行全体のAI概算生成、集計パネル、履歴のAI費用確認ボタンは撤去する。鉄道の予定には費用欄を表示しない。
+
+楽天トラベルで採用した宿は `hotelMinCharge` の参考価格を表示する。これは1室1泊の最安料金の目安であり「〜 / 1室1泊」を添える。人数や泊数を掛けた旅行総額を自動生成しない。取得時刻・原通貨・価格条件を `AccommodationSnapshot.observedPrice` に保持する。価格のない既存宿に金額を補完しない。再検索・採用時に取得する。
+
+他の予定はユーザーが予定全体の概算金額を入力する。宿にも手入力でき、入力額は参考価格より優先する。入力を削除すると宿は参考価格に戻り、それ以外は未入力となる。0円は未入力と区別する。説明の長い注意書きは表示しない。
 
 ## 保存契約
 
-Trip V2へoptionalな`costs`を追加した。既存Tripはfieldなしで読み、0円の予測を補完しない。
-別Repository・LocalStorage・予算サービスは追加しない。
+既存の `Trip.costs.lines` と `cost_lines` patchを使う。`forecast` は省略可能とし、初回入力時にAI forecastを要求しない。旧forecastとカテゴリoverrideは読み取り互換を保持するが、予定へ配分せず画面にも表示しない。Server Agentへ `propose_trip_costs` を登録しない。
 
-- `forecast`: Trip ID、生成根拠revision、生成日時、4項目の予測。
-- `items[].category`: transport/accommodation/sightseeing/food。初期版はカテゴリを安定した項目IDとする。
-  それぞれ交通・宿泊・観光・食事の旅行全体・利用者全員分。予定1件ずつの明細分割は行わない。
-- `items[].amount?`: 既存Moneyの原通貨・safe integer最小単位。省略は未推定、0とは異なる。
-  説明240文字、前提6件×240文字を保持する。4カテゴリの欠落・重複を拒否する。
-- `overrides`: カテゴリごとのユーザー金額。存在すれば0でも表示額として採用し、元のAI値は残す。
-- `stale`: Requestまたは採用済みitemsが変わるとDomainがtrueにする。タイトル・費用編集だけでは変えない。
-  再予測のみfalseへ戻す。異なるrevisionの予測を古いTripへ適用できない。
+手入力のCostLineは `item-estimate:` のID、単一 `targetRefs.itemIds`、`user_override`、`amountRole: total` を持つ。原通貨のsafe integer最小単位を保存する。存在しない予定と鉄道を対象にできず、予定削除時には当該明細を除去する。ほかの予定の明細は保持する。費用は予約済み・支払済み・成立性の事実にはしない。
 
-`cost_forecast` patchは現在Trip ID/revisionと一致する予測のみ受け付け、既存overrideを引き継ぐ。
-`cost_override` patchは1カテゴリの設定または解除。全解除は4件のpatchを1Proposalとして確認する。
-合計は通貨別の計算値であり保存しない。未推定が残れば部分合計。為替換算と合計直接編集はない。
-個々の額だけでなく合計のsafe integer上限も保存前に検証する。
+変更案の明示確認、既存Server writer / CAS / read-backを使用する。同じ旅程の再取得では入力途中のフォームを保持するが、revisionが変われば古い変更案を保存できない。別会話・アカウントへ入力を持ち越さない。画面移動とページ離脱では入力破棄を確認する。
 
-## Server Agentと公開応答
+## 検証
 
-認可済みTrip snapshotを取得したturnにのみ`propose_trip_costs`を登録する。
-モデル入力は4項目のカテゴリ・概算・説明・前提だけ。Trip ID/revision/生成時刻はServerが決め、
-override・合計・取得済み価格は入力できない。人数または日程が不明なら金額付き項目の前提を必須とする。
-推定不能はamountを省略する。Tool失敗時に0円を生成せず、Tripも書き換えない。
-
-公開`tripCostProposal`はcost_forecast patch 1件、12KiB以内。completed/follow_upだけに付与し、
-本文・assistant message・receiptを同じtransactionで保存する。同一turnの再送は同じ案を返す。
-通常のConversation appendから案を注入できない。SSEと履歴の読取でも公開契約を検証する。
-条件案と費用案は同じturnに保持できるが、確認は別々。片方の採用でrevisionが変わった場合、
-他方を自動rebaseせず再生成を求める。Trip未作成の相談には費用Toolを登録しない。
-
-## UIと確認
-
-現在のTrip workspaceへ費用セクションを接続した。#459の4タブ統合ではこのread modelを利用する。
-「AIに概算を依頼」→差分比較→「確認して旅程を保存」で既存Server writer/CAS/read-backへ進む。
-履歴は「費用の概算を確認」から開き、自動採用しない。
-項目の編集・取消・AI値への復帰を提供し、全解除は確認を挟む。通貨別合計はread-only。
-入力は文字削除で補正せず、負数・空欄・桁超過・通貨に合わない小数を拒否する。
-
-同じTripの再取得中も未保存入力を保持するが、revision変更後は保存を拒否して再編集を求める。
-別会話・アカウントへ入力を持ち越さない。費用編集中の画面移動・ページ離脱を確認する。
-保存の応答喪失、CAS競合、遅着応答は既存mutation receiptとsourceのgeneration検証を使う。
-更新結果はサーバから再読込し、別の画面でも同じ費用を取得できる。
-
-## 価格事実との分離と検証
-
-AI概算とユーザー編集は予約価格、支払済み、Offeringの観測価格、価格保証ではない。
-費用patchは採用意思・予約・予定を変更せず、Feasibilityのcost factを生成しない。
-hard budgetのunknownを概算でsatisfiedへ変更しない。旅行中の予定組替えpatchへ費用を混在させない。
-
-Domainの合計/部分合計/0円/未定/原通貨/桁上限/stale/再予測保護、Server Tool境界、
-生成→履歴→再送→認証済みTrip CAS→再読込、フォーム入力と明示確認をoffline testで検証する。
-実Cognito/AWS/Bedrockでの費用schema・前提・対象維持・非断定のLive評価は未実施。
-推定精度や実モデル品質をoffline fixtureだけで保証しない。#458はLive確認を含め完了扱いにしない。
+Domainで初回保存、0円、削除、複数予定、旧forecast互換、無効参照を確認する。UIで入力・確認・再取得・入力解除、古いrevisionと会話の拒否、鉄道欄の非表示を確認する。楽天の検証済み選択フローで参考価格の保存を確認する。実予約API、AI推定、通貨換算は使用しない。

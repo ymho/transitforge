@@ -253,13 +253,8 @@ export function configureAiGuidePanel(
   });
 
   const addProposalAction = (message: HTMLElement, response: AssistantTurnView) => {
-    const cost = response.tripCostProposal;
     const consultation = response.consultationRequestProposal;
     const update = response.tripUpdateProposal;
-    if (cost && elements.onTripCostProposal) {
-      const button = document.createElement("button"); button.type = "button"; button.textContent = "費用の概算を確認";
-      button.addEventListener("click", () => elements.onTripCostProposal?.(cost)); message.append(button);
-    }
     const review = consultation && elements.onConsultationRequestProposal
       ? () => elements.onConsultationRequestProposal?.(consultation)
       : update && elements.onTripUpdateProposal ? () => elements.onTripUpdateProposal?.(update) : undefined;

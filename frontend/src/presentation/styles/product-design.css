@@ -183,9 +183,7 @@
   & .journey-card-route strong { font-size: 13px; font-weight: 500; }
   & .journey-card-route :is(span, small) { font-size: 12px; color: var(--tf-muted); }
   & .journey-adoption { padding: 12px 0 0; border-top: 1px solid var(--tf-line); }
-  & .journey-source-disclosure { margin: 8px 0 0; font-size: 11px; }
   & .public-plan-presentation, & .public-plan-candidate { background: transparent; box-shadow: none; }
-  & .trip-costs { background: var(--tf-bg); color: var(--tf-ink); border-color: var(--tf-line); }
   & .conversation-feedback button { border: 0; background: transparent; color: var(--tf-muted); }
   & .home-prompt { border: 0; box-shadow: none; }
   & .home-prompt :is(textarea, button) { border: 0; }
