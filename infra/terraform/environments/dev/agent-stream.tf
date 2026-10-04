@@ -490,7 +490,8 @@ resource "aws_iam_role_policy" "agent_stream_dependencies" {
   for_each = local.agent_stream_instances
   role     = aws_iam_role.agent_stream[each.key].id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
-    { Effect = "Allow", Action = ["dynamodb:GetItem"], Resource = aws_dynamodb_table.trips.arn },
+    # Replacing an itinerary slot checks owner-scoped booking facts before mutation.
+    { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:Query"], Resource = aws_dynamodb_table.trips.arn },
     { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = aws_secretsmanager_secret.agent_stream_providers[each.key].arn },
     { Effect = "Allow", Action = ["s3:GetObject"], Resource = concat(["arn:aws:s3:::${local.resource_prefix}-data-builder-source/timetable/*", "arn:aws:s3:::${local.resource_prefix}-data-builder-source/ai-timetable/*", "${aws_s3_bucket.website.arn}/api/traffic/delays.json", "${aws_s3_bucket.website.arn}/viewer-input/train_index.json"], var.enable_otp_route_service ? ["arn:aws:s3:::${local.otp_graph_bucket}/${local.otp_graph_manifest_key}"] : []) }
   ] })

@@ -40,6 +40,18 @@ override_resource {
     arn = "arn:aws:iam::123456789012:role/transitforge-dev-agent-stream"
   }
 }
+# Resolve dependency-policy ARNs at plan time so the permission assertion can
+# inspect the policy without provisioning resources or reading any secret value.
+override_resource {
+  target          = aws_secretsmanager_secret.agent_stream_providers["stream"]
+  override_during = plan
+  values          = { arn = "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:transitforge-dev-providers-example" }
+}
+override_resource {
+  target          = aws_s3_bucket.website
+  override_during = plan
+  values          = { arn = "arn:aws:s3:::transitforge-dev-website" }
+}
 run "current_topology" {
   command = plan
   assert {
@@ -79,6 +91,19 @@ run "enabled_contract" {
   variables {
     enable_fixed_egress_provider = true
   }
+  assert {
+    condition = (
+      aws_iam_role_policy.agent_stream_dependencies["stream"].role == aws_iam_role.agent_stream["stream"].id &&
+      length([for statement in jsondecode(aws_iam_role_policy.agent_stream_dependencies["stream"].policy).Statement : statement
+        if contains(statement.Action, "dynamodb:Query") &&
+        statement.Effect == "Allow" &&
+        toset(statement.Action) == toset(["dynamodb:GetItem", "dynamodb:Query"]) &&
+        statement.Resource == aws_dynamodb_table.trips.arn
+      ]) == 1
+    )
+    error_message = "Candidate replacement must be able to read booking facts from the Trip table; this read grant must not allow standalone writes, delete, scan or wildcard resources."
+  }
+
   assert {
     condition = (
       aws_iam_role_policy.agent_stream_trip_adoption["stream"].role == aws_iam_role.agent_stream["stream"].id &&
