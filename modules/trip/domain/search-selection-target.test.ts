@@ -8,7 +8,7 @@ const trip = createTrip("75800000-0000-4000-8000-000000000001", "旅", "2026-10-
   requirement: { type: "dates", start: { earliest: "2026-10-05", latest: "2026-10-05" } } }], assumptions: [] }, "inspiration", undefined,
 { version: 1, logicalDays: [{ id: "day-1" }, { id: "day-2" }], calendarBindings: [] });
 const item = (date: string, zone = "Asia/Tokyo"): ItineraryItem => ({ id: "verified", type: "transport", title: "検索結果",
-  schedule: { type: "fixed", startAt: { at: `${date}T08:00:00+09:00`, timeZone: zone } }, detail: { status: "unresolved" } });
+  schedule: { type: "fixed", startAt: { at: `${date}T08:00:00${zone === "Europe/Vienna" ? "+02:00" : "+09:00"}`, timeZone: zone } }, detail: { status: "unresolved" } });
 
 it("matches every alternative to the uniquely dated outbound slot without mutating the Trip", () => {
   const before = structuredClone(trip);
@@ -21,6 +21,12 @@ it("keeps unknown and flexible trip dates ambiguous", () => {
   const flexible = { ...trip, request: { ...trip.request, constraints: trip.request.constraints.map(c => ({ ...c, requirement: { type: "dates" as const,
     start: { earliest: "2026-10-05", latest: "2026-10-06" } } })) } };
   expect(datedSearchSelectionTarget([item("2026-10-05")], slots, flexible)).toBeUndefined();
+  for (const source of ["assumption", "profile"] as const) {
+    const inferred = { ...trip, request: { ...trip.request, constraints: trip.request.constraints.map(c => ({ ...c, source })) } };
+    expect(datedSearchSelectionTarget([item("2026-10-05")], slots, inferred)).toBeUndefined();
+  }
+  const participantOnly = { ...trip, request: { ...trip.request, constraints: trip.request.constraints.map(c => ({ ...c, scope: { type: "trip" as const, participantIds: ["one-member"] } })) } };
+  expect(datedSearchSelectionTarget([item("2026-10-05")], slots, participantOnly)).toBeUndefined();
 });
 it("does not choose between two slots on the same day or alternatives on different days", () => {
   const sameDay = slots.map(slot => ({ ...slot, schedule: slots[0]!.schedule }));

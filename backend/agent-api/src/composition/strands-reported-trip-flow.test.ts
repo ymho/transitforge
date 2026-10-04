@@ -71,9 +71,17 @@ it(`#758 reported Izumo flow: ${live ? "Bedrock" : "SDK"} carries hotels and rai
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     weather: { search: vi.fn() }, additionalTools: bindings,
     newExecutionId: () => `75800000-2222-4000-8000-${String(++executions).padStart(12, "0")}`,
-    runRuntime: input => { runtimeCalls++; return createStrandsServerRuntime(new StrandsAgentEngine({ modelId, region: "ap-northeast-1",
+    runRuntime: input => { runtimeCalls++;
+      const controller = input.candidateController;
+      const observed = live && controller ? { ...controller, review: async (id?: string) => {
+        const result = await controller.review(id);
+        console.log(JSON.stringify({ scenario: "reported-izumo", turn: executions, review: result.status, groupKind: result.group?.kind ?? null,
+          requestedKind: controller.context.groups.find(group => group.presentationId === id)?.kind ?? null, omittedGroup: !id, groupCount: controller.context.groups.length }));
+        return result;
+      } } : controller;
+      return createStrandsServerRuntime(new StrandsAgentEngine({ modelId, region: "ap-northeast-1",
       systemPrompt: agentV2SystemPrompt, ...strandsProductionReasoning(modelId), maxTurns: 8, maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
-    }, live ? {} : { model: new StrandsScriptedModel(scripted) }))(input); },
+    }, live ? {} : { model: new StrandsScriptedModel(scripted) }))({ ...input, candidateController: observed }); },
     projectResult: result => ({ publicJourneyPresentation: projectPublicJourneyPresentation(rail, new Set(result.claims.flatMap(claim => claim.evidenceIds))) }),
     verifiedSearchSelectionItems: result => [...hotels.itemsFor(result.publicAccommodationPresentation), ...rails.itemsFor(result.publicJourneyPresentation)],
     limits: { maxIterations: 8, maxModelCalls: 8, maxToolCalls: 4, maxExecutionMs: 90000 },
@@ -131,6 +139,9 @@ it(`#758 reported Izumo flow: ${live ? "Bedrock" : "SDK"} carries hotels and rai
   await turn("経路1でお願いします", select("shown:18:journey", "journey-1", "経路1でお願いします", { kind: "ordinal", ordinal: 1, quote: "1" }));
   expect(journey.mock.calls.length).toBe(journeyCalls);
   const saved = await trips.repository.get(stateA, metadata.tripId);
+  const returnItems = hotelSaved!.items.filter(item => item.type === "transport" && item.schedule.type === "relative" && item.schedule.dayId === hotelSaved!.timeline!.logicalDays[1]!.id);
+  expect(returnItems).toHaveLength(1);
+  expect(saved?.items.filter(item => returnItems.some(original => original.id === item.id))).toEqual(returnItems);
   expect(saved?.items).toContainEqual(expect.objectContaining({ type: "transport", detail: expect.objectContaining({ status: "selected", mode: "rail", journey: expect.objectContaining({ legs: [expect.objectContaining({ serviceUid: "fixture-rail-0" })] }) }) }));
   expect(saved?.items.filter(item => item.type === "stay")).toEqual(hotelSaved?.items.filter(item => item.type === "stay"));
   expect(saved?.items.filter(item => item.type === "activity")).toEqual(hotelSaved?.items.filter(item => item.type === "activity"));

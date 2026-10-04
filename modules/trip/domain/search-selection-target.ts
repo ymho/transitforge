@@ -3,14 +3,17 @@ import type { ItineraryItem, Trip } from "./trip";
 
 /** Match verified calendar days, never names or model-authored destination labels.
  * An undated or multiply matching slot remains ambiguous. All alternatives must
- * identify the same slot before a common selection presentation can be retained. */
+ * identify the same slot before a common selection presentation can be retained.
+ * For an unbound timeline, the exact user start date anchors its first logical
+ * day locally. A missing request zone uses the verified alternatives' one zone;
+ * this policy does not persist calendar bindings or change other Trip items. */
 export function datedSearchSelectionTarget(items: readonly ItineraryItem[], slots: readonly ItineraryItem[], trip: Trip): ItineraryItem | undefined {
   let timeline = trip.timeline;
   const candidateZones = new Set(items.flatMap(item => item.schedule.type === "fixed" ? [item.schedule.startAt.timeZone] : item.schedule.type === "day" && item.schedule.timeZone ? [item.schedule.timeZone] : []));
   if (candidateZones.size !== 1) return undefined;
   const candidateZone = [...candidateZones][0]!;
   if (timeline && !timeline.calendarBindings.length) {
-    const anchors = trip.request.constraints.filter(c => c.scope.type === "trip" && c.source === "user")
+    const anchors = trip.request.constraints.filter(c => c.scope.type === "trip" && !c.scope.participantIds?.length && c.source === "user")
       .flatMap(c => c.requirement.type === "dates" && c.requirement.start.earliest === c.requirement.start.latest
         ? [{ date: c.requirement.start.earliest, timeZone: c.requirement.timeZone ?? candidateZone }] : []);
     if (anchors.length === 1) timeline = bindTimelineFromAnchor(timeline, timeline.logicalDays[0]!.id, anchors[0]!.date, anchors[0]!.timeZone);
