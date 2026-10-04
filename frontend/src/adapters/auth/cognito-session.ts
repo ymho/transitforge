@@ -18,6 +18,10 @@ const accessTokenMaximumSeconds = 300;
 const refreshWindowMs = 30_000;
 const absoluteSessionMs = 12 * 60 * 60 * 1000;
 const clockSkewMs = 30_000;
+/** A temporary token endpoint failure is not proof that the refresh grant expired. */
+class RefreshUnavailableError extends Error {
+  constructor() { super("Authentication refresh temporarily unavailable"); this.name = "RefreshUnavailableError"; }
+}
 export interface AuthBrowser {
   storage: Storage;
   location: Pick<Location, "href" | "origin" | "pathname" | "assign">;
@@ -69,8 +73,12 @@ export function createCognitoSession(config: AuthConfig, browser: AuthBrowser): 
     refreshFlight = (async () => {
       try {
         const body = new URLSearchParams({ grant_type: "refresh_token", client_id: config.clientId, refresh_token: refreshToken });
-        const response = await fetch(`${config.loginOrigin}/oauth2/token`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body,
-          cache: "no-store", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer" });
+        let response: Response;
+        try {
+          response = await fetch(`${config.loginOrigin}/oauth2/token`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body,
+            cache: "no-store", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(15_000) });
+        } catch { throw new RefreshUnavailableError(); }
+        if (response.status === 408 || response.status === 429 || response.status >= 500) throw new RefreshUnavailableError();
         const value: unknown = await response.json();
         if (!response.ok || !isRecord(value) || typeof value.access_token !== "string" || !value.access_token ||
             String(value.token_type).toLowerCase() !== "bearer" || !validAccessLifetime(value.expires_in) ||
@@ -82,7 +90,11 @@ export function createCognitoSession(config: AuthConfig, browser: AuthBrowser): 
           refreshToken: typeof value.refresh_token === "string" ? value.refresh_token : refreshToken,
           expiresAt: Math.min(browser.now() + Number(value.expires_in) * 1000, absoluteExpiresAt) };
         persist(updated); session = updated; return updated.accessToken;
-      } catch { if (currentGeneration === generation) expire(); return undefined; }
+      } catch (error) {
+        if (currentGeneration !== generation) return undefined;
+        if (session && session.absoluteExpiresAt > browser.now() && error instanceof RefreshUnavailableError) throw error;
+        expire(); return undefined;
+      }
       finally { refreshFlight = undefined; }
     })();
     return refreshFlight;
@@ -139,7 +151,10 @@ export function createCognitoSession(config: AuthConfig, browser: AuthBrowser): 
           signedIn(stored);
           if (stored.expiresAt <= browser.now() + refreshWindowMs) await refresh();
         } else clear();
-      } catch { fail(); }
+      } catch (error) {
+        // A reload must not discard the still-valid grant on a transient refresh.
+        if (!(error instanceof RefreshUnavailableError) || !session || session.absoluteExpiresAt <= browser.now()) fail();
+      }
     },
     async login() {
       ++generation;

@@ -105,6 +105,45 @@ describe("Cognito public-client authentication", () => {
     expect(await auth.getAccessToken()).toBeUndefined(); expect(auth.getState().status).toBe("expired");
   });
 
+
+  it.each(["network", 408, 429, 502, 503] as const)("keeps the twelve-hour grant on transient refresh %s without using an expired access token", async failure => {
+    const { callback } = await login(); const fetchMock = mockTokens();
+    const auth = createCognitoSession(config, browser(callback)); await auth.initialize();
+    const before = sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`);
+    now += 301_000;
+    if (failure === "network") fetchMock.mockRejectedValueOnce(new TypeError("private network detail"));
+    else fetchMock.mockResolvedValueOnce(new Response("private upstream detail", { status: failure }));
+    await expect(auth.getAccessToken()).rejects.toMatchObject({ name: "RefreshUnavailableError", message: "Authentication refresh temporarily unavailable" });
+    expect(auth.getState().status).toBe("signed-in");
+    expect(sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`)).toBe(before);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    fetchMock.mockResolvedValueOnce(refreshedTokens());
+    expect(await auth.getAccessToken()).toBe("access-token-refreshed");
+    const after = JSON.parse(sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`)!);
+    expect(after.absoluteExpiresAt).toBe(JSON.parse(before!).absoluteExpiresAt);
+    now = after.absoluteExpiresAt;
+    expect(await auth.getAccessToken()).toBeUndefined(); expect(auth.getState().status).toBe("expired");
+  });
+
+  it("preserves the grant on a reload during a token endpoint outage and respects logout", async () => {
+    const { callback } = await login(); const fetchMock = mockTokens();
+    await createCognitoSession(config, browser(callback)).initialize();
+    const before = sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`);
+    now += 301_000;
+    fetchMock.mockResolvedValueOnce(new Response("upstream unavailable", { status: 502 }));
+    const auth = createCognitoSession(config, browser()); await auth.initialize();
+    expect(auth.getState().status).toBe("signed-in");
+    expect(sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`)).toBe(before);
+    let fail!: (reason: Error) => void;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((_, reject) => { fail = reject; }));
+    const refresh = auth.getAccessToken();
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
+    await auth.logout(); fail(new TypeError("private detail"));
+    expect(await refresh).toBeUndefined();
+    expect(auth.getState().status).toBe("signed-out");
+    expect(sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`)).toBeNull();
+  });
+
   it("expires once on invalid_grant and does not retry refresh", async () => {
     const { callback } = await login(); const fetchMock = mockTokens();
     const auth = createCognitoSession(config, browser(callback)); await auth.initialize();
