@@ -56,15 +56,17 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
   const serialize = () => JSON.stringify({ userMessage: input.userRequest, application });
   let serialized = serialize();
   // Stored source excerpts and old dialogue can outgrow a valid current Trip.
-  // Bound only this transport copy. Current conditions, Trip, focus, candidate
+  // Bound only this transport copy. Current conditions, Trip items, focus, candidate
   // identities and the two most recent messages remain intact. Applications keep
   // the complete admitted Evidence and persisted history for read-back/grounding.
   const evidence = application.evidence as Json[];
   const conversation = application.conversation as { [key: string]: Json } | null;
   const history = Array.isArray(conversation?.messages) ? conversation.messages : [];
   let omittedEvidence = 0, omittedHistoryMessages = 0;
+  const omittedDerivedTripFields: string[] = [];
   const coverage = () => {
-    application.contextCoverage = { reason: "transport_budget", omittedEvidence, omittedHistoryMessages };
+    application.contextCoverage = { reason: "transport_budget", omittedEvidence, omittedHistoryMessages,
+      ...(omittedDerivedTripFields.length ? { omittedDerivedTripFields } : {}) };
     serialized = serialize();
   };
   while (serialized.length > 24_000 && evidence.length) {
@@ -73,7 +75,16 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
   while (serialized.length > 24_000 && history.length > 2) {
     history.shift(); omittedHistoryMessages++; coverage();
   }
-  // Never cut a condition, current utterance, candidate identity or current Trip.
+  // Daily metrics repeat item/day identities for provenance and can dominate a
+  // small Trip after dated rail/lodging adoption. They are a derived read model,
+  // not the schedule or selection authority. Omit this whole transport field
+  // explicitly, never interpret missing metrics as zero or cut individual facts.
+  const trip = (application.state as { [key: string]: Json }).trip as { [key: string]: Json } | undefined;
+  if (serialized.length > 24_000 && trip?.workload !== undefined) {
+    delete trip.workload;
+    omittedDerivedTripFields.push("workload"); coverage();
+  }
+  // Never cut a condition, current utterance, candidate identity or Trip item.
   if (serialized.length > 24_000) throw new StrandsTurnInputError("context_budget");
   return serialized;
 }

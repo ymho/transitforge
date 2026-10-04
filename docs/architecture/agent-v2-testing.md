@@ -7,7 +7,10 @@
 
 会話継続で24,000文字を超える場合、モデルへ送るコピーから古い保持Evidence、
 次に古い対話を全件単位で省く。`contextCoverage`で省略件数を明示し、直近2発言は維持する。
-現在発言・EffectiveIntent・現在Trip・画面の選択対象・提示候補のID/名称は切断しない。
+それでも超過する場合だけ、現在Tripから再生成できる日別集計`workload`を送信コピーから
+全体単位で省き、`contextCoverage.omittedDerivedTripFields`に`workload`を明示する。
+欠落した集計を0や確定した負荷と解釈しない。保存したTripと集計計算自体は変更しない。
+現在発言・EffectiveIntent・Trip項目と日別配置・画面の選択対象・提示候補のID/名称は切断しない。
 これらだけで上限を超える場合は引き続き拒否する。Serverに保存した履歴とEvidence、
 Applicationの根拠検証・採用権限は変更せず、モデルには保持候補の種別と識別子を渡す。
 

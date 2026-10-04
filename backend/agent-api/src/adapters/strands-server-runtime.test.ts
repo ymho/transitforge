@@ -8,6 +8,8 @@ import type { StrandsAgentEngine } from "./strands-agent-engine.js";
 import { strandsConversationInput, strandsTurnInput } from "./strands-turn-input.js";
 import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
 import { emptyConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
+import { createTrip, type ItineraryItem } from "@raiquora/trip/trip";
+import { createAgentContextSnapshot, selectedTripItemSnapshot } from "@raiquora/agent/agent-context-snapshot";
 import { createStrandsServerRuntime } from "./strands-server-runtime.js";
 const limits = { maxIterations: 4, maxModelCalls: 6, maxToolCalls: 6, maxExecutionMs: 10_000, maxEvidence: 20 };
 function runtimeInput() {
@@ -168,4 +170,50 @@ it("still rejects an oversized authoritative Trip rather than truncating it to m
   const currentTrip = { sourceRevision: 7, summary: "x".repeat(25_000) };
   expect(() => strandsTurnInput({ ...runtimeInput(), context: { currentTrip } })).toThrow("context_budget");
   expect(currentTrip.summary).toHaveLength(25_000);
+});
+
+it("continues route reselection after dated rail and overnight lodging expand the derived daily metrics", () => {
+  const items: ItineraryItem[] = Array.from({ length: 7 }, (_, i) => ({ id: `candidate:${String(i).repeat(32)}`,
+    title: i === 0 ? "経路1: 向日町駅→出雲市駅" : i === 4 ? "御師の宿 ますや旅館" : `出雲の予定${i}`,
+    schedule: { type: "relative", dayId: `day-${i < 5 ? 1 : 2}` },
+    ...([0, 1, 6].includes(i) ? { type: "transport", detail: { status: "unresolved" } } : i === 4
+      ? { type: "stay", selection: { status: "unselected" } } : { type: "activity", category: "sightseeing" }) } as ItineraryItem));
+  // These precision/zone differences are valid saved schedules. The domain
+  // projects two relative days plus rail day and lodging start/end days.
+  items[0] = { ...items[0]!, schedule: { type: "fixed", startAt: { at: "2026-10-05T08:48:00+09:00", timeZone: "Asia/Tokyo" },
+    endAt: { at: "2026-10-05T13:15:00+09:00", timeZone: "Asia/Tokyo" } } };
+  items[4] = { ...items[4]!, schedule: { type: "day", date: "2026-10-05", endDate: "2026-10-06" } };
+  const trip = createTrip("12345678-1234-4123-8123-123456789012", "出雲大社への旅", "2026-10-04T00:00:00Z", items,
+    undefined, undefined, undefined, { version: 1, logicalDays: [{ id: "day-1", label: "1日目" }, { id: "day-2", label: "2日目" }], calendarBindings: [] });
+  const currentTrip = createAgentContextSnapshot(undefined, trip).trip!;
+  expect(currentTrip.dailyItinerary!.days).toHaveLength(5);
+  const effectiveIntent = compileEffectiveIntent({ baseSource: "trip", baseRevision: trip.revision,
+    baseRequest: trip.request, overlay: emptyConversationIntentOverlay() });
+  const messages = Array.from({ length: 12 }, (_, i) => ({ role: i % 2 ? "assistant" as const : "user" as const,
+    text: `${i}:` + "旅".repeat(1590) }));
+  const candidates = { groups: ["plan", "journey", "accommodation"].map((kind, i) => ({ kind, presentationId: `shown:${i + 10}:${kind}`,
+    candidates: Array.from({ length: 3 }, (_, j) => ({ ordinal: j + 1, candidateId: `${kind}:${String(j).repeat(64)}`,
+      label: kind === "journey" ? "向日町駅→出雲市駅 08:48–13:15" : kind === "accommodation" ? "出雲大社 御師の宿 ますや旅館" : `出雲大社への旅程案${j + 1}` })) })),
+    itineraryItemCount: 7, canSave: true };
+  const input = { ...runtimeInput(), userRequest: "相談対象の往路を選び直したいです。電車の経路を3件検索して比較してください。ホテルとほかの予定は変更しないでください。",
+    context: { effectiveIntent, currentTrip, conversation: { title: trip.title, summary: "旅".repeat(700), messages },
+      featureContext: { uiFocus: { itemId: items[0]!.id, item: selectedTripItemSnapshot(items[0]!) } } },
+    candidateController: { context: candidates } as never };
+  const before = structuredClone({ trip, context: input.context, candidates });
+  const payload = JSON.parse(strandsTurnInput(input));
+  expect(payload.application.contextCoverage).toMatchObject({ omittedDerivedTripFields: ["workload"], omittedHistoryMessages: 10 });
+  const { workload, request: _request, ...authority } = currentTrip;
+  expect(workload!.days).toHaveLength(5);
+  expect(payload.application.state.trip).toEqual(authority);
+  expect(payload.application.effectiveIntent).toEqual(effectiveIntent);
+  expect(payload.application.state.viewSelection).toEqual(input.context.featureContext.uiFocus);
+  expect(payload.application.presentedCandidates).toEqual(candidates);
+  expect(payload.application.conversation.messages).toEqual(messages.slice(-2));
+  const native = strandsConversationInput(input);
+  expect(native.applicationReference.length + native.modelInput.length + native.history.reduce((n, message) => n + JSON.stringify(message).length, 0)).toBeLessThanOrEqual(24_000);
+  expect({ trip, context: input.context, candidates }).toEqual(before);
+  // Small contexts still expose the metrics, including their unknown coverage.
+  const small = JSON.parse(strandsTurnInput({ ...runtimeInput(), context: { effectiveIntent, currentTrip } }));
+  expect(small.application.state.trip.workload).toEqual(workload);
+  expect(small.application.contextCoverage).toBeUndefined();
 });
