@@ -92,6 +92,13 @@ function inlineNodes(tokens: Token[]): InlineNode[] {
   return tokens.flatMap((token): InlineNode[] => {
     switch (token.type) {
       case "text":
+        // Repair malformed bold only inside a plain text token; code, URLs and
+        // raw HTML keep their original contents and security rules.
+        if (!nestedTokens(token).length) {
+          const repaired = token.text.replace(/\*\*([^*`\n]+?)[ \t]+\*\*/gu, "**$1**");
+          if (repaired !== token.text) return inlineNodes(marked.Lexer.lexInline(repaired, { gfm: true, breaks: true }));
+        }
+        return nestedTokens(token).length > 0 ? inlineNodes(nestedTokens(token)) : [{ kind: "text", value: token.text }];
       case "escape":
         return nestedTokens(token).length > 0 ? inlineNodes(nestedTokens(token)) : [{ kind: "text", value: token.text }];
       case "strong":

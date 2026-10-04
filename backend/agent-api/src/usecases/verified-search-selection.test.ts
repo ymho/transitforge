@@ -202,3 +202,37 @@ it.each(["journey", "accommodation"] as const)("replaces a %s slot only after th
   for (const query of queries) expect(query.input).toMatchObject({ TableName: "trips", ConsistentRead: true,
     KeyConditionExpression: "pk = :owner AND begins_with(sk, :prefix)", ExpressionAttributeValues: { ":owner": { S: `OWNER#${stateA.subject}` }, ":prefix": { S: `RESERVATION#${tripId}#` } } });
 });
+
+
+it("adds accommodation to the same trip after adopting rail, preserving the selected route", async () => {
+  const fixture = tripDynamoFixture(); fixture.clock.now = () => new Date(at);
+  fixture.seed(createTrip(tripId, "出雲大社の検証用旅行", at), stateA.subject);
+  const candidates = new DynamoDbItineraryCandidateRepository("trips", fixture.client);
+  const retention = new PlanCandidateRetentionApplication(candidates, () => new Date(at));
+  const application = new TripApplication(fixture.repository, { attach: vi.fn(), detach: vi.fn(), reference: vi.fn() }, fixture.clock);
+  const adoption = new PlanCandidateAdoptionApplication(candidates, fixture.repository, candidates, application,
+    (item, context) => trustedCandidateItem(item, context.candidateSetId, context.variantId, context.retainedItem, context.selectedAt), () => new Date(at));
+  const lodging = hotel();
+  const selections = [verifiedJourneySelectionItems(search(), index, at), verifiedAccommodationSelectionItems([lodging.offering], [lodging.proof], at)];
+  let selectedRoute: ItineraryItem | undefined;
+  for (const [revision, items] of selections.entries()) {
+    const trip = (await fixture.repository.get(stateA, tripId))!;
+    const retained = await retention.retain({ principal: stateA, executionId: `combined-${revision}`, conversationId,
+      tripId, baseTripRevision: revision, userRequest: "検索した候補を同じ旅程に追加" }, searchSelectionDraft(items, trip)!, []);
+    if (retained.presentation.candidateSetRef.kind !== "candidate-set-ref") throw new Error("Candidate was not retained");
+    const request = { operation: "preview" as const, conversationId, tripId, candidateSetId: retained.presentation.candidateSetRef.candidateSetId,
+      candidateSetRevision: 0, variantId: "option-1", baseTripRevision: revision, mutationId: `75800000-0000-4000-8000-00000000000${revision + 3}` };
+    const preview = await adoption.execute(stateA, request);
+    if (preview.status !== "confirmation-required") throw new Error("Missing confirmation preview");
+    expect(preview.preview.changes).toEqual({ added: 1, replaced: 0, removed: 0 });
+    await adoption.execute(stateA, { ...request, operation: "confirm" }, { confirmationKey: preview.confirmationKey });
+    const saved = (await fixture.repository.get(stateA, tripId))!;
+    expect(saved.revision).toBe(revision + 1);
+    if (revision === 0) selectedRoute = structuredClone(saved.items[0]);
+    else {
+      expect(saved.items).toHaveLength(2);
+      expect(saved.items[0]).toEqual(selectedRoute);
+      expect(saved.items[1]).toMatchObject({ type: "stay", selection: { accommodation: { providerItemId: "hotel-a" } } });
+    }
+  }
+});

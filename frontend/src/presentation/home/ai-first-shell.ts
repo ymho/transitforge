@@ -155,7 +155,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     }));
     root.querySelectorAll<HTMLButtonElement>("[data-trip-archive]").forEach((button) => button.addEventListener("click", () => {
       const current = view.trips.find((row) => row.trip.id === button.dataset.tripArchive)?.trip;
-      if (!current || !ports.archiveTrip || !window.confirm(`「${current.title}」をアーカイブしますか？`)) return;
+      if (!current || !ports.archiveTrip || !window.confirm(`「${current.title}」を削除しますか？\n画面から元に戻すことはできません。宿泊や列車の予約は取り消されません。`)) return;
       void ports.archiveTrip(current.id).then(render, () => { void ports.retry().then(render, render); });
     }));
     if (!signedIn && (window.location.hash !== "#chat" || consultationMode !== "landing")) {
@@ -277,5 +277,5 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
 }
 function esc(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 function card(trip: Trip, group?: string, withTravelMode = false): string {
-  return `<article class="home-card home-trip-card"><button class="trip-list-choice" type="button" data-trip="${esc(trip.id)}"><span class="trip-list-emblem">${iconMarkup("trips")}</span><span class="trip-list-copy"><strong>${esc(trip.title)}</strong><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span>${group ? `<small>${esc(group)}</small>` : ""}</span><span aria-hidden="true">›</span></button><details class="home-trip-manage"><summary>旅程の操作</summary><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">アーカイブ</button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}</details></article>`;
+  return `<article class="home-card home-trip-card"><button class="trip-list-choice" type="button" data-trip="${esc(trip.id)}"><span class="trip-list-emblem">${iconMarkup("trips")}</span><span class="trip-list-copy"><strong>${esc(trip.title)}</strong><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span>${group ? `<small>${esc(group)}</small>` : ""}</span><span aria-hidden="true">›</span></button><details class="home-trip-manage"><summary aria-label="旅程の操作">⋯</summary><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">削除</button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}</details></article>`;
 }

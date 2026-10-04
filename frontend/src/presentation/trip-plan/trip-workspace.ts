@@ -8,9 +8,6 @@ import { renderWorkspaceCard, refreshMoveTargets } from "./trip-workspace-card";
 import { renderWorkspaceCandidates } from "./trip-workspace-candidates";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
 import { element, control, option } from "./trip-workspace-elements";
-import { renderTripFeasibility } from "./trip-feasibility-view";
-import { renderTripReadiness } from "./trip-readiness-view";
-import { renderTripChecklist } from "./trip-checklist-view";
 import { travelIcon } from "../shared/travel-icon";
 import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
 import { renderTripPartyControl } from "./trip-party-control";
@@ -72,17 +69,13 @@ export function configureTripWorkspace(options: {
   const management = element("details", "trip-header-management"); management.append(element("summary", "", "旅程の操作"), openConsultation, adoption, branch, openTravelMode);
   heading.append(back, emblem, title, summary, party, notice, management);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
-  const assumptions = element("section", "trip-workspace-assumptions");
-  const feasibility = element("div");
-  const readiness = element("div"), checklist = element("div");
-  let checklistKey = "";
   const costs = element("div"); let costKey = "", costTripId: string | undefined, costSessionVersion: number | undefined;
   const dayTabs = element("div", "trip-day-tabs"); dayTabs.setAttribute("role", "tablist"); dayTabs.setAttribute("aria-label", "旅程の日付");
   const days = element("div", "trip-workspace-days"), proposal = element("div"), candidates = element("div");
   const selectedDays = new Map<string, string>();
   const itinerary = element("section", "trip-detail-panel"), details = element("details", "trip-extra-details");
   itinerary.id = "trip-detail-itinerary";
-  details.append(element("summary", "", "旅程の詳細"), feasibility, readiness, checklist, assumptions, costs);
+  details.append(element("summary", "", "費用"), costs);
   const add = element("form", "trip-workspace-add"); add.hidden = true;
   let addContext: { tripId: string; revision: number; session: string; afterId?: string } | undefined; const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
   addTitle.required = true; addTitle.maxLength = 200; addLabel.append(addTitle);
@@ -217,10 +210,9 @@ export function configureTripWorkspace(options: {
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
       const costEditor = costs.querySelector(".trip-cost-editor");
       costs.replaceChildren(...(costEditor ? [costEditor] : [])); costKey = "";
-      feasibility.replaceChildren(); assumptions.replaceChildren(); days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
+      days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
       dayTabs.replaceChildren();
       party.replaceChildren(); partyKey = "";
-      readiness.replaceChildren(); checklist.replaceChildren(); checklistKey = "";
       cards.clear(); groups.clear(); previousTripId = undefined; proposalKey = candidateKey = "";
       return;
     }
@@ -236,14 +228,6 @@ export function configureTripWorkspace(options: {
       .map(([key, , label]) => option(label, key)));
     addDay.value = [...addDay.options].some((entry) => entry.value === chosenDay) ? chosenDay : "unscheduled";
     const evaluation = controller.feasibility()!;
-    feasibility.replaceChildren(renderTripFeasibility(evaluation));
-    const prepared = controller.readiness()!;
-    readiness.replaceChildren(renderTripReadiness(prepared, trip, controller.focus));
-    const nextChecklistKey = JSON.stringify([controller.sessionId(), trip, prepared.reservations, prepared.preparation, controller.checklist.items(), controller.checklist.proposal(), controller.checklist.canWrite()]);
-    if (checklistKey !== nextChecklistKey) {
-      checklistKey = nextChecklistKey;
-      checklist.replaceChildren(renderTripChecklist({ controller: controller.checklist, trip, readiness: prepared, newId: () => crypto.randomUUID(), focus: controller.focus, ask: chat, report }));
-    }
     const nextCostKey = JSON.stringify([trip.id, trip.revision, trip.costs, controller.canConfirm()]);
     if (costKey !== nextCostKey) {
       const editor = costTripId === trip.id ? costs.querySelector(".trip-cost-editor") : null;
@@ -261,7 +245,6 @@ export function configureTripWorkspace(options: {
     summary.textContent = tripDateLabel(trip);
     const nextPartyKey = JSON.stringify([trip.id, trip.revision, trip.request.party]);
     if (partyKey !== nextPartyKey) { partyKey = nextPartyKey; party.replaceChildren(renderTripPartyControl(trip, controller, report)); }
-    assumptions.replaceChildren(...view.assumptions.map((a) => element("p", "trip-workspace-assumption", `⚠ 仮置き（${a.target}）: ${a.text}`)));
     const ids = new Set<string>(), dates = new Set<string>();
     const dayLabels = new Map<string, string>();
     for (const [date, entries, label] of view.dayEntries) {

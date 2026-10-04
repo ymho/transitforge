@@ -6,7 +6,7 @@ import {
   type ConversationHistoryRepository,
 } from "../../usecases/concierge/conversation-history-repository";
 import { renderPublicPlanPresentation } from "./public-plan-presentation-view";
-import { renderPublicJourneyPresentation } from "./public-journey-presentation-view";
+import { canCombineJourneyPlan, renderPublicJourneyPresentation } from "./public-journey-presentation-view";
 import { renderPublicGroundRoutePresentation } from "./public-ground-route-presentation-view";
 import type { PublicGroundRoutePresentation } from "@raiquora/agent/public-ground-route-presentation";
 import { renderPublicPlacePresentation } from "./public-place-presentation-view";
@@ -548,8 +548,17 @@ export function resolveAssistantMessage(
   renderAssistantCopy(item, visibleAssistantText(response.text), options.animate ?? true);
   if (response.delivery && response.delivery.status !== "full") item.append(renderDeliveryStatus(response.delivery));
   if (response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
-  if (response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
-  if (response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
+  const combined = response.publicJourneyPresentation && response.publicPlanPresentation &&
+    canCombineJourneyPlan(response.publicJourneyPresentation, response.publicPlanPresentation);
+  if (response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation,
+    combined ? response.publicPlanPresentation : undefined));
+  if (response.publicPlanPresentation && !combined) {
+    const plan = renderPublicPlanPresentation(response.publicPlanPresentation);
+    if (response.publicJourneyPresentation && response.publicPlanPresentation.candidates.every(candidate => candidate.items.every(value => value.kind === "transport"))) {
+      const details = document.createElement("details"), summary = document.createElement("summary");
+      details.className = "journey-plan-actions"; summary.textContent = "旅程に追加・変更"; details.append(summary, plan); item.append(details);
+    } else item.append(plan);
+  }
   if (response.publicAccommodationPresentation) item.append(renderPublicAccommodationPresentation(response.publicAccommodationPresentation));
   if (response.publicGroundRoutePresentation) item.append(renderPublicGroundRoutePresentation(response.publicGroundRoutePresentation, options.onGroundRoute));
   if (response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation, options.placeMemoSelection));
