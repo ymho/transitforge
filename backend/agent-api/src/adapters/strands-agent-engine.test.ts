@@ -61,6 +61,25 @@ function setup(effect: "read" | "proposal" = "read", agentV2Proposal = false) {
     toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()), effectiveIntent: effectiveDestination("京都") } };
 }
 describe("StrandsAgentEngine", () => {
+  it("requires an actual group ID before reviewing multiple presented groups through the native SDK", async () => {
+    const { input, execute } = setup();
+    const groups = [
+      { presentationId: "shown:6:plan", kind: "plan" as const, candidates: [{ candidateId: "plan-1", ordinal: 1, label: "旅程案" }] },
+      { presentationId: "shown:10:accommodation", kind: "accommodation" as const, candidates: [{ candidateId: "hotel-1", ordinal: 1, label: "宿" }] },
+    ];
+    const review = vi.fn(async () => ({ status: "shown" as const, group: groups[1] })), select = vi.fn();
+    const model = new ScriptedModel([
+      { tool: "review_presented_candidates", input: {} },
+      { tool: "review_presented_candidates", input: { presentationId: "invented-group" } },
+      { tool: "review_presented_candidates", input: { presentationId: groups[1]!.presentationId } }, submitted,
+    ]);
+    const result = await new StrandsAgentEngine(options, { model }).run({ ...input,
+      candidateController: { context: { groups, itineraryItemCount: 1, canSave: true }, review, select } });
+    expect(result.replyProposal).toEqual({ kind: "uncertainty" });
+    expect(review.mock.calls).toEqual([[groups[1]!.presentationId]]);
+    expect(select).not.toHaveBeenCalled(); expect(execute).not.toHaveBeenCalled();
+    expect(model.toolChoices).toHaveLength(4);
+  });
   it("runs a real Strands model-tool-model loop through the existing Tool executor", async () => {
     const { execute, input } = setup();
     const model = new ScriptedModel([lookup, submitted, end]);

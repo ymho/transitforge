@@ -19,6 +19,10 @@
 
 ## 既存の局所証拠と残る実行
 
+`npm run test:trip:v2:reported-live` は報告された出雲相談を10ターンで確認する。通常は合成SDK、`AGENT_V2_LIVE=true` では初回の紹介から最後の経路採用まで全ターンが実Bedrockとなる。手動workflowの `reported-trip-flow` は1回最大10ターン×8モデル呼出、各ターン90秒、出力上限4096、独立反復1または3回で実行する。3件の宿の曖昧な保存は無更新、ホテル名・経路番号の選択はApplicationの保存処理を使い、履歴再読込・再送・外部ホテルID・別ownerの拒否を確認する。Provider、認証主体、DynamoDBはfixtureのため、実Providerや実ブラウザの合格には数えない。
+
+未選択の往路・帰路を含む旅程では、検証済み検索候補の日付とIANAタイムゾーンが全候補について同じ一枠に一致する場合だけ保存先を特定する。保存済みcalendar bindingを優先し、bindingが空の場合だけ、旅程全体に適用するユーザ指定の確定開始日を最初のlogical dayへ一時的に結び付ける。日程のタイムゾーンが未指定なら、検証済み候補で一致した唯一のzoneを照合用に使う。この計算はTripの日程や他の予定を更新しない。開始日が未定・範囲・複数、zone不一致、同日に複数枠なら保存先を推測しない。明示された相談対象の枠がある場合はそちらを優先する。
+
 - 状態・Repositoryと合成SDKの局所試験: `backend/agent-api/src/composition/strands-place-cards-acceptance.test.ts` は候補カード、履歴保存、再送、owner越境を確認する。`backend/agent-api/src/composition/epic-537-product-e2e.test.ts` は候補採用、再読込、局所変更を確認する。`backend/agent-api/src/usecases/agent/trip-gap-place-tool.test.ts` と `trip-gap-restaurant-tool.test.ts` は天気の部分失敗を扱う。これらは実Providerや実画面の証拠ではない。
 - 実Bedrock＋固定Provider: `.github/workflows/strands-v2-live.yml` の `trip-v2-product` は `strands-trip-product-live.test.ts` の3種の入口を実Strands/Bedrock、隔離したTrip、固定Providerで確認する opt-in 経路。1回につき最大3ケース×8モデル呼出、各turn 60秒で実行する。分岐・変更・部分失敗を含む残りのcaseや各caseの縦断完了は別途記録が必要で、単発Runを六つの縦断caseの合格へ読み替えない。
 - 実Provider: 本番と同じ接続を使って観光/写真/飲食/天気を各caseで取得し、Evidenceの出典と時刻、取得不可の状態を記録する。写真の表示確認はProvider応答とは別に画面で行う。
