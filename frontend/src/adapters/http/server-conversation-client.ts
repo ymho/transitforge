@@ -10,6 +10,7 @@ import { parsePublicPlacePresentation } from "@raiquora/agent/public-place-prese
 import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { requestSessionVersion } from "./authenticated-fetch";
 import { personalApiFetch } from "./personal-api-fetch";
+import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 import type { ServerConversation, ServerConversationClient, ServerConversationMessage, ServerConversationMetadata, ServerPage } from "../../usecases/personal-state/server-conversation-client";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -21,9 +22,9 @@ export class ConversationApiError extends Error {
 /** Only bounded technical metadata is logged; never the request, response or raw error. */
 export function reportConversationReadFailure(stage: "history" | "render", error: unknown): void {
   const known = ["Conversation unavailable", "Incomplete Conversation history", "Invalid Conversation history sequence", "Conversation changed while loading history", "Invalid Conversation API response", "Authentication required"];
-  console.warn("conversation_read_failed", error instanceof ConversationApiError
+  console.warn("conversation_read_failed", JSON.stringify(error instanceof ConversationApiError
     ? { stage, operation: ["create", "get", "list", "history", "update", "delete"].includes(error.operation) ? error.operation : "unknown", boundary: error.stage, ...(error.status === undefined ? {} : { status: error.status }) }
-    : { stage, reason: error instanceof Error && known.includes(error.message) ? error.message : "unknown" });
+    : { stage, reason: error instanceof Error && known.includes(error.message) ? error.message : "unknown" }));
 }
 function validMetadata(value: unknown): value is ServerConversationMetadata {
   const v = value as Partial<ServerConversationMetadata>;
@@ -70,7 +71,7 @@ export class HttpServerConversationClient implements ServerConversationClient {
     const operation = String(command.operation);
     let response: Response;
     try { response = await this.request(this.endpoint, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ version: "conversation-api-v1", ...command }), signal: AbortSignal.timeout(15_000) }); }
-    catch { throw new ConversationApiError(operation, "transport"); }
+    catch (error) { if (error instanceof ApiAuthenticationError) throw error; throw new ConversationApiError(operation, "transport"); }
     if (response.status === 404 && ["get", "history"].includes(command.operation as string)) return undefined;
     if (!response.ok) throw new ConversationApiError(operation, "http", response.status);
     const value: unknown = await response.json();
