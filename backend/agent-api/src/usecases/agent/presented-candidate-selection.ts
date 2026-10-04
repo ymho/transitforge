@@ -24,7 +24,9 @@ export function createPresentedCandidateController(input: {
       if (candidates.length) groups.push({ message, presentation, group: { presentationId: `shown:${message.sequence}:${kind}`, kind,
         candidates: candidates.map((candidate, index) => ({ ...candidate, ordinal: index + 1 })) } });
     };
-    if (message.publicPlanPresentation && !message.publicJourneyPresentation && !message.publicAccommodationPresentation) add("plan", message.publicPlanPresentation.candidates.map(candidate => ({ candidateId: candidate.variantId, label: candidate.label })), { publicPlanPresentation: message.publicPlanPresentation });
+    const searchIds = new Set([...(message.publicJourneyPresentation?.journeys.map(item => item.id) ?? []), ...(message.publicAccommodationPresentation?.cards.map(item => item.evidenceId) ?? [])]);
+    const searchPlan = message.publicPlanPresentation?.candidates.every(candidate => candidate.items.length === 1 && searchIds.has(candidate.items[0]!.sourceRef));
+    if (message.publicPlanPresentation && !searchPlan) add("plan", message.publicPlanPresentation.candidates.map(candidate => ({ candidateId: candidate.variantId, label: candidate.label })), { publicPlanPresentation: message.publicPlanPresentation });
     if (message.publicJourneyPresentation) add("journey", message.publicJourneyPresentation.journeys.map(journey => ({ candidateId: journey.id,
       label: `${message.publicJourneyPresentation!.originStation}→${message.publicJourneyPresentation!.destinationStation} ${journey.departureTime}–${journey.arrivalTime}` })), { publicJourneyPresentation: message.publicJourneyPresentation, ...(message.publicPlanPresentation ? { publicPlanPresentation: message.publicPlanPresentation } : {}) });
     if (message.publicAccommodationPresentation) add("accommodation", message.publicAccommodationPresentation.cards.map(card => ({ candidateId: card.evidenceId, label: card.name })), { publicAccommodationPresentation: message.publicAccommodationPresentation, ...(message.publicPlanPresentation ? { publicPlanPresentation: message.publicPlanPresentation } : {}) });
@@ -46,6 +48,14 @@ export function createPresentedCandidateController(input: {
       if (!parsed.success || !input.userRequest.includes(parsed.data.quote)) return { status: "invalid_source" };
       const binding = bindings.find(binding => binding.group.presentationId === value.presentationId);
       if (!binding || !binding.group.candidates.some(candidate => candidate.candidateId === value.candidateId)) return { status: "unknown_candidate" };
+      const candidate = binding.group.candidates.find(candidate => candidate.candidateId === value.candidateId)!;
+      const reference = parsed.data.reference;
+      // Verify the model's chosen identity against the literal CURRENT source.
+      // This is reference integrity, not a phrase classifier for user intent.
+      if (reference.kind === "sole" ? bindings.length !== 1 || binding.group.candidates.length !== 1 :
+          !parsed.data.quote.includes(reference.quote) || (reference.kind === "label"
+            ? reference.quote !== candidate.label || binding.group.candidates.filter(item => item.label === candidate.label).length !== 1
+            : reference.ordinal !== candidate.ordinal || !/^[0-9０-９]+$/u.test(reference.quote) || Number(reference.quote.normalize("NFKC")) !== candidate.ordinal)) return { status: "invalid_source" };
       // One stable mutation per authenticated user turn. A repeated same choice reuses
       // the pending receipt; a different second choice cannot make another write.
       if (selected) return JSON.stringify(selected) === JSON.stringify(value) ? pending! : { status: "unknown_candidate" };

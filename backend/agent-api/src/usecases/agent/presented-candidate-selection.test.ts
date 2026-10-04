@@ -34,7 +34,7 @@ describe("Application-owned presented candidate selection", () => {
     expect(f.adoptPlan).not.toHaveBeenCalled();
   });
   it("passes explicit choice to the same preview/confirm boundary once and returns the actual receipt", async () => {
-    const f = await fixture(); const input = { presentationId: "shown:2:plan", candidateId: "plan-1", quote: "案1を保存して" };
+    const f = await fixture(); const input = { presentationId: "shown:2:plan", candidateId: "plan-1", quote: "案1を保存して", reference: { kind: "label" as const, quote: "案1" } };
     const [a, b] = await Promise.all([f.controller.select(input), f.controller.select(input)]);
     expect(a).toEqual(b); expect(a).toMatchObject({ status: "saved", tripId: trip.id, tripRevision: 1,
       receipt: { id: stableSelectionMutation(conversationId, 3), executionId: "execution", operation: "save", status: "succeeded" } });
@@ -45,17 +45,32 @@ describe("Application-owned presented candidate selection", () => {
   });
   it("rejects forged source/candidate and distinguishes stale from ambiguous writes", async () => {
     const f = await fixture();
-    await expect(f.controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "以前の依頼" })).resolves.toEqual({ status: "invalid_source" });
-    await expect(f.controller.select({ presentationId: "foreign", candidateId: "plan-1", quote: "保存して" })).resolves.toEqual({ status: "unknown_candidate" });
+    await expect(f.controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "以前の依頼", reference: { kind: "sole" as const } })).resolves.toEqual({ status: "invalid_source" });
+    await expect(f.controller.select({ presentationId: "foreign", candidateId: "plan-1", quote: "保存して", reference: { kind: "sole" as const } })).resolves.toEqual({ status: "unknown_candidate" });
     f.adoptPlan.mockRejectedValue(new TripResourceError("conflict"));
-    await expect(f.controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "保存して" })).resolves.toEqual({ status: "stale" });
+    await expect(f.controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "保存して", reference: { kind: "sole" as const } })).resolves.toEqual({ status: "stale" });
     const g = await fixture(); g.adoptPlan.mockRejectedValue(new TripResourceError("unavailable"));
-    await expect(g.controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "保存して" })).rejects.toThrow();
+    await expect(g.controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "保存して", reference: { kind: "sole" as const } })).rejects.toThrow();
   });
   it("has no candidate when only an assistant sentence mentioned saving", () => {
     const controller = createPresentedCandidateController({ messages: [{ role: "assistant", text: "保存できます", sequence: 2, createdAt: at }],
       trip, conversationId, userSequence: 3, executionId: "execution", userRequest: "保存して", adoptPlan: vi.fn(), show: vi.fn() });
     expect(controller.context).toEqual({ groups: [], itineraryItemCount: 0, canSave: false });
+  });
+  it("refuses an unmentioned alternative and a sole-candidate claim in a multi-candidate group", async () => {
+    const f = await fixture(["案1", "案2"]);
+    const controller = createPresentedCandidateController({ messages: [f.message], trip, conversationId, userSequence: 3,
+      executionId: "execution", userRequest: "案2は保存しないでください", adoptPlan: f.adoptPlan, show: f.show });
+    await expect(controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "案2は保存しないでください", reference: { kind: "ordinal", ordinal: 1, quote: "1" } })).resolves.toEqual({ status: "invalid_source" });
+    await expect(controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "保存", reference: { kind: "sole" } })).resolves.toEqual({ status: "invalid_source" });
+    expect(f.adoptPlan).not.toHaveBeenCalled();
+  });
+  it("keeps a separate itinerary plan addressable when the same answer also shows hotels", async () => {
+    const f = await fixture();
+    const controller = createPresentedCandidateController({ messages: [{ ...f.message, publicAccommodationPresentation: { version: "public-accommodation-presentation-v1", cards: [{ evidenceId: "hotel-A", name: "宿A", summary: "未選択", retrievedAt: at }] } }],
+      trip, conversationId, userSequence: 3, executionId: "execution", userRequest: "案1でお願いします", adoptPlan: f.adoptPlan, show: f.show });
+    expect(controller.context.groups.map(group => group.kind)).toEqual(["plan", "accommodation"]);
+    await expect(controller.select({ presentationId: "shown:2:plan", candidateId: "plan-1", quote: "案1でお願いします", reference: { kind: "label" as const, quote: "案1" } })).resolves.toMatchObject({ status: "saved" });
   });
   it("keeps hotel identity and duplicate names distinct and replays exact cards", async () => {
     const presentation = { version: "public-accommodation-presentation-v1" as const, cards: [
@@ -65,7 +80,7 @@ describe("Application-owned presented candidate selection", () => {
       trip, conversationId, userSequence: 5, executionId: "execution", userRequest: "ホテル1で", adoptPlan, show });
     await controller.review("shown:4:accommodation"); expect(show).toHaveBeenCalledWith({ publicAccommodationPresentation: presentation });
     expect(controller.context.groups[0]?.candidates.map(value => value.candidateId)).toEqual(["hotel-A", "hotel-B"]);
-    await expect(controller.select({ presentationId: "shown:4:accommodation", candidateId: "hotel-A", quote: "ホテル1で" })).resolves.toEqual({ status: "unavailable" });
+    await expect(controller.select({ presentationId: "shown:4:accommodation", candidateId: "hotel-A", quote: "ホテル1で", reference: { kind: "ordinal" as const, ordinal: 1, quote: "1" } })).resolves.toEqual({ status: "unavailable" });
     expect(adoptPlan).not.toHaveBeenCalled();
   });
 });

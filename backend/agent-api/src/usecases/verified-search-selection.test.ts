@@ -89,7 +89,7 @@ it.each(["journey", "accommodation"] as const)("adopts the original %s through t
   const controller = createPresentedCandidateController({ messages: [{ role: "assistant", sequence: 2, createdAt: at, text: "経路候補です。", ...presented, publicPlanPresentation: retained.presentation }],
     trip, conversationId, userSequence: 3, executionId: "selection", userRequest, adoptPlan: (request, authority) => adoption.execute(stateA, request, authority), show: vi.fn() });
   expect(controller.context.groups[0]?.kind).toBe(kind); expect(controller.context.canSave).toBe(true);
-  const request = { presentationId: `shown:2:${kind}`, candidateId: items[0]!.id, quote: userRequest };
+  const request = { presentationId: `shown:2:${kind}`, candidateId: items[0]!.id, quote: userRequest, reference: kind === "journey" ? { kind: "ordinal" as const, ordinal: 1, quote: "1" } : { kind: "label" as const, quote: "検証用ホテル" } };
   expect(await controller.select(request)).toMatchObject({ status: "saved", tripRevision: 1 });
   const saved = await trips.repository.get(stateA, tripId);
   expect(saved?.items).toHaveLength(1); expect(saved?.items[0]).toMatchObject(kind === "journey" ? { type: "transport", detail: { journey: { legs: [{ serviceUid: "direct" }] } } } : { type: "stay", selection: { accommodation: { providerItemId: "hotel-a" } } });

@@ -12,6 +12,8 @@ SDKの会話履歴には従来どおり利用者発言と公開回答本文を�
 
 モデルは保存DTO、候補スナップショット、確認キーを作らない。Applicationが保持済み候補を解決し、ボタンと同じ`PlanCandidateAdoptionApplication`のpreview/confirm、owner、期限、Trip revision、予約保護、Proposal CAS、mutation receiptを通す。期限は初回の実書込み時にも確認する。既に成功した同じmutationの再送は期限後も保存済みreceiptを読み戻し、書込みを増やさない。
 
+選択には今回の発言中の名前または表示番号の引用も必要で、Applicationが対象の表示名・番号と照合する。同名候補や、発言に出ていない別案、複数候補を唯一の候補とする指定は受理しない。否定・仮定・採用の意味解釈はモデルの責務であり、名前・番号の照合だけで肯定的な同意を保証したとは扱わない。
+
 mutation IDは認証済みconversationとuser sequenceから決定し、1つの利用者turnで別の候補を追加保存しない。曖昧な保存失敗は成功として公開せず、そのSDK実行の後続処理を閉じる。SDKのnative loopと構造化応答だけを使い、独自の再試行、語句判定ルーター、v1へのfallbackは追加しない。
 
 成功時だけ`operation_result`を実receiptで認可する。公開`tripMutationReceipt`はTrip IDと保存後revisionだけを持ち、final、B commit、履歴、再送を共通化する。現在の応答を受けた画面はTripを再取得する。履歴の表示で保存を再実行しない。

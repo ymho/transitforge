@@ -20,7 +20,7 @@ const output = (reply: unknown) => ({ name: "strands_structured_output", input: 
 type Mode = "empty" | "single" | "multiple" | "named" | "negated" | "hypothetical";
 const steps = (mode: Mode) => mode === "negated" || mode === "hypothetical" ? [output({ kind: "conversation", message: "acknowledgement", text: "案は保存せず、相談を続けます。" })] : mode === "empty" ? [output({ kind: "clarification", target: "itinerary_target", text: "保存する候補はまだありません。旅程画面で相談したい予定や追加箇所を選んでください。" })] : mode === "multiple" ? [
   { name: "review_presented_candidates", input: { presentationId: "shown:2:plan" } }, output({ kind: "clarification", target: "candidate_selection", text: "案が複数あります。どの案にしますか？" }),
-] : [{ name: "select_presented_candidate", input: { presentationId: "shown:2:plan", candidateId: mode === "named" ? "plan-2" : "plan-1", quote: mode === "named" ? "案2でお願いします" : "この案を保存して" } },
+] : [{ name: "select_presented_candidate", input: { presentationId: "shown:2:plan", candidateId: mode === "named" ? "plan-2" : "plan-1", quote: mode === "named" ? "案2でお願いします" : "この案を保存して", reference: mode === "named" ? { kind: "ordinal", ordinal: 2, quote: "2" } : { kind: "sole" } } },
   output({ kind: "operation_result", receiptId: stableSelectionMutation(conversationId, 3) })];
 it.each(["empty", "single", "multiple", "named", "negated", "hypothetical"] as const)(`#784 ${live ? "Bedrock" : "SDK"} selection %s preserves state/history/replay`, async mode => {
   const state = stateDynamoFixture(), trips = tripDynamoFixture(), metadata = stateMetadata();
@@ -38,7 +38,10 @@ it.each(["empty", "single", "multiple", "named", "negated", "hypothetical"] as c
   const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
     model: { converse: vi.fn(async () => { throw Error("legacy runtime called"); }) }, weather: { search: vi.fn() },
     newExecutionId: () => `78400000-2222-4000-8000-${String(++execution).padStart(12, "0")}`,
-    runRuntime: async input => { if (isPrelude) return prelude(input); calls++; inputSeen = input; const result = await selected(input); proof = result.publicReply; return result; },
+    runRuntime: async input => { if (isPrelude) return prelude(input); calls++; inputSeen = input; const result = await selected(input); proof = result.publicReply;
+      if (live) console.log(JSON.stringify({ mode, phase: "selection-reply", status: result.status, kind: result.publicReply?.kind, question: result.publicReply?.question,
+        committed: !!result.tripMutationReceipt, publicationError: result.publicationError }));
+      return result; },
     limits: { maxIterations: 6, maxModelCalls: 6, maxToolCalls: 3, maxExecutionMs: 60000 },
   });
   let plan;
@@ -86,7 +89,7 @@ it(`#784 ${live ? "Bedrock" : "SDK"} route choice saves the shown scheduled serv
     output({ kind: "answer", references: [{ evidenceId: "journey:2026-10-04:0", field: "departureTimeMinutes" }, { evidenceId: "journey:2026-10-04:1", field: "departureTimeMinutes" }], commentary: "経路候補です。どちらにしますか？" }),
   ]) }));
   const selected = createStrandsServerRuntime(new StrandsAgentEngine(settings, live ? {} : { model: new StrandsScriptedModel([
-    { name: "select_presented_candidate", input: { presentationId: "shown:2:journey", candidateId: "journey-2", quote: "経路2でお願いします" } },
+    { name: "select_presented_candidate", input: { presentationId: "shown:2:journey", candidateId: "journey-2", quote: "経路2でお願いします", reference: { kind: "ordinal", ordinal: 2, quote: "2" } } },
     output({ kind: "operation_result", receiptId: stableSelectionMutation(conversationId, 3) }),
   ]) }));
   let isPrelude = true, execution = 0;
