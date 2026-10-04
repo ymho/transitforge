@@ -79,7 +79,10 @@ Agentは推論とToolのオーケストレーションを担当し 鉄道の計�
 外部旅行情報も同じ依存方向を使う。`usecases/agent/external-travel-tools.ts`が
 Browser Toolの入力検証と実行結果の収集を所有する。共有Evidence変換は
 `@raiquora/agent/external-travel-evidence`へ委譲し、`adapters/bedrock`はモデル形式との変換を行う。
-天気などの外部旅行情報カードは`presentation/concierge/external-travel-cards.ts`へ閉じる。
+v2の会話表示は`frontend/src/domain/assistant-turn-view.ts`の`AssistantTurnView`へ統一する。
+SSEとServer履歴は`usecases/concierge/assistant-turn-projection.ts`で許可したpublic artifactだけを投影し、
+`presentation/concierge/public-*-presentation-view.ts`がカードを描画する。旧ViewerAgentResponse、
+ConversationGuidance、TripContextのBrowser引継ぎと生のExternalTravelInformationカードは#721で撤去した。
 観光候補は`presentation/place-explorer`がカードを所有し `adapters/mapbox/place-media-layer.ts`が
 同じPlace IDを地図へ投影する。チャット本体は外部Providerの応答構造やMapbox操作を解釈しない。
 
@@ -115,7 +118,7 @@ style再読込時は前回の定期更新を破棄してから新しい購読を
 Viewer UIは`presentation`の機能別ディレクトリに置く
 
 - `presentation/concierge`: 会話 プロフィール Landmark操作
-- `presentation/concierge/external-travel-cards.ts`: 外部旅行情報のEvidence付き会話内表示
+- `presentation/concierge/public-*-presentation-view.ts`: 検証済みpublic artifactの会話内表示
 - `presentation/place-explorer`: 検証済みPlaceの地図下部カードと選択状態
 - `presentation/trip-plan`: 旅程表示と編集提案
 - `presentation/train-viewer`: 列車選択 詳細 時刻表 Three.js描画

@@ -30,7 +30,8 @@ V1のrepair本文・finalization順序・guard発火順・旧renderer・旧model
 Tool catalog未公開のproposal登録/保存は`proposal-runtime.fixture.ts`でApplicationのruntime portを通して検証する。
 これはv2が当該Toolをモデルへ公開済みであるという保証ではない。
 API/保存形式の`v1`、地点詳細のBedrock要約とそのテストは旧Runtimeの撤去対象にしない。
-画面の旧型は#721の範囲とする。
+画面の旧union・質問ガイド・外部カードと専用テストは#721で撤去した。
+text-onlyを含む全turnを同じAssistantTurnViewへ投影する。保存receipt・Proposalの検証は残す。
 
 ## V2で再表現する原則
 
@@ -106,3 +107,14 @@ sink障害時の結果維持、未知値・不正数値・本文の除外も確�
 本変更は診断の追加であり、model、prompt、4096の出力上限、150秒の時間上限、retry方針、IAM、
 デプロイworkflowを変更しない。実Providerを使うopt-inテストのskipや通常CI成功を、
 実ブラウザでの症状解消・本番ログの取得成功として扱わない。デプロイ後の再現と診断照合が別途必要である。
+
+## v2表示境界（#721）
+
+`assistant-turn-projection.test.ts`は本文だけのturnもlive/historyで同じobject型になり、
+legacy state/Provider/Traceを投影しないことと候補ID・順序の保持を確認する。
+各public cardのSSE→HTTP履歴→同じDOM投影、Proposalの履歴復元が自動保存しないこと、
+現在のreceiptだけでServer Tripを再取得すること、feedbackへartifact metadataを送らないことを維持する。
+通常CIの`test:agent-cutover:browser`はnative SDKと認証済みApplicationの保存を通った宿泊カードを、
+Chromiumのページ再読込後にServer履歴から取得・描画し、追加のmodel/Provider呼出しがないことを確認する。
+これは合成Provider/モデルとDynamoDB command fixtureによるブラウザ検証であり、実AWS/model/Providerの製品E2Eではない。
+旧表示用の独立workflowはなく、現行CI/v2 Acceptance/Smoke/CDを引き続き使う。

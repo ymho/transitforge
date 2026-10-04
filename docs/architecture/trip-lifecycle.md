@@ -37,7 +37,7 @@ converterとwriter gateの状態は[Trip V2コア導入](trip-v2-core.md)を参�
 | `JourneyRouteResult.legs`はdelay値・補正済み時刻も含み得る | 検索結果を直接保存せず、計画専用`SelectedRailJourney`へ明示変換する | #385 |
 | `selectTripPlanAccommodation`は全stayへ同じ宿を反映する | 選択対象item IDを指定する。多都市の他の宿を変更しない | #385のV2採用境界 / #390のUI移行。#403は地点projection |
 | `modules/trip/domain/travel-profile.ts`: `TripContext`に今回条件と`planningStage`が同居 | 今回要求は`Trip.request`、状態は`Trip`、Profileは別リソース | #383 / #387 / #411 |
-| `frontend/src/domain/travel-conversation-context.ts`: 発話・埋込文から日付/泊数/状態を解釈するlegacy helper | 新しい発話routerへ発展させない。意味解釈はBedrock、日付・時刻検証はDomain | #383 / #387 / #384 |
+| `frontend/src/domain/travel-conversation-context.ts`（#721で撤去済み）: 発話・埋込文から日付/泊数/状態を解釈するlegacy helper | 新しい発話routerへ発展させない。意味解釈はBedrock、日付・時刻検証はDomain | #383 / #387 / #384 |
 | `frontend/src/usecases/trip-plan/trip-plan-repository.ts`: `plansBySessionId`、20件上限、store `version: 2`とplan `version: 1` | Trip IDで独立保存。store番号をDomain schema番号と混同しない | #388 / #389 |
 | 同repositoryは不正な1項目でplan/store全体を読めなくする。`wikipedia`復元も不一致 | 旧readerの不具合は#404。V2移行では原本を残してrecord単位の失敗を報告 | #404 / #388 |
 | `applyTripPlanPatches`はvalidationと異なり存在しないreplaceをupsertする。既存testもこれを期待 | 原子的なvalidate+apply、暗黙upsert禁止を継承 | #405 → #385 / #389 |

@@ -87,8 +87,8 @@ it("loads the latest 50 messages across byte pages, including proposals beyond t
   });
   const controller = new ConversationUiController({ ...fake({ items: [session] }), history });
   await controller.hydrate(); const messages = await controller.loadHistory("a");
-  expect(messages).toHaveLength(50); expect(messages[0]).toMatchObject({ response: "message-23" });
-  expect(messages.at(-1)).toMatchObject({ response: "message-72" });
+  expect(messages).toHaveLength(50); expect(messages[0]).toMatchObject({ response: { text: "message-23" } });
+  expect(messages.at(-1)).toMatchObject({ response: { text: "message-72" } });
   expect(history.mock.calls[0][1]).toEqual({ limit: 50, after: "000000000022" });
 });
 

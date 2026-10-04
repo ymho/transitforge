@@ -19,7 +19,6 @@ export interface ViewerElements {
   sidebarRealtimeMap: HTMLButtonElement;
   travelProfileToggle: HTMLButtonElement;
   aiGuideSuggestions: HTMLButtonElement[];
-  aiGuideContextChoices: HTMLElement;
   journeySettingsToggle: HTMLButtonElement;
   journeySettingsPanel: HTMLElement;
   journeyTransferPace: HTMLSelectElement;
@@ -55,7 +54,6 @@ export function loadViewerElements(root: ParentNode): ViewerElements {
     sidebarRealtimeMap: required(root, "#sidebar-realtime-map"),
     travelProfileToggle: required(root, "#travel-profile-toggle"),
     aiGuideSuggestions: all(root, "[data-prompt]"),
-    aiGuideContextChoices: required(root, "#ai-guide-context-choices"),
     journeySettingsToggle: required(root, "#journey-settings-toggle"),
     journeySettingsPanel: required(root, "#journey-settings-panel"),
     journeyTransferPace: required(root, "#journey-transfer-pace"),

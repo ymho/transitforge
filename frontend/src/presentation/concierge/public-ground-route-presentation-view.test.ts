@@ -19,7 +19,7 @@ it("renders source and a user-controlled map action without marking a route save
   const live = projectAssistantTurn({ response: "検索しました", publicGroundRoutePresentation: value });
   const restored = projectAssistantTurn({ response: "検索しました", publicGroundRoutePresentation: value });
   const item = document.createElement("li");
-  resolveAssistantMessage(item, live, undefined, undefined, undefined, undefined, false, undefined, callback);
-  resolveAssistantMessage(item, restored, undefined, undefined, undefined, undefined, false, undefined, callback);
+  resolveAssistantMessage(item, live, { animate: false, onGroundRoute: callback });
+  resolveAssistantMessage(item, restored, { animate: false, onGroundRoute: callback });
   expect(item.querySelectorAll('section[aria-label="徒歩・バスの経路候補"]')).toHaveLength(1);
 });

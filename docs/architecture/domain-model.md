@@ -20,7 +20,7 @@ LocalStorageに保存または復元しない。旧TripPlanとmigration compatib
 | 検索ドメイン | 入力をもとにした経路候補と制約 | `modules/journey/domain` |
 | 旅行相談 | 普段の好みと今回の条件 旅行候補 旅程 | `modules/trip/domain` |
 | 会話状態 | セッション 履歴と端末内保存 | `frontend/src/domain/`とブラウザLocalStorage |
-| AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `frontend/src/domain/viewer-agent-response.ts` |
+| AI応答 | UIへ返す経路 旅行 会話の構造化結果 | `frontend/src/domain/assistant-turn-view.ts` |
 | フィードバック | 利用者が明示送信した会話と評価 | private S3 |
 | Agent Trace | 上限付き実行eventと関連request ID | private S3 |
 
@@ -351,18 +351,11 @@ Trip.planningStateへ分離し、AgentDecisionや履歴のContextを永続正本
 Decision Traceの外部化可能な判断結果をTripContextへ写して次ターンへ引き継ぐ。
 目的地だけの相談では前者から始め 利用者が旅程化を望むか日程を明示した後にだけ後者へ進む。
 
-### `ConversationGuidance` `ConversationSubmission`
+### 旧質問ガイドの撤去（#721）
 
-- 定義: `frontend/src/domain/conversation-guidance.ts`
-- 生成元: Bedrockの`ask_follow_up`ツール
-
-`ConversationGuidance`は条件不足でも先に示せる仮の推奨 次の質問 質問の種類 クイックリプライ
-`TripContext`を持つ。
-UIはこの契約を共通入力として描画するだけで 会話パターンごとの日付入力や宿泊数入力を持たない。
-`ConversationSubmission`は利用者の回答と直前のガイダンスを結び 次のAI呼び出しへ渡す。
-構造化旅程ができた後は 同じ会話セッションの`TripContext`を追質問間で保持する。
-出発日や泊数など明示的な利用者回答はモデルの応答を待たず既存Contextへ統合する。
-応答に新しい`TripContext`が含まれる場合は正本として統合し 経路表示や旅程更新など別形式の応答では消去しない。
+旧ConversationGuidance/ConversationSubmissionとBrowserのTripContext引継ぎは撤去した。
+条件の意味解釈・受理・正本はServer Applicationが持つ。Browserは利用者の発話とboundedな参照だけを送り、
+公開receipt・回答・カードを表示する。質問本文は自由入力の同じturnで扱い、Browserで条件を発話regexから補完しない。
 
 ### `ConversationHistoryEntry`
 
@@ -416,19 +409,19 @@ Mobileでは会話を通常画面とし 左側の会話操作レールから地�
 鉄道経路へ宿泊と体験を組み合わせるProvider非依存の候補である。費用はJPYの既知価格だけを合計し
 価格がない項目は`hasUnpricedItems`で明示する。鉄道運賃は取得も推定もせず常に集計対象外とする。
 
-### `ViewerAgentJourneyPlan`
+### `TripJourneyPlan`
 
 - 定義: `modules/trip/domain/travel-plan.ts`
-- Viewer応答alias: `frontend/src/domain/viewer-agent-response.ts`
+- 共有計算型を直接参照する。旧Viewer応答aliasは#721で撤去した。
 - 内容: 検索条件と`JourneyRouteResult[]`
 
 AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult`をそのまま再解釈せず タブと
 タイムラインへ描画する。
 
-### `ViewerAgentTravelPlan`
+### 宿泊候補の共有契約
 
 - 定義: `modules/trip/domain/travel-plan.ts`
-- Viewer応答alias: `frontend/src/domain/viewer-agent-response.ts`
+- 共有計算型を直接参照する。旧Viewer応答aliasは#721で撤去した。
 - 内容: 行きの経路 帰りの経路 日帰り区分 宿泊候補
 
 旅行の鉄道運賃は含めない。宿泊候補は座標 総合評価 評価件数 画像を保持できる。料金は通常検索の
@@ -440,13 +433,16 @@ AI応答からUIへ渡す経路表示用モデルである。`JourneyRouteResult
 観光・宿泊・飲食のruntime候補は相談・旅程のpresentationで扱い、運行地図専用の共通候補型・ピン・詳細シートへ変換しない。
 Placeのidentity・Evidence・保存契約は各Domain/Application契約を正本とし、運行画面の都合で別の保存形式を作らない。
 
-### `ViewerAgentResponse`
+### `AssistantTurnView`
 
-- 定義: `frontend/src/domain/viewer-agent-response.ts`
+- 定義: `frontend/src/domain/assistant-turn-view.ts`
+- 投影: `frontend/src/usecases/concierge/assistant-turn-projection.ts`
 
-AIからUIへ返す合併型である。文字列 経路 `ViewerAgentJourneyPlan` 旅行 `ViewerAgentTravelPlan`
-追加質問 `ConversationGuidance` 旅程変更 `TripPlanUpdateProposal`のいずれかを返す。
-AIの自由文をUIの状態遷移に使わない。
+v2の本文・delivery・条件/保存receipt・publicカード・採用に必要なProposalだけを持つ表示契約である。
+本文だけでも同じobject型になり、live SSE・Server履歴・replayを同じ許可リストから投影する。
+旧ViewerAgentResponse union、raw外部情報・質問ガイド・TripContextの表示分岐は#721で撤去した。
+カードの候補ID・順序・保存用参照を維持し、Provider payload・Trace・内部状態を渡さない。
+UIは本文から状態や保存対象を推測せず、Serverの検証とreceiptを経由する。
 
 ## 明示的なフィードバック
 

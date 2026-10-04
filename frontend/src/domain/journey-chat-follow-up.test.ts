@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import type { ViewerAgentJourneyPlan } from "./viewer-agent-response";
+import type { TripJourneyPlan } from "@raiquora/trip/travel-plan";
 import {
   applyJourneyLegAlternative,
   intermediateStopsResponse,
   type PendingJourneyLegChange,
 } from "./journey-chat-follow-up";
 
-const plan: ViewerAgentJourneyPlan = {
+const plan: TripJourneyPlan = {
   originStation: "新大阪",
   destinationStation: "出雲市",
   journeys: [{
@@ -70,7 +70,7 @@ describe("journey chat follow-up", () => {
   });
 
   it("replaces every leg in the selected segment while preserving the rest", () => {
-    const extendedPlan: ViewerAgentJourneyPlan = {
+    const extendedPlan: TripJourneyPlan = {
       ...plan,
       journeys: [{
         ...plan.journeys[0],

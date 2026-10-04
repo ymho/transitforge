@@ -95,9 +95,9 @@ describe("public place presentation view", () => {
     const live = projectAssistantTurn(final), restored = projectAssistantTurn({ response: saved.text, ...saved });
     expect(restored).toEqual(live);
     const item = document.createElement("li"); item.scrollIntoView = vi.fn();
-    resolveAssistantMessage(item, live, undefined, undefined, undefined, undefined, false);
+    resolveAssistantMessage(item, live, { animate: false });
     const initial = item.innerHTML;
-    resolveAssistantMessage(item, restored, undefined, undefined, undefined, undefined, false);
+    resolveAssistantMessage(item, restored, { animate: false });
     expect(item.innerHTML).toBe(initial);
     expect(item.querySelectorAll(".public-place-card")).toHaveLength(1);
     expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe(event.response);

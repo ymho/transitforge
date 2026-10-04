@@ -10,8 +10,7 @@ it("restored proposal needs an explicit review and cannot preview a different Tr
   const messages = document.querySelector('ol')!, onTripUpdateProposal = vi.fn();
   const button = () => document.createElement('button'), select = () => document.createElement('select');
   const controller = configureAiGuidePanel({ conversationSessionId: 'a', panel: document.querySelector('section')!, toggle: button(), close: button(), messages,
-    form: document.querySelector('form')!, input: document.querySelector('input')!, submit: document.querySelector('button')!, suggestions: [], contextChoices: document.createElement('div'),
-    settingsToggle: button(), settingsPanel: document.createElement('div'), transferPace: select(), rankingPreference: select(), storage: localStorage,
+    form: document.querySelector('form')!, input: document.querySelector('input')!, submit: document.querySelector('button')!, suggestions: [], settingsToggle: button(), settingsPanel: document.createElement('div'), transferPace: select(), rankingPreference: select(), storage: localStorage,
     historyRepository: { list: () => [{ messageId: 'm', role: 'assistant', response: { text: '提案', tripUpdateProposal: proposal } }], append: vi.fn(), delete: vi.fn() }, onTripUpdateProposal,
   }, vi.fn());
   controller.switchSession('a');
@@ -27,8 +26,7 @@ it("restores a consultation proposal as an explicit review action without auto-a
   const messages = document.querySelector('ol')!, onConsultationRequestProposal = vi.fn(), onTripUpdateProposal = vi.fn();
   const button = () => document.createElement('button'), select = () => document.createElement('select');
   const controller = configureAiGuidePanel({ conversationSessionId: proposal.conversationId, panel: document.querySelector('section')!, toggle: button(), close: button(), messages,
-    form: document.querySelector('form')!, input: document.querySelector('input')!, submit: document.querySelector('button')!, suggestions: [], contextChoices: document.createElement('div'),
-    settingsToggle: button(), settingsPanel: document.createElement('div'), transferPace: select(), rankingPreference: select(), storage: localStorage,
+    form: document.querySelector('form')!, input: document.querySelector('input')!, submit: document.querySelector('button')!, suggestions: [], settingsToggle: button(), settingsPanel: document.createElement('div'), transferPace: select(), rankingPreference: select(), storage: localStorage,
     historyRepository: { list: () => [{ messageId: 'm', role: 'assistant', response: { text: '提案', consultationRequestProposal: proposal } }], append: vi.fn(), delete: vi.fn() }, onConsultationRequestProposal, onTripUpdateProposal,
   }, vi.fn());
   controller.switchSession(proposal.conversationId);

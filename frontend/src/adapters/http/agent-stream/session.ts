@@ -1,4 +1,4 @@
-import type { ViewerAgentResponse } from "../../../domain/viewer-agent-response";
+import type { AssistantTurnView } from "../../../domain/assistant-turn-view";
 import type { AuthSession } from "../../../usecases/auth/auth-session";
 import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
 import { consumeAgentStream, AgentStreamError } from "./consumer";
@@ -62,7 +62,7 @@ export function createConversationStreamSession(options: {
       let inFlight = false;
       return {
         request: structuredClone(request),
-        async send(onEvent?: (event: AgentTurnEvent) => void): Promise<ViewerAgentResponse> {
+        async send(onEvent?: (event: AgentTurnEvent) => void): Promise<AssistantTurnView> {
           if (inFlight || !current()) throw new AgentStreamError("stale_generation");
           inFlight = true; const controller = new AbortController(); active = controller;
           try {
@@ -70,7 +70,7 @@ export function createConversationStreamSession(options: {
             if (!current()) throw new AgentStreamError("stale_generation");
             if (!token || options.auth.getState().status !== "signed-in") throw new ApiAuthenticationError("unauthenticated");
             if (!current()) throw new AgentStreamError("stale_generation");
-            let final: ViewerAgentResponse | undefined;
+            let final: AssistantTurnView | undefined;
             for (let attempt = 0; attempt < 2; attempt++) {
               try {
                 await consumeAgentStream({ token, request, endpoint: options.endpoint ?? "/api/agent-stream", fetcher: options.fetcher,

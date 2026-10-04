@@ -7,14 +7,14 @@ describe("buildConversationFeedback", () => {
     {
       messageId: "message-2",
       role: "assistant" as const,
-      response: "いつ出発しますか",
+      response: { text: "いつ出発しますか" },
       requestId: "request-1",
     },
     { messageId: "message-3", role: "user" as const, text: "明日" },
     {
       messageId: "message-4",
       role: "assistant" as const,
-      response: "経路を案内します",
+      response: { text: "経路を案内します" },
       requestId: "request-2",
     },
   ];
@@ -44,7 +44,7 @@ describe("buildConversationFeedback", () => {
     )).toThrow("評価対象");
   });
 
-  it("builds feedback from a restored place response", () => {
+  it("builds feedback from a restored public card without copying artifact metadata", () => {
     const feedback = buildConversationFeedback(
       "session-place",
       [{
@@ -52,7 +52,8 @@ describe("buildConversationFeedback", () => {
         role: "assistant",
         response: {
           text: "宮島周辺の観光スポットを見つけました",
-          external: {},
+          publicPlacePresentation: { version: "public-place-presentation-v1", cards: [{ evidenceId: "evidence:place", placeRef: "place:1",
+            title: "宮島", description: "海を眺められます", sourceUrl: "https://example.org/place" }] },
         },
         requestId: "request-place",
       }],
@@ -68,5 +69,6 @@ describe("buildConversationFeedback", () => {
         text: "宮島周辺の観光スポットを見つけました",
       }],
     });
+    expect(JSON.stringify(feedback)).not.toMatch(/evidence:place|place:1|sourceUrl/);
   });
 });

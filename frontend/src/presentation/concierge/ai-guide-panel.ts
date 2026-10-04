@@ -1,10 +1,6 @@
 import { previewPlanAdoption } from "./plan-adoption-view";
 import { renderPublicAccommodationPresentation } from "./public-accommodation-presentation-view";
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
-import type {
-  ConversationGuidance,
-  ConversationSubmission,
-} from "../../domain/conversation-guidance";
 import {
   type ConversationHistoryRepository,
 } from "../../usecases/concierge/conversation-history-repository";
@@ -23,11 +19,7 @@ import {
   isTransferPace,
   type JourneySearchPreferences,
 } from "@raiquora/journey/journey-search-preferences";
-import type { ViewerAgentResponse } from "../../domain/viewer-agent-response";
-import type { TripContext } from "@raiquora/trip/travel-profile";
-import type { PlaceMediaSearchResult } from "@raiquora/trip/place-media";
-import type { GroundAccessArea, GroundAccessMatrix, GroundAccessRoute } from "@raiquora/trip/ground-access";
-import type { RestaurantCandidate } from "@raiquora/trip/restaurant-search";
+import type { AssistantTurnView } from "../../domain/assistant-turn-view";
 import type { AgentProgressPhase } from "@raiquora/agent/agent-progress";
 import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { hideSheet, showSheet } from "../shared/sheet-transition";
@@ -36,8 +28,6 @@ import {
   loadJourneySearchPreferences,
   saveJourneySearchPreferences,
 } from "./journey-preferences-storage";
-import { renderExternalTravelInformation } from "./external-travel-cards";
-import { tripContextAfterUserAnswer } from "../../domain/travel-conversation-context";
 import { typewriteText } from "../shared/typewriter-text";
 
 export { visibleAssistantText } from "./assistant-markdown";
@@ -59,7 +49,6 @@ export interface AiGuidePanelElements {
   input: HTMLInputElement;
   submit: HTMLButtonElement;
   suggestions: HTMLButtonElement[];
-  contextChoices: HTMLElement;
   settingsToggle: HTMLButtonElement;
   settingsPanel: HTMLElement;
   transferPace: HTMLSelectElement;
@@ -77,15 +66,10 @@ export interface AiGuidePanelElements {
   placeMemoTargets?: () => readonly { key: string; label: string }[];
   onPlaceMemoProposal?: (card: import("@raiquora/agent/public-place-presentation").PublicPlaceCard,
     dayKey: string, category: import("@raiquora/trip/trip").ActivityCategory) => void;
-  onChecklistProposal?: (proposal: import("@raiquora/trip/trip-checklist").ChecklistProposal) => void;
   onPlanAdoption?: (target: { conversationId: string; candidateSetId: string; candidateSetRevision: number; variantId: string; tripId: string; baseTripRevision: number; mutationId: string }) => Promise<{
     changes: { added: number; replaced: number; removed: number }; confirm(): Promise<void>;
   }>;
-  onPlaces?: (places: PlaceMediaSearchResult["places"]) => void;
-  onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void;
   onGroundRoute?: (route: PublicGroundRoutePresentation, index: number) => void;
-  onRestaurantConsult?: (restaurant: RestaurantCandidate) => void;
-  onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void;
   persistent?: () => boolean;
   /** Host-owned explicit Trip/revision binding; no title or message inference. */
   responseContextKey?: () => string;
@@ -94,11 +78,10 @@ export interface AiGuidePanelElements {
 export type AiGuidePromptHandler = (
   prompt: string,
   preferences: JourneySearchPreferences,
-  conversation?: ConversationSubmission,
   onResponseMetadata?: (metadata: AgentResponseMetadata) => void,
   options?: { requestedResearchMode: "standard" | "detailed"; researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number };
     onProgress?: (phase: AgentProgressPhase) => void },
-) => Promise<ViewerAgentResponse>;
+) => Promise<AssistantTurnView>;
 
 export const staleResponseNotice =
   "会話の状態が変わったため回答を表示できませんでした。もう一度お試しください。";
@@ -125,7 +108,6 @@ export function configureAiGuidePanel(
     input,
     submit,
     suggestions,
-    contextChoices,
     settingsToggle,
     settingsPanel,
     transferPace,
@@ -269,11 +251,10 @@ export function configureAiGuidePanel(
     showBadFeedbackComment(message, send);
   });
 
-  const addProposalAction = (message: HTMLElement, response: ViewerAgentResponse) => {
-    if (typeof response === "string") return;
-    const cost = "tripCostProposal" in response ? response.tripCostProposal : undefined;
-    const consultation = "consultationRequestProposal" in response ? response.consultationRequestProposal : undefined;
-    const update = "tripUpdateProposal" in response ? response.tripUpdateProposal : undefined;
+  const addProposalAction = (message: HTMLElement, response: AssistantTurnView) => {
+    const cost = response.tripCostProposal;
+    const consultation = response.consultationRequestProposal;
+    const update = response.tripUpdateProposal;
     if (cost && elements.onTripCostProposal) {
       const button = document.createElement("button"); button.type = "button"; button.textContent = "費用の概算を確認";
       button.addEventListener("click", () => elements.onTripCostProposal?.(cost)); message.append(button);
@@ -288,24 +269,8 @@ export function configureAiGuidePanel(
     message.append(button);
   };
 
-  let activeConversation: ConversationGuidance | undefined;
-  let activeTripContext: TripContext | undefined;
   let hasConversationHistory = false;
-  const setContextChoices = (guidance?: ConversationGuidance) => {
-    contextChoices.replaceChildren();
-    const choices = guidance?.quickReplies ?? [];
-    contextChoices.hidden = choices.length === 0;
-    for (const reply of choices) {
-      const choice = document.createElement("button");
-      choice.type = "button";
-      choice.textContent = reply.label;
-      choice.addEventListener("click", () => submitPrompt(reply.value));
-      contextChoices.append(choice);
-    }
-    if (choices.length > 0) messages.append(contextChoices);
-  };
-
-  const sendPrompt = (prompt: string, conversation?: ConversationSubmission, requestedResearchMode: "standard" | "detailed" = "standard",
+  const sendPrompt = (prompt: string, requestedResearchMode: "standard" | "detailed" = "standard",
     researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }) => {
     if (!prompt || submit.disabled) {
       return;
@@ -332,7 +297,7 @@ export function configureAiGuidePanel(
     const pendingMessage = appendPendingMessage(messages);
 
     let requestId: string | undefined;
-    void handlePrompt(prompt, preferences(), conversation, (metadata) => {
+    void handlePrompt(prompt, preferences(), (metadata) => {
       requestId = metadata.requestId;
     }, { requestedResearchMode, ...(researchTarget ? { researchTarget } : {}), onProgress: phase => {
       if (requestedGeneration === requestGeneration && conversationSessionId === requestedSessionId) updatePendingMessage(pendingMessage, phase);
@@ -356,32 +321,20 @@ export function configureAiGuidePanel(
           },
         );
         if (conversationSessionId !== requestedSessionId) return;
-        const nextState = nextTripConversationState(
-          activeTripContext,
-          response,
-        );
-        const guidance = nextState.guidance;
-        activeConversation = guidance;
-        activeTripContext = nextState.tripContext;
-        setContextChoices(guidance);
-        if (guidance) {
-          input.placeholder = inputPlaceholderForConversation(guidance);
-        } else {
-          input.placeholder = "列車、行き先、旅の相談を入力";
-        }
-        resolveAssistantMessage(pendingMessage, response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants,
-          true, elements.placeMemoTargets && elements.onPlaceMemoProposal ? { days: elements.placeMemoTargets, propose: elements.onPlaceMemoProposal } : undefined, elements.onGroundRoute);
+        resolveAssistantMessage(pendingMessage, response, {
+          placeMemoSelection: elements.placeMemoTargets && elements.onPlaceMemoProposal ? { days: elements.placeMemoTargets, propose: elements.onPlaceMemoProposal } : undefined,
+          onGroundRoute: elements.onGroundRoute,
+        });
         addProposalAction(pendingMessage, response);
         // Only a newly delivered V2 proposal opens the preview. Restoring history never reapplies it.
-        if (typeof response !== "string" && "consultationRequestProposal" in response && response.consultationRequestProposal) elements.onConsultationRequestProposal?.(response.consultationRequestProposal);
-        if (typeof response !== "string" && "tripCostProposal" in response && response.tripCostProposal && !("tripUpdateProposal" in response && response.tripUpdateProposal)) elements.onTripCostProposal?.(response.tripCostProposal);
-        if (typeof response !== "string" && "tripUpdateProposal" in response && response.tripUpdateProposal) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
-        if (typeof response !== "string" && "publicPlanPresentation" in response && response.publicPlanPresentation) elements.onPlanPresentation?.(response.publicPlanPresentation, true);
-        if (typeof response !== "string" && "checklistProposal" in response) elements.onChecklistProposal?.(response.checklistProposal);
+        if (response.consultationRequestProposal) elements.onConsultationRequestProposal?.(response.consultationRequestProposal);
+        if (response.tripCostProposal && !response.tripUpdateProposal) elements.onTripCostProposal?.(response.tripCostProposal);
+        if (response.tripUpdateProposal) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
+        if (response.publicPlanPresentation) elements.onPlanPresentation?.(response.publicPlanPresentation, true);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
-        if (typeof response !== "string" && "tripMutationReceipt" in response && response.tripMutationReceipt) elements.onTripConditionsSaved?.();
-        if (typeof response !== "string" && !("publicPlanPresentation" in response && response.publicPlanPresentation) && "semanticReceipt" in response && response.semanticReceipt?.changes.some(
+        if (response.tripMutationReceipt) elements.onTripConditionsSaved?.();
+        if (!response.publicPlanPresentation && response.semanticReceipt?.changes.some(
           change => change.status === "accepted" && change.frame === "actual")) elements.onTripConditionsSaved?.();
       })
       .catch((error: unknown) => {
@@ -397,11 +350,11 @@ export function configureAiGuidePanel(
         const errorResponse = agentFailureMessage(error);
         const assistantMessage = historyRepository.append(requestedSessionId, {
           role: "assistant",
-          response: errorResponse,
+          response: { text: errorResponse },
           ...(requestId ? { requestId } : {}),
         });
         if (conversationSessionId !== requestedSessionId) return;
-        resolveAssistantMessage(pendingMessage, errorResponse);
+        resolveAssistantMessage(pendingMessage, { text: errorResponse });
         pendingMessage.classList.add("ai-guide-message-failure");
         const actions = document.createElement("div");
         actions.className = "ai-guide-failure-actions";
@@ -434,27 +387,7 @@ export function configureAiGuidePanel(
 
   const submitPrompt = (prompt: string, requestedResearchMode: "standard" | "detailed" = "standard", researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }) => {
     if (!prompt || submit.disabled) return;
-    const guidance = activeConversation ?? (activeTripContext === undefined ? undefined : {
-      question: "現在の旅行条件を変更します",
-      expectedInput: "free-text" as const,
-      quickReplies: [],
-      tripContext: activeTripContext,
-    });
-    const updatedGuidance = guidance === undefined ? undefined : {
-      ...guidance,
-      tripContext: tripContextAfterUserAnswer(
-        guidance.tripContext,
-        prompt,
-        guidance.expectedInput,
-      ),
-    };
-    if (updatedGuidance) activeTripContext = updatedGuidance.tripContext;
-    const conversation = updatedGuidance === undefined
-      ? undefined
-      : { answer: prompt, guidance: updatedGuidance };
-    activeConversation = undefined;
-    setContextChoices();
-    sendPrompt(prompt, conversation, requestedResearchMode, researchTarget);
+    sendPrompt(prompt, requestedResearchMode, researchTarget);
   };
 
   messages.addEventListener("raiquora:detailed-research", (event) => {
@@ -480,11 +413,8 @@ export function configureAiGuidePanel(
     switchSession(nextConversationSessionId) {
       requestGeneration++;
       scrollPositions.set(conversationSessionId, messages.scrollTop);
-      elements.onPlaces?.([]);
       if (nextConversationSessionId !== conversationSessionId) saveInputDraft();
       conversationSessionId = nextConversationSessionId;
-      activeConversation = undefined;
-      activeTripContext = undefined;
       input.value = restoreInputDraft();
       input.disabled = false;
       input.placeholder = "列車、行き先、旅の相談を入力";
@@ -497,42 +427,20 @@ export function configureAiGuidePanel(
       for (const entry of restoredHistory) {
         if (entry.role === "user") {
           appendMessage(messages, "user", entry.text, entry.messageId);
-          const restoredGuidance = activeConversation as ConversationGuidance | undefined;
-          if (restoredGuidance) {
-            activeTripContext = tripContextAfterUserAnswer(
-              restoredGuidance.tripContext,
-              entry.text,
-              restoredGuidance.expectedInput,
-            );
-            activeConversation = {
-              ...restoredGuidance,
-              tripContext: activeTripContext,
-            };
-          } else if (activeTripContext) {
-            activeTripContext = tripContextAfterUserAnswer(activeTripContext, entry.text);
-          }
           continue;
         }
         const restored = appendPendingMessage(messages, entry.messageId);
-        resolveAssistantMessage(restored, entry.response, elements.onPlaces, elements.onGroundAccess, elements.onRestaurantConsult, elements.onRestaurants,
-          false, elements.placeMemoTargets && elements.onPlaceMemoProposal ? { days: elements.placeMemoTargets, propose: elements.onPlaceMemoProposal } : undefined, elements.onGroundRoute);
+        resolveAssistantMessage(restored, entry.response, { animate: false,
+          placeMemoSelection: elements.placeMemoTargets && elements.onPlaceMemoProposal ? { days: elements.placeMemoTargets, propose: elements.onPlaceMemoProposal } : undefined,
+          onGroundRoute: elements.onGroundRoute,
+        });
         addProposalAction(restored, entry.response);
         if (!submitFeedback) restored.querySelector(".conversation-feedback")?.remove();
-        activeConversation = typeof entry.response !== "string" && "conversation" in entry.response
-          ? entry.response.conversation
-          : undefined;
-        if (typeof entry.response !== "string" && "tripContext" in entry.response) {
-          activeTripContext = entry.response.tripContext;
-        } else if (activeConversation) activeTripContext = activeConversation.tripContext;
       }
-      const latestPlan = [...restoredHistory].reverse().find(entry => entry.role === "assistant" && typeof entry.response !== "string" && "publicPlanPresentation" in entry.response && entry.response.publicPlanPresentation);
-      if (latestPlan?.role === "assistant" && typeof latestPlan.response !== "string" && "publicPlanPresentation" in latestPlan.response && latestPlan.response.publicPlanPresentation)
+      const latestPlan = [...restoredHistory].reverse().find(entry => entry.role === "assistant" && entry.response.publicPlanPresentation);
+      if (latestPlan?.role === "assistant" && latestPlan.response.publicPlanPresentation)
         elements.onPlanPresentation?.(latestPlan.response.publicPlanPresentation, false);
       messages.scrollTop = scrollPositions.get(conversationSessionId) ?? 0;
-      setContextChoices(activeConversation);
-      input.placeholder = activeConversation
-        ? inputPlaceholderForConversation(activeConversation)
-        : "列車、行き先、旅の相談を入力";
     },
     openLandmarkJourney(name) {
       setOpen(true);
@@ -542,7 +450,7 @@ export function configureAiGuidePanel(
       setOpen(true);
     },
     ask(prompt) { setOpen(true); submitPrompt(prompt); },
-    notify(text) { const message = appendPendingMessage(messages); resolveAssistantMessage(message, text); },
+    notify(text) { const message = appendPendingMessage(messages); resolveAssistantMessage(message, { text }); },
   };
   controller.switchSession(conversationSessionId);
   return controller;
@@ -556,36 +464,6 @@ export function agentFailureMessage(error: unknown): string {
     return "同じ相談を処理中です。少し待ってから、もう一度お試しください。";
   }
   return "案内を開始できませんでした。時間をおいてもう一度お試しください。";
-}
-
-export function nextTripConversationState(
-  currentTripContext: TripContext | undefined,
-  response: ViewerAgentResponse,
-): {
-  guidance?: ConversationGuidance;
-  tripContext?: TripContext;
-} {
-  const guidance = typeof response === "string" || !("conversation" in response)
-    ? undefined
-    : response.conversation;
-  const responseTripContext = typeof response === "string" || !("tripContext" in response)
-    ? undefined
-    : response.tripContext;
-  return {
-    guidance: guidance && responseTripContext
-      ? { ...guidance, tripContext: responseTripContext }
-      : guidance,
-    tripContext: responseTripContext ?? guidance?.tripContext ?? currentTripContext,
-  };
-}
-
-function inputPlaceholderForConversation(guidance: ConversationGuidance): string {
-  switch (guidance.expectedInput) {
-    case "departure-date": return "例: 来週の火曜日、9月3日";
-    case "stay-length": return "例: 1泊、2泊、日帰り";
-    case "traveler-count": return "例: 大人2人、子ども1人";
-    default: return "自由に入力できます";
-  }
 }
 
 export function shouldFocusAiGuideInputOnOpen(
@@ -654,46 +532,26 @@ function updatePendingMessage(item: HTMLLIElement, phase: AgentProgressPhase): v
 }
 
 function showStaleResponseNotice(item: HTMLLIElement): void {
-  resolveAssistantMessage(item, staleResponseNotice, undefined, undefined, undefined, undefined, false);
+  resolveAssistantMessage(item, { text: staleResponseNotice }, { animate: false });
   item.querySelector(".conversation-feedback")?.remove();
 }
 
 export function resolveAssistantMessage(
   item: HTMLLIElement,
-  response: ViewerAgentResponse,
-  onPlaces?: (places: PlaceMediaSearchResult["places"]) => void,
-  onGroundAccess?: (access: GroundAccessRoute | GroundAccessMatrix | GroundAccessArea) => void,
-  onRestaurantConsult?: (restaurant: RestaurantCandidate) => void,
-  onRestaurants?: (restaurants: readonly RestaurantCandidate[]) => void,
-  animate = true,
-  placeMemoSelection?: Parameters<typeof renderPublicPlacePresentation>[1],
-  onGroundRoute?: (route: PublicGroundRoutePresentation, index: number) => void,
+  response: AssistantTurnView,
+  options: { animate?: boolean; placeMemoSelection?: Parameters<typeof renderPublicPlacePresentation>[1];
+    onGroundRoute?: (route: PublicGroundRoutePresentation, index: number) => void } = {},
 ): void {
   item.classList.remove("ai-guide-message-pending");
   item.removeAttribute("aria-label");
-  if (typeof response === "string") {
-    renderAssistantCopy(item, visibleAssistantText(response), animate);
-  } else {
-    // V2 is a preview only until the #388/#389 writer gate. Never invoke the legacy apply callback.
-    renderAssistantCopy(item, visibleAssistantText(response.text), animate);
-    if ("delivery" in response && response.delivery && response.delivery.status !== "full") item.append(renderDeliveryStatus(response.delivery));
-    if ("semanticReceipt" in response && response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
-    if ("publicPlanPresentation" in response && response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
-    if ("publicJourneyPresentation" in response && response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
-    if ("publicAccommodationPresentation" in response && response.publicAccommodationPresentation) item.append(renderPublicAccommodationPresentation(response.publicAccommodationPresentation));
-    if ("publicGroundRoutePresentation" in response && response.publicGroundRoutePresentation) item.append(renderPublicGroundRoutePresentation(response.publicGroundRoutePresentation, onGroundRoute));
-    if ("publicPlacePresentation" in response && response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation, placeMemoSelection));
-  }
-  // A question is metadata on the same turn, not a branch that hides its artifacts.
-  if (typeof response !== "string" && "external" in response && response.external) {
-    appendExternalCards(item, renderExternalTravelInformation(
-      { text: response.text, external: response.external },
-      { onRestaurantConsult, includePlaceInspiration: "conversation" in response, includeRestaurants: !onRestaurants },
-    ));
-    if (response.external.places?.status === "available" && response.external.places.data) onPlaces?.(response.external.places.data.places);
-    if (response.external.restaurants?.status === "available" && response.external.restaurants.data) onRestaurants?.(response.external.restaurants.data.restaurants);
-    if (response.external.groundAccess?.status === "available" && response.external.groundAccess.data) onGroundAccess?.(response.external.groundAccess.data);
-  }
+  renderAssistantCopy(item, visibleAssistantText(response.text), options.animate ?? true);
+  if (response.delivery && response.delivery.status !== "full") item.append(renderDeliveryStatus(response.delivery));
+  if (response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
+  if (response.publicPlanPresentation) item.append(renderPublicPlanPresentation(response.publicPlanPresentation));
+  if (response.publicJourneyPresentation) item.append(renderPublicJourneyPresentation(response.publicJourneyPresentation));
+  if (response.publicAccommodationPresentation) item.append(renderPublicAccommodationPresentation(response.publicAccommodationPresentation));
+  if (response.publicGroundRoutePresentation) item.append(renderPublicGroundRoutePresentation(response.publicGroundRoutePresentation, options.onGroundRoute));
+  if (response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation, options.placeMemoSelection));
   appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });
 }
@@ -736,10 +594,6 @@ function renderAssistantCopy(item: HTMLElement, text: string, animate: boolean):
   copy.append(renderAssistantMarkdown(text));
   item.replaceChildren(copy);
   if (animate) typewriteText(copy);
-}
-
-function appendExternalCards(parent: HTMLElement, cards: HTMLElement): void {
-  if (cards.childElementCount > 0) parent.append(cards);
 }
 
 function appendConversationFeedback(item: HTMLLIElement): void {

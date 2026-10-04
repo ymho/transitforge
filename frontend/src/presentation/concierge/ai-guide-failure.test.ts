@@ -7,7 +7,7 @@ it("marks a failed answer and lets the user retry the same prompt", async () => 
   const button = () => document.createElement("button");
   const select = () => document.createElement("select");
   const messages = document.querySelector("ol")!;
-  const responses = [Promise.reject(new Error("limit_reached")), Promise.resolve("候補を見つけました")];
+  const responses = [Promise.reject(new Error("limit_reached")), Promise.resolve({ text: "候補を見つけました" })];
   const handlePrompt = vi.fn((_prompt: string) => responses.shift()!);
   let messageIndex = 0;
   const controller = configureAiGuidePanel({
@@ -20,7 +20,6 @@ it("marks a failed answer and lets the user retry the same prompt", async () => 
     input: document.querySelector("input")!,
     submit: document.querySelector("button")!,
     suggestions: [],
-    contextChoices: document.createElement("div"),
     settingsToggle: button(),
     settingsPanel: document.createElement("div"),
     transferPace: select(),

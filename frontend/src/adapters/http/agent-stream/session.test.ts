@@ -29,7 +29,7 @@ it("sends only references/raw request and Bearer; a communication retry retains 
   s.fetcher.mockRejectedValueOnce(new Error("network"));
   await expect(action.send()).rejects.toThrow("stream_error");
   const pending = action.send(); await vi.waitFor(() => expect(s.fetcher).toHaveBeenCalledTimes(2)); s.complete();
-  expect(await pending).toBe("保存された回答");
+  expect(await pending).toEqual({ text: "保存された回答" });
   const bodies = s.fetcher.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
   expect(bodies[0]).toEqual({ conversationId: "conversation-a", turnId: "turn-1", userRequest: "相談", requestedResearchMode: "standard", tripId: "trip-a",
     uiContext: { itemId: "item-a", calendarDate: "2026-09-21" } });
@@ -57,7 +57,7 @@ it("refreshes and retries one 401 with the same turn", async () => {
   vi.mocked(s.auth.refreshAccessToken).mockResolvedValueOnce("refreshed-token");
   const pending = s.session.start("相談").send();
   await vi.waitFor(() => expect(s.fetcher).toHaveBeenCalledTimes(2)); s.complete();
-  expect(await pending).toBe("保存された回答");
+  expect(await pending).toEqual({ text: "保存された回答" });
   expect(s.auth.refreshAccessToken).toHaveBeenCalledWith("access-token");
   expect(s.fetcher.mock.calls[1][1]?.headers).toMatchObject({ Authorization: "Bearer refreshed-token" });
   expect(s.fetcher.mock.calls[1][1]?.body).toBe(s.fetcher.mock.calls[0][1]?.body);

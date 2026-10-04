@@ -141,7 +141,6 @@ const {
   sidebarRealtimeMap,
   travelProfileToggle,
   aiGuideSuggestions,
-  aiGuideContextChoices,
   journeySettingsToggle,
   journeySettingsPanel,
   journeyTransferPace,
@@ -329,7 +328,6 @@ aiGuideController = configureAiGuidePanel(
     input: aiGuideInput,
     submit: aiGuideSubmit,
     suggestions: aiGuideSuggestions,
-    contextChoices: aiGuideContextChoices,
     settingsToggle: journeySettingsToggle,
     settingsPanel: journeySettingsPanel,
     transferPace: journeyTransferPace,
@@ -343,16 +341,9 @@ aiGuideController = configureAiGuidePanel(
         .then((renamed) => { if (activeConversationSession.id === conversationId) activeConversationSession = renamed; })
         .catch(() => undefined);
     },
-    onGroundAccess: (access) => {
-      groundAccessLayer?.show(access);
-      contextWorkspaceController.show("map");
-    },
     onGroundRoute: (route, index) => {
       groundAccessLayer?.showGroundRoute(route, index);
       contextWorkspaceController.show("map");
-    },
-    onRestaurantConsult: (restaurant) => {
-      aiGuideController.ask(`${restaurant.name}を食事候補として旅程に入れたい`);
     },
     persistent: () => true,
     responseContextKey: () => JSON.stringify([serverAgentSession.contextVersion(), activeConversationSession.id, tripWorkspaceController.current()?.id, tripWorkspaceController.current()?.revision]),
@@ -394,16 +385,11 @@ aiGuideController = configureAiGuidePanel(
       tripWorkspace.show("trip");
     },
     onPlanAdoption: adoptPlan,
-    onChecklistProposal: (proposal) => {
-      try { tripWorkspaceController.checklist.preview(proposal); }
-      catch { tripWorkspace.report("準備リストの追加案を表示できません。最新のリストを確認してください。"); }
-    },
   },
-  (prompt, preferences, conversation, onResponseMetadata, options) =>
+  (prompt, preferences, onResponseMetadata, options) =>
     handleAiGuidePrompt(
       prompt,
       preferences,
-      conversation,
       onResponseMetadata,
       options,
     ),
@@ -579,7 +565,7 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip
 }
 
 const initialDateTime = new Date();
-handleAiGuidePrompt = async (prompt, _preferences, _conversation, _metadata, execution) => {
+handleAiGuidePrompt = async (prompt, _preferences, _metadata, execution) => {
   if (activeConversationSession.tripId && tripWorkspaceController.current()?.id !== activeConversationSession.tripId) {
     throw new Error("対象の旅程を再取得してから相談してください。");
   }

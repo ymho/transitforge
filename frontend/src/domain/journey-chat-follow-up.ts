@@ -2,12 +2,12 @@ import type {
   JourneyRouteLeg,
   JourneyRouteResult,
 } from "@raiquora/journey/direct-route-search";
-import type { ViewerAgentJourneyPlan } from "./viewer-agent-response";
+import type { TripJourneyPlan } from "@raiquora/trip/travel-plan";
 import { formatRouteClockTime } from "@raiquora/train/route-time";
 import { formatStationLabel } from "@raiquora/train/station-name";
 
 export interface PendingJourneyLegChange {
-  plan: ViewerAgentJourneyPlan;
+  plan: TripJourneyPlan;
   journeyIndex: number;
   legIndex: number;
   endLegIndex?: number;
@@ -15,7 +15,7 @@ export interface PendingJourneyLegChange {
 }
 
 export type JourneyLegAlternativeSearch = (request: {
-  plan: ViewerAgentJourneyPlan;
+  plan: TripJourneyPlan;
   journey: JourneyRouteResult;
   startLegIndex: number;
   endLegIndex: number;
@@ -23,7 +23,7 @@ export type JourneyLegAlternativeSearch = (request: {
 }) => Promise<JourneyRouteLeg[]>;
 
 export function intermediateStopsResponse(
-  plan: ViewerAgentJourneyPlan,
+  plan: TripJourneyPlan,
   journeyIndex: number,
   legIndex: number,
 ): string {
@@ -67,7 +67,7 @@ export function alternativeProposalResponse(
 export function applyJourneyLegAlternative(
   pending: PendingJourneyLegChange,
   alternativeIndex: number,
-): ViewerAgentJourneyPlan {
+): TripJourneyPlan {
   const alternative = pending.alternatives[alternativeIndex];
   const selectedJourney = pending.plan.journeys[pending.journeyIndex];
   if (!alternative || !selectedJourney) {

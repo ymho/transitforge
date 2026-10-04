@@ -9,7 +9,7 @@
 | 現行の所在 | #383の変更 / 境界 |
 | --- | --- |
 | `travel-profile.ts`のTripContext.planningStage | inspiration/planningのlegacy値。V2ではTripのplanningStateだけを正本とする。legacy型には新しい状態を足さない |
-| `travel-conversation-context.ts` | 旧状態の復元・引継ぎ。V2状態の発話regex routerに流用しない。writer切替時に旧producerを撤去する |
+| `travel-conversation-context.ts`（#721で撤去済み） | 旧状態の復元・引継ぎ。V2状態の発話regex routerに流用しない。writer切替時に旧producerを撤去する |
 | `viewer-agent-runtime.ts` | legacy状態のparser、質問Context、旅程生成、応答projectionがある。今回はV2へ接続し直さず、別の固定進行ルールも追加しない |
 | `structured-model-class-policy.ts` | legacy条件によるモデルクラス判断。V2 stateをToolやモデルの固定振分キーとして追加しない |
 | `ai-guide-panel.ts` | legacy旅程相談のplanning指定。V2へ二重書込しない |

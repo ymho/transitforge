@@ -148,6 +148,6 @@ function metadataFor(value: Partial<ServerConversationMetadata>): ServerConversa
   return { title: value.title ?? "新しい旅", scope: "trip", summary: value.summary ?? "",
     resolvedTopics: value.resolvedTopics ?? [], pendingTopics: value.pendingTopics ?? [], tripId: value.tripId };
 }
-function assistantResponse(item: import("./server-conversation-client").ServerConversationMessage): import("../../domain/viewer-agent-response").ViewerAgentResponse {
+function assistantResponse(item: import("./server-conversation-client").ServerConversationMessage): import("../../domain/assistant-turn-view").AssistantTurnView {
   return projectAssistantTurn({ response: item.text, ...item });
 }

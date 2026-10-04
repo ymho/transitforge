@@ -97,7 +97,7 @@ tests/               境界fixtureとrepository保守toolのPythonテスト
 tools/               検証 評価 再生成コマンド
 ```
 
-production AgentはADR 0096に従うStrands v2専用である。`modules/agent/runtime`は共通契約を、`backend/agent-api/src/adapters`は実行ループを所有する。旧Runtime・旧Prompt・旧評価Actionsは#788で撤去した。画面の旧表示型の分離は#721で扱う。
+production AgentはADR 0096に従うStrands v2専用である。`modules/agent/runtime`は共通契約を、`backend/agent-api/src/adapters`は実行ループを所有する。旧Runtime・旧Prompt・旧評価Actionsは#788で撤去した。画面は#721のv2専用`AssistantTurnView`を使い、live・履歴・replayを同じpublic projectionから描画する。旧表示union・質問ガイド・外部カードは撤去した。
 本番BrowserはCognito Access TokenでRegional RESTへ接続し、相談は常に`/api/agent-stream`を通る。
 Conversationは`/api/conversations/v1`、Profileは`/api/profile/v1`、Trip V2は`/api/trips/v1`がServer正本である。
 Bedrock・Server Tool・Evidence・Traceは`backend/agent-api`が所有する。Browser Agent Runtime、Browser Trip writer、
