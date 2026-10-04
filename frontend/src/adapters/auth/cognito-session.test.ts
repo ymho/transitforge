@@ -63,7 +63,7 @@ describe("Cognito public-client authentication", () => {
     const fetchMock = mockTokens();
     const b = browser(callback), auth = createCognitoSession(config, b);
     await auth.initialize();
-    expect(auth.getState()).toEqual({ status: "signed-in", displayName: "user@example.test", sessionExpiresAt: now + 8 * 60 * 60 * 1000 });
+    expect(auth.getState()).toEqual({ status: "signed-in", displayName: "user@example.test", sessionExpiresAt: now + 12 * 60 * 60 * 1000 });
     expect(await auth.getAccessToken()).toBe("access-token-fixture");
     expect(b.history.replaceState).toHaveBeenLastCalledWith(null, "", "/");
     expect(vi.mocked(b.history.replaceState).mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]!);
@@ -87,7 +87,7 @@ describe("Cognito public-client authentication", () => {
     expect(JSON.stringify(fetchMock.mock.calls.at(-1))).not.toContain("id_token");
   });
 
-  it("single-flights concurrent refreshes, rotates the token atomically and never extends the eight-hour deadline", async () => {
+  it("single-flights concurrent refreshes, rotates the token atomically and never extends the twelve-hour deadline", async () => {
     const { callback } = await login(); const fetchMock = mockTokens();
     const auth = createCognitoSession(config, browser(callback)); await auth.initialize();
     const stored = JSON.parse(sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`)!) as { absoluteExpiresAt: number };
@@ -202,4 +202,27 @@ it("invalidates rejected API credentials locally without logout navigation or au
   expect(auth.getState().status).toBe("expired");
   expect(await auth.getAccessToken()).toBeUndefined();
   expect(sessionStorage.length).toBe(0); expect(b.location.assign).not.toHaveBeenCalled();
+});
+
+it("refreshes after eight hours and reloads up to the fixed twelve-hour boundary", async () => {
+  const { callback } = await login(); const fetchMock = mockTokens();
+  const auth = createCognitoSession(config, browser(callback)); await auth.initialize();
+  const issuedAt = now; now += 9 * 60 * 60 * 1000;
+  fetchMock.mockResolvedValueOnce(refreshedTokens());
+  const reloaded = createCognitoSession(config, browser()); await reloaded.initialize();
+  expect(reloaded.getState().status).toBe("signed-in");
+  expect(await reloaded.getAccessToken()).toBe("access-token-refreshed");
+  now = issuedAt + 12 * 60 * 60 * 1000;
+  expect(await reloaded.getAccessToken()).toBeUndefined(); expect(reloaded.getState().status).toBe("expired");
+  expect(fetchMock).toHaveBeenCalledTimes(2); expect(sessionStorage.length).toBe(0);
+});
+it("restores a previously issued eight-hour session without extending its lifetime", async () => {
+  const { callback } = await login(); const fetchMock = mockTokens();
+  await createCognitoSession(config, browser(callback)).initialize();
+  const key = `raiquora.auth.${config.clientId}.session`, stored = JSON.parse(sessionStorage.getItem(key)!);
+  stored.absoluteExpiresAt = stored.issuedAt + 8 * 60 * 60 * 1000; sessionStorage.setItem(key, JSON.stringify(stored));
+  const reloaded = createCognitoSession(config, browser()); await reloaded.initialize();
+  expect(reloaded.getState()).toMatchObject({ status: "signed-in", sessionExpiresAt: stored.absoluteExpiresAt });
+  now = stored.absoluteExpiresAt;
+  expect(await reloaded.getAccessToken()).toBeUndefined(); expect(fetchMock).toHaveBeenCalledTimes(1);
 });

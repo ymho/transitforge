@@ -7,14 +7,18 @@ export type TripListState = "loading" | "available" | "unavailable" | "unauthent
 /** Collects the existing owner-scoped cursor API; this is a read view, never a second Trip cache. */
 export function createServerTripListSource(client: Pick<ServerTripClient, "list" | "sessionVersion" | "subscribeSessionChange">,
   authenticated: () => boolean) {
-  let state: TripListState = authenticated() ? "loading" : "unauthenticated";
+  let authentication = authenticated();
+  let state: TripListState = authentication ? "loading" : "unauthenticated";
   let trips: Trip[] = [], generation = 0, session = client.sessionVersion?.();
   const listeners = new Set<() => void>();
   const publish = () => listeners.forEach((listener) => listener());
   const sessionChanged = () => {
     const next = client.sessionVersion?.();
-    if (next === session && authenticated()) return false;
-    session = next; ++generation; trips = []; state = authenticated() ? "loading" : "unauthenticated"; publish(); return true;
+    const nextAuthentication = authenticated();
+    if (next === session && nextAuthentication === authentication) return false;
+    // Update both snapshots before notifying synchronous readers.
+    session = next; authentication = nextAuthentication;
+    ++generation; trips = []; state = authentication ? "loading" : "unauthenticated"; publish(); return true;
   };
   const refresh = async () => {
     sessionChanged();

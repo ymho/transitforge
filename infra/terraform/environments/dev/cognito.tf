@@ -65,7 +65,7 @@ resource "aws_cognito_user_pool_client" "spa" {
   enable_token_revocation              = true
   access_token_validity                = 5
   id_token_validity                    = 5
-  refresh_token_validity               = 8
+  refresh_token_validity               = 12
   explicit_auth_flows                  = ["ALLOW_REFRESH_TOKEN_AUTH"]
   token_validity_units {
     access_token  = "minutes"

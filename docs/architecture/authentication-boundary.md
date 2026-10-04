@@ -163,3 +163,21 @@ root全量はCIへ委ねる。Agent Eval、live AWS/E2E、本番切替は本段�
 `/api/agent`の汎用会話・trace・feedbackは410で閉鎖する。残るoperationの分類、公開weatherと
 Cognito必須operation、OAC用token搬送は[旧ingress閉鎖契約](server-agent-legacy-ingress-closure.md)を参照。
 これはTrip公開writerの有効化ではない。Server streamのAuthorization Bearer契約は維持する。
+
+## 初回起動とログイン期限（#789）
+
+旅程一覧Sourceは認証状態とsession versionの両方をsnapshotとして保持し、変化したときだけ消去・通知する。
+同じ未認証状態の読取では通知せず、同期subscriberの再読取も再帰させない。
+Composition Rootは認証初期化、Viewerのdynamic import、非同期起動を順にawaitする。
+entry自体はtop-level awaitで止めない。ViteがViewerからentryの共有exportを参照すると、
+entryのawaitとdynamic importが互いのmodule評価完了を待つためである。起動Promiseの失敗はComposition内で処理する。
+途中失敗では非表示のProduct shellとは別の起動状態欄へ固定文言と再読み込みボタンを出す。
+未認証の個人API・地図・運行データgateは維持する。
+
+新規ログインの絶対期限とCognito Refresh Token期限は12時間。Access/ID Tokenは最大5分のままとし、
+refreshやreloadで絶対期限を延長しない。旧8時間sessionは元の期限を保持する。token保存は引き続きタブ単位のsessionStorageである。
+CDはAWSのApp Clientから期限・単位を読み戻し、12時間と5分の組合せを確認する。
+
+`node tools/verify_viewer_startup.mjs`はbuild済みViewerをChromiumの1440px/390pxで起動する。
+ハッシュなし・保護route・reload・pageshow・8時間経過後のrefresh・12時間失効・logout・import失敗後の復旧を確認する。
+CIでは既存のChromium導入とbuildを再利用する。認証/個人APIはsyntheticであり、実Cognitoでの12時間連続利用の証明ではない。

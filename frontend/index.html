@@ -5,10 +5,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f4f7fb" />
-    <style>#app:not([data-primary-view]) { visibility: hidden; }</style>
+    <style>
+      #app:not([data-primary-view]) { visibility: hidden; }
+      #startup-status { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; gap: 1rem; padding: 2rem; background: #f4f7fb; color: #23455e; font: 1rem/1.6 system-ui, sans-serif; }
+      #startup-status button { padding: .75rem 1.5rem; border: 1px solid currentColor; border-radius: 1rem; color: inherit; background: white; font: inherit; cursor: pointer; }
+    </style>
     <title>Raiquora — Agentic Transit Intelligence</title>
   </head>
   <body>
+    <section id="startup-status" role="status" aria-live="polite"><p>画面を読み込んでいます。</p></section>
     <main id="app" data-loading-state="ready" data-display-mode="digital-twin" aria-busy="false">
       <section id="loading-screen" class="loading-screen" role="status" aria-live="polite" aria-atomic="true" aria-hidden="true" hidden>
         <div class="loading-screen-content">

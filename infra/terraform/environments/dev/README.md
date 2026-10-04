@@ -195,7 +195,7 @@ ID TokenはAPIへ送らない。OACと既存の公開writer gateも維持する�
 新規登録リンクを表示せず、公開App ClientのSignUp APIも拒否する。新しい利用者はCognito管理者だけが作成する。
 パスワードは12文字以上で英大文字・小文字・数字・記号を必須とする。Access/ID Tokenは5分のまま、
 Refresh TokenをsessionStorageへタブ単位で保持して失効前と401時に1回だけ更新する。ログイン開始から
-最大8時間の絶対期限は更新で延長しない。詳しい保存・logout保証と未実施の実環境試験は
+最大12時間の絶対期限は更新で延長しない。詳しい保存・logout保証と未実施の実環境試験は
 [ADR 0069](../../../../docs/decisions/0069-use-cognito-managed-login-for-spa.md)を参照する。
 
 ## Fixed-egress Provider（#480 Phase B）
