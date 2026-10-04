@@ -92,7 +92,7 @@ validateDecisionRecords();
 const frontendMain = resolve(repositoryRoot, "frontend/src/main.ts");
 if (existsSync(frontendMain)) {
   const mainSource = readFileSync(frontendMain, "utf8");
-  if (mainSource.split("\n").length > 20 || !mainSource.includes("await startApplication();")) {
+  if (mainSource.split("\n").length > 20 || !mainSource.includes("void startApplication();")) {
     errors.push("frontend/src/main.tsはCSS読込とComposition Rootの起動だけに限定してください");
   }
 }

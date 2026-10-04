@@ -169,6 +169,8 @@ Cognito必須operation、OAC用token搬送は[旧ingress閉鎖契約](server-age
 旅程一覧Sourceは認証状態とsession versionの両方をsnapshotとして保持し、変化したときだけ消去・通知する。
 同じ未認証状態の読取では通知せず、同期subscriberの再読取も再帰させない。
 Composition Rootは認証初期化、Viewerのdynamic import、非同期起動を順にawaitする。
+entry自体はtop-level awaitで止めない。ViteがViewerからentryの共有exportを参照すると、
+entryのawaitとdynamic importが互いのmodule評価完了を待つためである。起動Promiseの失敗はComposition内で処理する。
 途中失敗では非表示のProduct shellとは別の起動状態欄へ固定文言と再読み込みボタンを出す。
 未認証の個人API・地図・運行データgateは維持する。
 

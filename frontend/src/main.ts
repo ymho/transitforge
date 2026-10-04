@@ -4,4 +4,5 @@ import { installIosInputZoomPrevention } from "./presentation/shared/ios-input-z
 
 installIosInputZoomPrevention(document, navigator);
 
-await startApplication();
+// Let the entry module finish before the lazy Viewer imports shared entry exports.
+void startApplication();

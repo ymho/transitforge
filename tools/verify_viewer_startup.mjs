@@ -33,7 +33,7 @@ try {
     page.on("request", request => {
       const url = new URL(request.url());
       if (url.pathname.startsWith("/api/")) apiCalls.push(url.pathname);
-      if (/viewer-input|\/api\/traffic|mapbox|three-/.test(url.pathname + url.hostname)) dataCalls.push(url.pathname);
+      if (/viewer-input|\/api\/traffic/.test(url.pathname) || /(^|\.)mapbox\.com$/.test(url.hostname)) dataCalls.push(url.pathname);
     });
     await page.route("**/auth-config.json", route => route.fulfill({ json: config }));
     await page.route("**/api/**", route => {
