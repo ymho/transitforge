@@ -1,3 +1,7 @@
+import { QueryCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDbTripRepository, type TripDynamoClient } from "../adapters/dynamodb-trip-repository.js";
+import { DynamoDbReservationRepository } from "../adapters/dynamodb-reservation-repository.js";
+import { ReservationApplication } from "./reservation-application.js";
 import { expect, it, vi } from "vitest";
 import { searchJourneyIndex } from "@raiquora/journey/journey-search-engine";
 import { projectPublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
@@ -101,4 +105,50 @@ it.each(["journey", "accommodation"] as const)("adopts the original %s through t
   const fresh = createPresentedCandidateController({ messages: [{ role: "assistant", sequence: 2, createdAt: at, text: "経路候補です。", ...presented, publicPlanPresentation: retained.presentation }],
     trip, conversationId, userSequence: 5, executionId: "expired", userRequest, adoptPlan: (request, authority) => adoption.execute(stateA, request, authority), show: vi.fn() });
   expect(await fresh.select(request)).toMatchObject({ status: "stale" });
+});
+
+it.each(["journey", "accommodation"] as const)("replaces a %s slot only after the Agent can read booking facts", async kind => {
+  const fixture = tripDynamoFixture(); fixture.clock.now = () => new Date(at);
+  let allowQuery = false;
+  const queries: QueryCommand[] = [];
+  const client: TripDynamoClient = { async send(command) {
+    if (command instanceof QueryCommand) {
+      queries.push(command);
+      if (!allowQuery) throw Object.assign(new Error("private IAM detail"), { name: "AccessDeniedException" });
+    }
+    return fixture.client.send(command);
+  } };
+  const repository = new DynamoDbTripRepository("trips", client, fixture.clock);
+  const slot: ItineraryItem = kind === "journey"
+    ? { id: "slot", type: "transport", title: "未選択の往路", schedule: { type: "unscheduled" }, detail: { status: "unresolved" } }
+    : { id: "slot", type: "stay", title: "未選択の宿泊", schedule: { type: "unscheduled" }, selection: { status: "unselected" } };
+  const unrelated: ItineraryItem[] = Array.from({ length: 6 }, (_, i) => ({ id: `other-${i}`, type: "activity", category: "sightseeing", title: `予定${i}`, schedule: { type: "unscheduled" } }));
+  const trip = createTrip(tripId, "旅行", at, [slot, ...unrelated]); fixture.seed(trip, stateA.subject);
+  const candidates = new DynamoDbItineraryCandidateRepository("trips", client);
+  const lodging = hotel(), result = search();
+  const items = kind === "journey" ? verifiedJourneySelectionItems(result, index, at) : verifiedAccommodationSelectionItems([lodging.offering], [lodging.proof], at);
+  const presented = kind === "journey" ? { publicJourneyPresentation: projectPublicJourneyPresentation(result) }
+    : { publicAccommodationPresentation: { version: "public-accommodation-presentation-v1" as const, cards: [{ evidenceId: items[0]!.id, name: lodging.offering.name, summary: "合成fixture", retrievedAt: at }] } };
+  const retained = await new PlanCandidateRetentionApplication(candidates, () => new Date(at)).retain(
+    { principal: stateA, executionId: `replacement:${kind}`, conversationId, tripId, baseTripRevision: 0, userRequest: "候補を検索" }, searchSelectionDraft(items, trip, "slot")!, []);
+  const application = new TripApplication(repository, { attach: vi.fn(), detach: vi.fn(), reference: vi.fn() }, fixture.clock,
+    new ReservationApplication(repository, new DynamoDbReservationRepository("trips", client)));
+  const adoption = new PlanCandidateAdoptionApplication(candidates, repository, candidates, application,
+    (draft, context) => trustedCandidateItem(draft, context.candidateSetId, context.variantId, context.retainedItem, context.selectedAt), () => new Date(at));
+  const userRequest = kind === "journey" ? "経路1でお願いします" : "検証用ホテルでお願いします";
+  const controller = () => createPresentedCandidateController({ messages: [{ role: "assistant", sequence: 2, createdAt: at, text: "候補です", ...presented, publicPlanPresentation: retained.presentation }],
+    trip, conversationId, userSequence: 3, executionId: "replacement", userRequest, adoptPlan: (request, authority) => adoption.execute(stateA, request, authority), show: vi.fn() });
+  const selection = { presentationId: `shown:2:${kind}`, candidateId: items[0]!.id, quote: userRequest,
+    reference: kind === "journey" ? { kind: "ordinal" as const, ordinal: 1, quote: "1" } : { kind: "label" as const, quote: lodging.offering.name } };
+  await expect(controller().select(selection)).rejects.toMatchObject({ code: "unavailable" });
+  expect(await repository.get(stateA, tripId)).toEqual(trip);
+  allowQuery = true;
+  expect(await controller().select(selection)).toMatchObject({ status: "saved", tripRevision: 1 });
+  const saved = (await repository.get(stateA, tripId))!;
+  expect(saved.items).toHaveLength(7); expect(saved.items.slice(1)).toEqual(unrelated);
+  expect(saved.items[0]).toMatchObject(kind === "journey" ? { id: "slot", detail: { status: "selected" } }
+    : { id: "slot", selection: { status: "selected", accommodation: { providerItemId: "hotel-a" } } });
+  expect(queries).toHaveLength(2);
+  for (const query of queries) expect(query.input).toMatchObject({ TableName: "trips", ConsistentRead: true,
+    KeyConditionExpression: "pk = :owner AND begins_with(sk, :prefix)", ExpressionAttributeValues: { ":owner": { S: `OWNER#${stateA.subject}` }, ":prefix": { S: `RESERVATION#${tripId}#` } } });
 });
