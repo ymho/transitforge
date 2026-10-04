@@ -26,7 +26,9 @@ const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
     const context = await browser.newContext({ viewport });
-    const page = await context.newPage(), errors = [], apiCalls = [], dataCalls = [];
+    const page = await context.newPage(), errors = [], apiCalls = [], dataCalls = [], failures = [], consoleErrors = [];
+    page.on("requestfailed", request => failures.push(new URL(request.url()).pathname));
+    page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
     page.on("pageerror", error => errors.push(error.message));
     page.on("request", request => {
       const url = new URL(request.url());
@@ -42,7 +44,13 @@ try {
       return route.fulfill({ json });
     });
     async function ready() {
-      await page.waitForSelector('#app[data-primary-view="chat"]');
+      try { await page.waitForSelector('#app[data-primary-view="chat"]'); }
+      catch (error) {
+        console.error("Synthetic startup diagnostics", { url: page.url(), errors, failures, consoleErrors,
+          state: await page.evaluate(() => ({ primary: document.getElementById("app")?.dataset.primaryView,
+            hidden: document.getElementById("app")?.hidden, status: document.getElementById("startup-status")?.textContent })) });
+        throw error;
+      }
       await page.waitForFunction(() => !document.getElementById("startup-status"));
       assert.equal(await page.locator("#app").evaluate(element => getComputedStyle(element).visibility), "visible");
       assert.equal(await page.locator("[data-home-hero]").isVisible(), true);
