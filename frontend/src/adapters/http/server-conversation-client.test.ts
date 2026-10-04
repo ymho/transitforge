@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpServerConversationClient, ConversationApiError, reportConversationReadFailure } from "./server-conversation-client";
+import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 const id = "11111111-1111-4111-8111-111111111111";
 const metadata = { title: "相談", scope: "trip" as const, tripId: "22222222-2222-4222-8222-222222222222", summary: "", resolvedTopics: [], pendingTopics: [] };
 const conversation = { ...metadata, conversationId: id, createdAt: "2026-09-18T00:00:00.000Z", updatedAt: "2026-09-18T00:00:00.000Z", revision: 0, messageCount: 0 };
 describe("Conversation HTTP client", () => {
+  it("preserves session-change rejection as authentication failure", async () => {
+    const failure = new ApiAuthenticationError("session-changed");
+    const request = vi.fn<typeof fetch>().mockRejectedValue(failure);
+    await expect(new HttpServerConversationClient("/api/conversations/v1", request).get(id)).rejects.toBe(failure);
+  });
   it("distinguishes history HTTP rejection from transport failure without retaining response content", async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response("private response", { status: 501 }))
       .mockRejectedValueOnce(new Error("private request"));
@@ -15,9 +21,9 @@ describe("Conversation HTTP client", () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       reportConversationReadFailure("history", new ConversationApiError("history", "http", 501));
-      expect(warning).toHaveBeenLastCalledWith("conversation_read_failed", { stage: "history", operation: "history", boundary: "http", status: 501 });
+      expect(JSON.parse(warning.mock.calls.at(-1)![1])).toEqual({ stage: "history", operation: "history", boundary: "http", status: 501 });
       reportConversationReadFailure("render", new Error("private text and token"));
-      expect(warning).toHaveBeenLastCalledWith("conversation_read_failed", { stage: "render", reason: "unknown" });
+      expect(JSON.parse(warning.mock.calls.at(-1)![1])).toEqual({ stage: "render", reason: "unknown" });
       reportConversationReadFailure("history", new ConversationApiError("private operation", "transport"));
       expect(JSON.stringify(warning.mock.calls)).not.toContain("private");
     } finally { warning.mockRestore(); }
