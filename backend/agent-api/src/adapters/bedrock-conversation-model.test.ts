@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { agentTurnPlanningOutputContract } from "@raiquora/agent/agent-output-contract";
+import { outputContract } from "@raiquora/agent/output-contract";
 import { semanticInterpretationOutputContract } from "@raiquora/agent/semantic-interpretation";
 
 it("does not retain earlier Profile text echoed in conversation after consent removal", async () => {
@@ -249,10 +249,14 @@ describe("BedrockConversationModel", () => {
     expect(system).not.toContain("responseTextの文字列値");
   });
 
-  it("finds presentation nested in anyOf when instructing Bedrock about the actual planning schema", async () => {
+  it("finds a presentation field nested in a generic anyOf output contract", async () => {
     const converse = vi.fn(async (_input: JsonObject) => ({ output: { message: { role: "assistant", content: [{ text: "{}" }] } }, stopReason: "end_turn" }));
     const model = new BedrockConversationModel({ converse }, { modelId: "model", systemPrompt: "system" });
-    await model.converse({ messages: [{ role: "user", content: [{ text: "出雲大社に行きたい" }] }], outputContract: agentTurnPlanningOutputContract });
+    const contract = outputContract("nested_presentation", "1", { anyOf: [
+      { type: "object", properties: { presentation: { type: "object" } }, required: ["presentation"] },
+      { type: "object", properties: { responseText: { type: "string" } }, required: ["responseText"] },
+    ] });
+    await model.converse({ messages: [{ role: "user", content: [{ text: "request" }] }], outputContract: contract });
     const system = JSON.stringify(converse.mock.calls[0]?.[0]?.system);
     expect(system).toContain("そのobjectをpresentationへ設定");
     expect(system).not.toContain("そのJSONをresponseTextの文字列値として");

@@ -38,7 +38,6 @@ export interface ServerAgentDependencies {
   /** Server authorization/policy only. Browser may request detailed mode but cannot grant it. */
   detailedResearchAllowed?: boolean;
   detailedResearchLimits?: Partial<AgentRuntimeLimits>;
-  /** Exact provider model ID lookup. Unknown models deliberately produce incomplete cost. */
   onResearchLedger?: (ledger: ResearchExecutionLedger) => void;
   /** Required, trusted server execution engine. No implicit runtime or fallback. */
   runRuntime: ServerAgentRuntimeRunner;
