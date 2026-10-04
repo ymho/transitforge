@@ -277,7 +277,7 @@ export function configureTripWorkspace(options: {
         const collapseKey = `${activeSession}:${trip.id}:${entryKey}`;
         let card = cards.get(entryKey);
         if (card?.key !== key) {
-          const node = renderWorkspaceCard(trip, item, controller, { entry, addAfter: () => startAdd(trip, date, item.id, cards.get(entryKey)?.node), collapsed: collapsed.get(collapseKey) ?? false,
+          const node = renderWorkspaceCard(trip, item, controller, { entry, addAfter: () => startAdd(trip, date, item.id, cards.get(entryKey)?.node), collapsed: collapsed.get(collapseKey) ?? true,
             collapse: (value) => collapsed.set(collapseKey, value), chat, report,
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           if (card) card.node.replaceWith(node);
@@ -288,6 +288,10 @@ export function configureTripWorkspace(options: {
         card.node.querySelector(".trip-workspace-item-focus")?.setAttribute("aria-pressed", String(controller.uiFocus()?.itemId === item.id));
         if (group!.children[index + 1] !== card.node) group!.insertBefore(card.node, group!.children[index + 1] ?? null);
       });
+    }
+    if (!add.hidden && addContext?.afterId) {
+      const target = view.dayEntries.find(([key, entries]) => entries.some(e => e.sourceItemId === addContext!.afterId) && key === addDay.value)?.[1].find(e => e.sourceItemId === addContext!.afterId);
+      if (target) cards.get(target.entryKey)?.node.after(add);
     }
     for (const [id, card] of cards) if (!ids.has(id)) { card.node.remove(); cards.delete(id); }
     for (const [date, group] of groups) if (!dates.has(date)) { group.remove(); groups.delete(date); }

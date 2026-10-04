@@ -41,7 +41,7 @@ try {
     const page = await context.newPage(), errors = [], apiCalls = [], dataCalls = [], failures = [], consoleErrors = [];
     page.on("requestfailed", request => failures.push(new URL(request.url()).pathname));
     page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
-    page.on("pageerror", error => errors.push(error.message));
+    page.on("pageerror", error => { errors.push(error.message); console.error("Synthetic Viewer page error", error.message); });
     page.on("request", request => {
       const url = new URL(request.url());
       if (url.pathname.startsWith("/api/")) apiCalls.push(url.pathname);
@@ -115,7 +115,12 @@ try {
     await page.locator("[data-trip]").first().waitFor(); assert.equal(await page.locator("[data-trip]").count(), 2);
     await checkLayout("trip-list");
     await page.locator(`[data-trip="${trips[0].id}"]`).click();
-    await page.locator('.trip-workspace [data-item-id="rail"]').waitFor();
+    await page.locator('.trip-workspace .trip-workspace-card[data-item-id="rail"]').waitFor().catch(async error => {
+      console.error("Synthetic timeline diagnostics", { errors, consoleErrors, cards: await page.locator(".trip-workspace-card").count(), title: await page.locator(".trip-workspace-heading").textContent() });
+      await page.screenshot({ path: `.artifacts/product-design/timeline-failure-${viewport.width}.png` }); throw error;
+    });
+    console.log("Timeline render diagnostics", { errors, consoleErrors });
+    assert.deepEqual(errors, []);
     assert.equal(await page.locator(".trip-detail-tabs").count(), 0);
     assert.equal(await page.locator(".trip-route-leg").count(), 2);
     assert.match(await page.locator(".trip-route-transfer").textContent(), /乗換10分/);
@@ -176,4 +181,4 @@ try {
     await context.close();
     console.log(`Built Viewer startup verified at ${viewport.width}px: first load/reload, protected routes, 12h expiry and import recovery.`);
   }
-} finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+} catch (error) { console.error(error); throw error; } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

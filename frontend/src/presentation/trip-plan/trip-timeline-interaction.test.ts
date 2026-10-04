@@ -39,3 +39,11 @@ it("renders every rail leg and the actual transfer interval without presenting m
   const route = renderTripRouteTimeline(item); expect(route.querySelectorAll(".trip-route-leg")).toHaveLength(2);
   expect(route.textContent).toContain("B・乗換10分"); expect(route.textContent).toContain("内訳未取得"); expect(route.textContent).not.toContain("徒歩5分");
 });
+it("projects a rail trip into the actual workspace without losing its legs", () => {
+  const f = railSelectionFixture(), journey = selectRailJourney(f.candidate, f.inputs, f.selectedAt);
+  const trip = createTrip("11111111-1111-4111-8111-111111111111", "乗換のある旅", f.selectedAt, [{ id: "rail", title: "AからCへ", type: "transport", detail: { status: "selected", mode: "rail", journey }, schedule: projectRailSchedule(journey) }, { id: "visit", title: "町を歩く", type: "activity", category: "sightseeing", schedule: { type: "day", date: "2026-09-13", timeZone: "Asia/Tokyo" } }]);
+  const controller = createTripWorkspaceController("one"); controller.attach("one", { getCurrentTrip: () => trip });
+  const app = document.createElement("main"); document.body.append(app);
+  configureTripWorkspace({ app, chat: document.createElement("section"), messages: document.createElement("div"), input: document.createElement("input"), controller, ask: vi.fn(), showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => "after" });
+  expect(app.querySelectorAll(".trip-route-leg")).toHaveLength(2);
+});

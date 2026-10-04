@@ -216,7 +216,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.focus("activity"); f.controller.propose("順序変更", [{ type: "move", itemId: "activity" }]);
     button(f.ui.nav, "旅程").click(); f.ui.panel.scrollTop = 330;
     const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
-    button(card, "閉じる").click(); expect(button(card, "開く").getAttribute("aria-expanded")).toBe("false");
+    button(card, "開く").click(); button(card, "閉じる").click(); expect(button(card, "開く").getAttribute("aria-expanded")).toBe("false");
     button(f.ui.nav, "会話").click();
     expect(f.input.value).toBe("編集中の文章"); expect(document.activeElement).toBe(f.input); expect(f.messages.scrollTop).toBe(240);
     expect(f.controller.sessionId()).toBe("one"); expect(f.controller.uiFocus()?.itemId).toBe("activity"); expect(f.controller.proposal()?.summary).toBe("順序変更");

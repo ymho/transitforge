@@ -22,7 +22,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const icon = element("span", "trip-workspace-item-icon");
   icon.innerHTML = travelIcon(item.type === "transport" ? "transport" : item.type === "stay" ? "stay" : "activity");
   icon.setAttribute("aria-hidden", "true");
-  const focus = control(item.title, () => controller.focus(item.id));
+  const focus = control(item.title, () => { controller.focus(item.id); body.hidden = false; expand.textContent = "閉じる"; expand.setAttribute("aria-expanded", "true"); options.collapse(false); });
   focus.className = "trip-workspace-item-focus";
   focus.setAttribute("aria-label", `${item.title}を相談対象にする`);
   const body = element("div", "trip-workspace-item-body");

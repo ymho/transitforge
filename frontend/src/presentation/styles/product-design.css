@@ -5,18 +5,18 @@
   --product-font: -apple-system, BlinkMacSystemFont, "Noto Sans JP", sans-serif;
   --product-radius: 9px; --product-control-radius: 7px;
   --glass-canvas: var(--tf-bg); --glass-surface-strong: var(--tf-bg); --glass-surface-muted: var(--tf-soft); --glass-muted: var(--tf-muted); --glass-border-subtle: var(--tf-line); --glass-accent-soft: var(--tf-soft); --glass-surface: var(--tf-bg); --glass-text: var(--tf-ink); --glass-text-secondary: var(--tf-muted); --glass-accent: var(--tf-blue);
-  background: var(--tf-bg); color: var(--tf-ink); font: 400 14px/1.55 var(--product-font);
+  color-scheme: light; background: var(--tf-bg); color: var(--tf-ink); font: 400 14px/1.55 var(--product-font);
 
   & .product-shell, & .product-page, & .trip-workspace, & .my-shell { background: var(--tf-bg); color: var(--tf-ink); }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) { font: inherit; }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) :is(h1, h2, h3) { font-family: var(--product-font); font-weight: 500; letter-spacing: normal; }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) h1 { font-size: 20px; }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) h2 { font-size: 16px; }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) h3 { font-size: 14px; }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) p { color: var(--tf-muted); font-size: 12px; line-height: 1.55; }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) :is(button, summary) { min-height: 44px; font: inherit; cursor: pointer; }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) button { background: var(--tf-bg); color: var(--tf-blue); border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px 10px; box-shadow: none; }
-  & :is(.product-page, .trip-workspace, .ai-guide-panel) :is(input:not([type="checkbox"]), select, textarea) { min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px; background: var(--tf-bg); color: var(--tf-ink); font: 400 16px/1.4 var(--product-font); }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) { font: inherit; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) :is(h1, h2, h3) { font-family: var(--product-font); font-weight: 500; letter-spacing: normal; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) h1 { font-size: 20px; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) h2 { font-size: 16px; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) h3 { font-size: 14px; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) p { color: var(--tf-muted); font-size: 12px; line-height: 1.55; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) :is(button, summary) { min-height: 44px; font: inherit; cursor: pointer; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) button { background: var(--tf-bg); color: var(--tf-blue); border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px 10px; box-shadow: none; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel) :is(input:not([type="checkbox"]), select, textarea) { min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px; background: var(--tf-bg); color: var(--tf-ink); font: 400 16px/1.4 var(--product-font); }
   & :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--tf-blue); outline-offset: 3px; }
   & .ds-icon { width: 17px; height: 17px; flex-shrink: 0; }
   & .product-nav { box-shadow: none; background: var(--tf-bg); border-color: var(--tf-line); border-radius: 9px; }
@@ -24,8 +24,9 @@
   & .product-nav .ds-icon { width: 19px; height: 19px; }
   & .product-nav [aria-current="page"] { background: var(--tf-soft); color: var(--tf-blue); border-radius: 7px; }
   & .product-page:not([data-page="chat"]) { padding-inline: max(20px, calc((100vw - 720px)/2)); line-height: 1.55; }
+  & .trip-list-heading, & .my-shell > .ds-page-heading { display: block; margin: 0 0 12px; }
   & .ds-eyebrow:empty { display: none; }
-  & .home-trip-card { display: block; padding: 0; margin: 0; border: 0; border-bottom: 1px solid var(--tf-line); border-radius: 0; box-shadow: none; background: var(--tf-bg); max-width: none; }
+  & .home-trip-card { min-height: 0; display: block; padding: 0; margin: 0; border: 0; border-bottom: 1px solid var(--tf-line); border-radius: 0; box-shadow: none; background: var(--tf-bg); max-width: none; }
   & .trip-list-choice { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 90px; padding: 15px 0; text-align: left; border: 0; color: var(--tf-ink); }
   & .trip-list-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   & .trip-list-copy :is(strong, small) { display: block; font-weight: 400; }
@@ -35,7 +36,7 @@
   & .trip-party-pair, & .trip-party-control > button { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; color: var(--tf-muted); }
   & .trip-party-part { display: inline-flex; align-items: center; gap: 5px; }
   & .trip-party-part .ds-icon { width: 16px; height: 16px; }
-  & .home-trip-manage { margin: 0; font-size: 12px; color: var(--tf-muted); }
+  & .home-trip-manage { display: block; margin: 0; font-size: 12px; color: var(--tf-muted); }
   & .home-trip-manage summary { display: flex; align-items: center; }
   & .trip-workspace { border: 0; box-shadow: none; padding: 22px 20px 28px; overflow-x: hidden; }
   & .trip-workspace-heading { display: block; padding: 0 0 12px; margin: 0; border: 0; background: transparent; }
@@ -130,7 +131,7 @@
   & [hidden] { display: none !important; }
 }
 @media (prefers-color-scheme: dark) {
-  #app[data-primary-view]:not([data-primary-view="map"]) { --tf-bg: #171b21; --tf-ink: #e3e9f1; --tf-muted: #a4afbf; --tf-line: #343c48; --tf-blue: #83b6ed; --tf-soft: #222a35; }
+  #app[data-primary-view]:not([data-primary-view="map"]) { color-scheme: dark; --tf-bg: #171b21; --tf-ink: #e3e9f1; --tf-muted: #a4afbf; --tf-line: #343c48; --tf-blue: #83b6ed; --tf-soft: #222a35; }
 }
 @media (min-width: 62.001rem) {
   #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { inset: 5rem max(0px, calc((100vw - 720px)/2)) 0; }

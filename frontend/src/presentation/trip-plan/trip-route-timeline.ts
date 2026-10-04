@@ -1,3 +1,4 @@
+import { transportModeLabel } from "../../usecases/trip-plan/transport-preview";
 import type { TransportItineraryItem } from "@raiquora/trip/trip";
 import { element } from "./trip-workspace-elements";
 import { iconMarkup } from "../shared/primitives";
@@ -6,7 +7,7 @@ export function renderTripRouteTimeline(item: TransportItineraryItem): HTMLEleme
   const route = element("details", "trip-route"); route.open = true;
   if (item.detail.status !== "selected") { route.append(element("summary", "", "交通手段未選択")); return route; }
   if (item.detail.mode !== "rail") {
-    route.append(element("summary", "", `${item.detail.origin.name} → ${item.detail.destination.name}`)); return route;
+    route.append(element("summary", "", `${transportModeLabel(item.detail.mode)}・${item.detail.origin.name} → ${item.detail.destination.name}`)); return route;
   }
   const { legs } = item.detail.journey;
   route.append(element("summary", "", `経路・乗換${legs.length - 1}回`));
