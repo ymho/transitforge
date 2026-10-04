@@ -65,7 +65,7 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
     const refs = { conversationId: "${conversationId}", tripId: "${secondId}" };
     let authState = {status:"signed-in", displayName:"A"}; const listeners = new Set();
     let accessToken = ${JSON.stringify(token())};
-    const auth = {getState:()=>authState, getAccessToken:async()=>accessToken,
+    const auth = {getState:()=>authState, getAccessToken:async()=>accessToken, refreshAccessToken:async()=>undefined,
       subscribe:l=>{listeners.add(l);l(authState);return()=>listeners.delete(l);}, invalidate:()=>{}, initialize:async()=>{},login:async()=>{},logout:async()=>{}};
     const session = createConversationStreamSession({auth,references:()=>refs});
     const el = tag => document.body.appendChild(document.createElement(tag));
