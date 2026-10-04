@@ -8,11 +8,12 @@ import { validateAccommodationSnapshot, type AccommodationSnapshot } from "./acc
 export interface AccommodationSelectionEvidence {
   provider: string;
   providerItemId: string;
-  /** Permission to retain product identity, stay dates and durable source, not volatile data. */
+  /** Trusted retention policy for identity, stay dates and durable source, not volatile data. */
   storageAllowed: boolean;
   /** Trusted permission bound to this product's quoted price; never accepted from model input. */
   priceRetention?: "permitted" | "forbidden" | "unknown";
-  /** Facility identity is resolved independently of the product ID. No name-based matching here. */
+  /** Resolved facility identity; a provider's documented facility number may also
+   * be its offering ID. No generic product-ID conversion or name-based matching. */
   place: PlaceSnapshot;
   placeRetention: PlaceSnapshotRetention;
   source: ExternalSourceEvidence;

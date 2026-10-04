@@ -38,6 +38,8 @@ import { AwsBedrockConverseClient, AwsS3Client, AwsSecretsManagerClient } from "
 import { createProductionConversationAgent } from "./composition/production-conversation-agent.js";
 import { productionServerTools } from "./composition/production-server-tools.js";
 import { createFixedEgressAccommodationOperation } from "./composition/fixed-egress-accommodation.js";
+import { VerifiedAccommodationSelections } from "./usecases/verified-accommodation-selection.js";
+import { rakutenAccommodationSelectionEvidence } from "./adapters/rakuten-accommodation-selection.js";
 import { serverAgentDeadline } from "./composition/server-agent-deadline.js";
 import type { AgentOperation } from "./ports/agent-operation.js";
 import { bedrockCapabilitiesFromConfiguration } from "./adapters/bedrock-provider-capabilities.js";
@@ -101,6 +103,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
    ? new LambdaGroundRouteProvider(otpBridge.functionArn, new S3OtpGraphManifestRepository(s3,
      required("AI_TIMETABLE_BUCKET"), otpBridge.manifestKey, otpBridge.version, otpBridge.otpImage, otpBridge.graphSha256)) : undefined;
  const selectableJourneys = new VerifiedJourneySelections();
+ const selectableAccommodations = new VerifiedAccommodationSelections();
  const railSearch = createJourneySearchOperation(journey, { onVerifiedResult: (result, index, retrievedAt) => {
    try { selectableJourneys.record(result, index, retrievedAt); }
    catch { /* A displayable result without complete selection provenance stays read-only. */ }
@@ -149,7 +152,8 @@ export function createProductionServerAgent(executionId: string, environment: Re
      return { ...(presentation ? { publicJourneyPresentation: presentation } : {}),
        ...(groundRoute ? { publicGroundRoutePresentation: groundRoute } : {}) };
    },
-   verifiedSearchSelectionItems: result => selectableJourneys.itemsFor(result.publicJourneyPresentation),
+   verifiedSearchSelectionItems: result => [...selectableJourneys.itemsFor(result.publicJourneyPresentation),
+     ...selectableAccommodations.itemsFor(result.publicAccommodationPresentation)],
    stateTable: required("SERVER_STATE_TABLE_NAME"), tripTable: required("TRIP_TABLE_NAME"),
    newExecutionId: () => executionId, weather,
    model: conversationModel,
@@ -165,6 +169,13 @@ export function createProductionServerAgent(executionId: string, environment: Re
      journey: railSearch,
      representativeTimetable: createRepresentativeTimetableOperation(new S3RepresentativeTimetableRepository(s3, required("AI_TIMETABLE_BUCKET"), "ai-timetable")),
      accommodation: createFixedEgressAccommodationOperation(required("FIXED_EGRESS_PROVIDER_FUNCTION_ARN")),
+     onAccommodationEvidence: (offerings, evidence, retrievedAt) => {
+       const proofs = offerings.flatMap(offering => {
+         const proof = rakutenAccommodationSelectionEvidence(offering, retrievedAt);
+         return proof ? [proof] : [];
+       });
+       selectableAccommodations.record(offerings, proofs, evidence);
+     },
      onJourneyResult: result => { verifiedJourneyResults.push(result); },
      external: {
        searchPlaceMedia: call(placeSearch),

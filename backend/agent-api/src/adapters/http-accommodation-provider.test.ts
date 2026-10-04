@@ -19,7 +19,7 @@ describe("HttpAccommodationProvider", () => {
       },
     }, { async load() { return { applicationId: "app", accessKey: "secret", hotelSearchUrl: "https://provider.example/search" }; } }, () => "2026-09-12T08:00:00Z");
     const results = await provider.search({ destination: "出雲市", checkInDate: "2026-08-17", checkOutDate: "2026-08-18", adults: 1, limit: 3 });
-    expect(results).toEqual([{ kind: "accommodation", provider: "travel-provider", providerItemId: "42", name: "駅前の宿", checkInDate: "2026-08-17", checkOutDate: "2026-08-18", bookingUrl: "https://booking.example/42", areaName: "島根県", imageUrl: "https://images.example/42.jpg", address: "島根県出雲市駅前", latitude: 35.36, longitude: 132.75, reviewAverage: 4.2, reviewCount: 120, price: { price: { amountMinor: 8800, currency: "JPY" }, observedAt: "2026-09-12T08:00:00Z", basis: "reference-minimum" }, availability: "unknown" }]);
+    expect(results).toEqual([{ kind: "accommodation", provider: "rakuten-travel", providerItemId: "42", name: "駅前の宿", checkInDate: "2026-08-17", checkOutDate: "2026-08-18", bookingUrl: "https://booking.example/42", areaName: "島根県", imageUrl: "https://images.example/42.jpg", address: "島根県出雲市駅前", latitude: 35.36, longitude: 132.75, reviewAverage: 4.2, reviewCount: 120, price: { price: { amountMinor: 8800, currency: "JPY" }, observedAt: "2026-09-12T08:00:00Z", basis: "reference-minimum" }, availability: "unknown" }]);
     expect(requestedHeaders.accessKey).toBe("secret");
     expect(requestedUrl).toContain("applicationId=app");
     expect(requestedUrl).toContain("keyword=%E5%87%BA%E9%9B%B2%E5%B8%82");

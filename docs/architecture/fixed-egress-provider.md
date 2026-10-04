@@ -45,6 +45,7 @@ requestIdは任意の英数字・ハイフン・アンダースコア128文字�
 成功は`{ok:true, accommodations: AccommodationOffering[]}`のallowlist DTO。
 候補数は最大5件、日程一致・ID/名称・数値範囲・価格観測・安全なHTTPSリンクを再検証する。
 Provider raw JSON、追加フィールド、内部例外は返さない。
+本番Rakuten adapterのサービス識別子は`rakuten-travel`、`providerItemId`は正の整数の施設番号`hotelNo`である。移行互換の`travel-provider`も受信できるがサービス/施設の同定済みとは扱わず、選択保存用の証拠を生成しない。保持方針は[宿泊Snapshot](trip-accommodation.md)を参照する。
 失敗は`{ok:false,error:{code,retryable}}`のみ。
 
 | code | retryable |

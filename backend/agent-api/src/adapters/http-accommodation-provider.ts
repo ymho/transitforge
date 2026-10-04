@@ -35,7 +35,9 @@ export class HttpAccommodationProvider implements AccommodationProvider {
       // comparison options with unknown availability instead of dropping them.
       const confirmedIds = new Set(available?.map(result => result.providerItemId) ?? []);
       const candidates = available ? [...available, ...discovered.filter(result => !confirmedIds.has(result.providerItemId))].slice(0, request.limit) : discovered;
-      return candidates.map((result) => createAccommodationOffering("travel-provider", request, result));
+      // This adapter implements Rakuten Travel's hotel catalog: hotelNo is a
+      // facility number, not a room/plan identifier or a name-derived identity.
+      return candidates.map((result) => createAccommodationOffering("rakuten-travel", request, result));
     } catch (error) {
       throw new Error("宿泊提供者の検索を利用できません。", { cause: error });
     } finally { clearTimeout(timeout); }
@@ -84,7 +86,7 @@ function providerResults(value: unknown, limit: number, observedAt: string, avai
   if (!Array.isArray(value.hotels)) return [];
   return value.hotels.slice(0, limit).flatMap((hotel) => {
     const basic = hotelBasicInfo(hotel);
-    if (!basic || !Number.isInteger(basic.hotelNo) || typeof basic.hotelName !== "string" || !basic.hotelName.trim()) return [];
+    if (!basic || !Number.isSafeInteger(basic.hotelNo) || (basic.hotelNo as number) <= 0 || typeof basic.hotelName !== "string" || !basic.hotelName.trim()) return [];
     const address = [basic.address1, basic.address2]
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
       .join("");

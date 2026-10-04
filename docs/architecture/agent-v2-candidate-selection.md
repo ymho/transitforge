@@ -24,13 +24,17 @@ mutation IDは認証済みconversationとuser sequenceから決定し、1つの�
 
 経路は検索に用いた同じ時刻表入力から検証済みrail snapshotを作り、保持済み候補へ結び付ける。表示と元データの関連は全区間・列車・時刻を含む表示スナップショットで照合し、駅名や「経路1」だけで別検索の結果を対応させない。リアルタイムの遅延表示を予定時刻として保存しない。未選択枠が複数なら明示的なfocused itemが必要で、自動的に往路・帰路を選ばない。
 
-宿泊は既存の`selectAccommodation`を共通Domainへ移し、施設同定と提供元の保存許可の両方を持つ証拠がある場合だけ保持できる。価格・画像・空室・予約URLを無条件に保存しない。現行の本番Rakuten adapterにはこの信頼済み許可情報と独立した施設情報の接続がないため、本変更だけで本番ホテルカードを選択済みStayとして保存できるとは扱わない。カードの比較・再表示は可能で、保存対象を解決できない場合は制約を応答する。fixtureの架空の許可を本番へ転用しない。
+宿泊は既存の`selectAccommodation`を使う。2026-10-04の利用者の保存許可を受け、旅程へ採用する最小の施設参照を本番検索から保持する。Rakuten adapterは`provider=rakuten-travel`で実サービスを識別する。公式APIの`hotelNo`は施設番号であり、`hotelName`と同じ構造化レスポンスから施設の対応を確定できる。任意の宿泊商品IDから施設IDを作る汎用変換は行わない。
+
+`rakutenAccommodationSelectionEvidence`はホテル名・施設ID・宿泊日・取得元・取得時刻に限るApplicationの保持方針を適用する。`sources.attribution=楽天トラベル`も保存する。この方針を外部提供元による包括的な複製許諾と扱わず、価格・写真・説明文・レビュー・空室・予約URL・住所・座標・raw responseは採用Snapshotへコピーしない。モデル/UIは保持方針や施設情報を自己申告できない。
+
+`VerifiedAccommodationSelections`は同じTool呼出しの実Offering、保持証拠、Evidence ID、日付と公開カードを照合し、実際に表示した候補だけを既存候補Repositoryへ保持する。再検索の別日程・同名施設・重複ID・対応の衝突から保存対象を推測しない。既存の無修飾`travel-provider`結果は表示できるが、新しいサービス同定へ自動昇格しない。会話・ボタンは同じ採用処理を使う。
 
 ## 確認
 
 `strands-candidate-selection.test.ts`は実SDKを通して候補なし、単一、複数、番号選択、状態・履歴・再送を確認する。`AGENT_V2_LIVE=true`では選択turnだけを実Bedrockで実行し、初期候補とProviderは合成fixtureを使う。`verified-search-selection.test.ts`は元時刻表、再検索・部分公開の関連、保存許可、追加先の曖昧さ、同じ採用処理・期限後receipt再送を確認する。SSEと履歴の契約テストは不正receiptを拒否する。
 
-これは実Provider・実画面を含む本番旅行全体の成功を意味しない。本番ホテルの保持証拠と、focused itemを決める相談導線の利用は別途確認する。
+`strands-accommodation-selection.test.ts`は合成API応答を実Http adapter→IAM Invoke契約→Server Tool→公開カード→履歴→会話選択→Trip保存へ通す。複数候補の再表示、名前/番号指定、単一候補の保存、未選択Stayの置換、保存内容、所有者境界、再検索しないこと、再送の重複防止を確認する。`AGENT_V2_LIVE=true`では選択turnを実Bedrockで実行する。実Provider・実画面を含む本番旅行全体の成功とは区別する。
 
 ## 2026-10-04の実モデル確認
 
