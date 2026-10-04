@@ -96,7 +96,7 @@ it("authenticated persisted fixed-egress turn reaches Chromium chat, replays, co
       },
       write: async frame => {
         if (frame.includes('"type":"final"')) {
-          expect([...state.records.values()].some(row => row.sk.S?.startsWith("TURN#") && row.payload.S?.includes("completed"))).toBe(true);
+          expect([...state.records.values()].some(row => row.sk.S?.startsWith("TRIP_TURN#") && row.payload.S?.includes("completed"))).toBe(true);
           if (dropFinal) return;
         }
         res.write(frame);
