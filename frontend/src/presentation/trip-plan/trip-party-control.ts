@@ -20,7 +20,7 @@ export function renderTripPartyControl(trip: Trip, controller: TripWorkspaceCont
   form.addEventListener("submit", event => { event.preventDefault(); const current = controller.current();
     if (current?.id !== trip.id || current.revision !== trip.revision || controller.sessionId() !== session) { report("最新の旅程から人数を変更してください。"); return; }
     try { controller.preview(proposeUserParty(current, partyWithCounts(current.request.party, Number(adults.value), Number(children.value)))); }
-    catch (error) { report(error instanceof Error ? error.message : "人数を確認してください。"); }
+    catch (error) { report(error instanceof Error && /[ぁ-んァ-ヶ一-龠]/u.test(error.message) ? error.message : "人数と旅行者の構成を確認してください。構成の変更は相談から行えます。"); }
   });
   if (controller.source()?.getRole?.() === "viewer") { const text = element("span", "trip-party-pair"); text.innerHTML = partyMarkup(trip); root.append(text); } else root.append(trigger, form); return root;
 }

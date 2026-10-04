@@ -115,13 +115,16 @@ try {
     await page.locator("[data-trip]").first().waitFor(); assert.equal(await page.locator("[data-trip]").count(), 2);
     await checkLayout("trip-list");
     await page.locator(`[data-trip="${trips[0].id}"]`).click();
+    await page.waitForLoadState("networkidle");
     await page.locator('.trip-workspace .trip-workspace-card[data-item-id="rail"]').waitFor().catch(async error => {
       console.error("Synthetic timeline diagnostics", { errors, consoleErrors, cards: await page.locator(".trip-workspace-card").count(), title: await page.locator(".trip-workspace-heading").textContent() });
       await page.screenshot({ path: `.artifacts/product-design/timeline-failure-${viewport.width}.png` }); throw error;
     });
+    await page.waitForFunction(() => document.querySelectorAll(".trip-route-leg").length === 2);
     console.log("Timeline render diagnostics", { errors, consoleErrors });
     assert.deepEqual(errors, []);
     assert.equal(await page.locator(".trip-detail-tabs").count(), 0);
+    await checkLayout("timeline");
     assert.equal(await page.locator(".trip-route-leg").count(), 2);
     assert.match(await page.locator(".trip-route-transfer").textContent(), /乗換10分/);
     assert.match(await page.locator(".trip-workspace-heading").textContent(), /9月13日ー9月14日・1泊2日/);

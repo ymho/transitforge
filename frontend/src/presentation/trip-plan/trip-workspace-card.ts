@@ -40,8 +40,14 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const placeName = item.type === "stay" ? item.selection.status === "selected" ? item.selection.accommodation.place.name : item.selection.place?.name : item.type === "activity" ? item.place?.name : undefined;
   if (placeName && placeName !== item.title) content.append(element("p", "trip-item-meta", placeName));
   if (stayRole) content.append(element("p", "trip-item-meta", stayRole));
-  content.append(element("p", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" :
-    item.decision ? "確定" : "仮の予定"));
+  const decisionStatus = element("p", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" : item.decision ? "確定" : "仮の予定");
+  decisionStatus.title = "予定の状態です。予約・購入の確認ではありません。";
+  if (issues.length || itemAssumptions(trip, item.id).length) { decisionStatus.textContent += "・要確認"; decisionStatus.title += issues.map(feasibilityIssueText).join(" / "); }
+  content.append(decisionStatus);
+  if (item.type !== "activity") {
+    const facts = controller.reservations(), relevant = facts?.filter(r => r.itineraryItemId === item.id);
+    content.append(element("p", "trip-item-meta", facts === undefined ? "予約状況未取得" : relevant?.length ? relevant.map(r => reservationStatusLabels[r.status]).join("・") : "予約記録なし"));
+  }
   const information = element("details", "trip-item-information"); information.append(element("summary", "", issues.length || itemAssumptions(trip, item.id).length ? "要確認・詳細" : "詳細"));
   for (const issue of issues) information.append(element("p", "trip-workspace-feasibility-issue", feasibilityIssueText(issue)));
   for (const r of controller.reservations()?.filter(r => r.itineraryItemId === item.id) ?? []) information.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
