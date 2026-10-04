@@ -84,9 +84,9 @@ run "enabled_contract" {
       aws_iam_role_policy.agent_stream_dependencies["stream"].role == aws_iam_role.agent_stream["stream"].id &&
       length([for statement in jsondecode(aws_iam_role_policy.agent_stream_dependencies["stream"].policy).Statement : statement
         if contains(statement.Action, "dynamodb:Query") &&
-          statement.Effect == "Allow" &&
-          toset(statement.Action) == toset(["dynamodb:GetItem", "dynamodb:Query"]) &&
-          statement.Resource == aws_dynamodb_table.trips.arn
+        statement.Effect == "Allow" &&
+        toset(statement.Action) == toset(["dynamodb:GetItem", "dynamodb:Query"]) &&
+        statement.Resource == aws_dynamodb_table.trips.arn
       ]) == 1
     )
     error_message = "Candidate replacement must be able to read booking facts from the Trip table; this read grant must not allow standalone writes, delete, scan or wildcard resources."
