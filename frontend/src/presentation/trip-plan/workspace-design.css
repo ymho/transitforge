@@ -258,7 +258,7 @@ dialog.trip-order-editor :focus-visible { outline: 2px solid #37675f; outline-of
 
 #app[data-primary-view]:not([data-primary-view="map"]) {
   & .trip-workspace-card { padding-bottom: 0; }
-  & .trip-timeline-content { padding: 6px 10px; border-radius: 10px; box-shadow: none; }
+  & .trip-timeline-content { padding: 6px 10px; border-radius: 10px; box-shadow: none; background: var(--tf-soft); align-self: start; }
   & .trip-timeline-content > header { min-height: 30px; gap: 6px; align-items: center; }
   & .trip-workspace-item-focus { min-height: 30px; padding: 2px 0; }
   & .trip-timeline-rail .trip-workspace-item-icon { margin-top: 6px; }
@@ -268,7 +268,7 @@ dialog.trip-order-editor :focus-visible { outline: 2px solid #37675f; outline-of
   & .trip-timeline-content > header > .trip-item-toggle { min-height: 30px; min-width: 24px; padding: 2px 3px; }
   & .trip-timeline-content > header > .trip-item-rename { flex: 0 0 auto; min-width: 22px; min-height: 28px; padding: 2px; border: 0; background: transparent; color: var(--tf-muted); box-shadow: none; }
   & .trip-timeline-content > header > .trip-item-rename[hidden] { display: none; }
-  & .trip-workspace-day > button.trip-timeline-add { margin: 8px auto; min-height: 24px; padding: 2px 10px; }
+  & .trip-workspace-day > button.trip-timeline-add { margin: 12px auto; min-height: 24px; padding: 2px 10px; }
 }
 
 #app[data-primary-view]:not([data-primary-view="map"]) {
@@ -280,4 +280,14 @@ dialog.trip-order-editor :focus-visible { outline: 2px solid #37675f; outline-of
   & .trip-workspace-editing { margin: 0; padding: 0; }
   & .trip-workspace-actions button { border: 1px solid var(--tf-line); background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; }
   & .trip-workspace-item-body button { min-height: 28px; padding: 3px 8px; }
+}
+
+/* Keep the date summary and order control together; time controls must not stretch cards. */
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .trip-itinerary-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 16px; }
+  & .trip-itinerary-heading > .trip-itinerary-dates { margin: 0; }
+  & .trip-itinerary-heading > .trip-order-open { margin: 0; min-height: 28px; padding: 3px 8px; font-size: 12px; }
+  & .trip-time-control { padding-top: 6px; }
+  & .trip-time-control > button { min-height: 30px; }
+  & .trip-workspace-actions { padding-bottom: 0; }
 }
