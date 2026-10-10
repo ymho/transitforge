@@ -35,7 +35,7 @@ it("uses the same consultation surface from Trip, returns to Trip, and makes the
   const item = document.querySelector<HTMLElement>('[data-item-id="shrine"]')!;
   [...item.querySelectorAll("button")].find(button => button.textContent === "相談")!.click();
   expect(app.dataset.primaryView).toBe("chat"); expect(app.dataset.consultationMode).toBe("conversation");
-  expect(window.history.state.tripId).toBe(trip.id); expect(ask).toHaveBeenCalledWith("この予定を相談したい");
+  expect(window.history.state.tripId).toBe(trip.id); expect(ask).toHaveBeenCalledWith("相談対象：旅程「出雲旅行」の1番目の予定「出雲大社」。\nこの予定を相談したい");
   expect(controller.uiFocus()).toEqual({ itemId: "shrine" });
   expect(controller.sessionId()).toBe("trip-conversation");
   workspace.show("trip"); expect(app.dataset.primaryView).toBe("trip");
