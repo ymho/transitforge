@@ -137,7 +137,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const editing = element("details", "trip-workspace-editing");
   editing.append(element("summary", "", "予定を編集"), actions, editor);
   if (manualActivityForm) editing.append(manualActivityForm);
-  editing.prepend(consult); body.append(editing); content.append(body);
+  header.append(consult); body.append(editing); content.append(body);
   if (options.addAfter && controller.source()?.getRole?.() !== "viewer") content.append(control("＋ この後に追加", options.addAfter));
   return card;
 }
