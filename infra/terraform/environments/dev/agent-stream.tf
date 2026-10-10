@@ -122,15 +122,15 @@ resource "aws_lambda_function" "trip_api" {
   memory_size      = 256
   timeout          = 15
   environment { variables = {
-    TRAFFIC_SNAPSHOT_BUCKET    = aws_s3_bucket.website.id
+    TRAFFIC_SNAPSHOT_BUCKET     = aws_s3_bucket.website.id
     OFFICIAL_PUBLISHER_SUBJECTS = join(",", var.official_publisher_subjects)
     CONSULTATION_SCOPE_MODEL_ID = var.bedrock_lightweight_model_id != "" ? var.bedrock_lightweight_model_id : var.bedrock_model_id
-    TRIP_API_ENABLED           = "true"
-    TRIP_TITLE_MODEL_ID        = var.bedrock_model_id
-    TRIP_TABLE_NAME            = aws_dynamodb_table.trips.name
-    SERVER_STATE_TABLE_NAME    = aws_dynamodb_table.server_state.name
-    COGNITO_USER_POOL_ID       = aws_cognito_user_pool.users.id
-    COGNITO_CLIENT_ID          = aws_cognito_user_pool_client.spa.id
+    TRIP_API_ENABLED            = "true"
+    TRIP_TITLE_MODEL_ID         = var.bedrock_model_id
+    TRIP_TABLE_NAME             = aws_dynamodb_table.trips.name
+    SERVER_STATE_TABLE_NAME     = aws_dynamodb_table.server_state.name
+    COGNITO_USER_POOL_ID        = aws_cognito_user_pool.users.id
+    COGNITO_CLIENT_ID           = aws_cognito_user_pool_client.spa.id
   } }
   depends_on = [aws_iam_role_policy.trip_api]
 }
