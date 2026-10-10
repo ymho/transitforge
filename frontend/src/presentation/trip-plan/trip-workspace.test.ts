@@ -232,7 +232,9 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const card = f.ui.panel.querySelector<HTMLElement>(`[data-item-id="${route.id}"]`)!;
     expect(card.querySelector(".trip-route")).toBeNull();
     const form = card.querySelector<HTMLFormElement>(".trip-workspace-manual-transport")!;
-    expect(form.querySelector("h3")?.textContent).toBe("手入力");
+    const disclosure = form.closest("details")!;
+    expect(disclosure.querySelector("summary")?.textContent).toBe("手入力");
+    expect(disclosure.open).toBe(false);
     expect(form.querySelectorAll(".trip-manual-transport-fields label")).toHaveLength(3);
     expect([...form.querySelectorAll("option")].map(o => o.textContent)).toEqual(["飛行機", "バス", "フェリー", "車", "レンタカー", "タクシー", "配車", "徒歩", "自転車", "移動"]);
     form.querySelector("select")!.value = "air";
