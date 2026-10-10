@@ -126,9 +126,10 @@ export function configureTripWorkspace(options: {
   const addFirst = control("＋ 予定を追加", () => { const trip = controller.current(); if (trip) startAdd(trip, "unscheduled", undefined, undefined, addFirst); });
   const planDraft = element("section", "trip-workspace-plan-draft"); planDraft.hidden = true; let planKey = "";
   summary.classList.add("trip-itinerary-dates");
-  const reorder = control("並べ替え", () => openTripOrderEditor(controller, report));
+  const reorder = control("並び替え", () => openTripOrderEditor(controller, report));
   reorder.className = "trip-order-open";
-  itinerary.append(planDraft, summary, reorder, dayTabs, days, addFirst, add);
+  const itineraryHeading = element("div", "trip-itinerary-heading"); itineraryHeading.append(summary, reorder);
+  itinerary.append(planDraft, itineraryHeading, dayTabs, days, addFirst, add);
   const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal);
   const travelMode = element("div"); travelMode.hidden = true;
   panel.append(detail, travelMode);
@@ -265,10 +266,11 @@ export function configureTripWorkspace(options: {
     for (const [date, entries, label] of view.timelineDays) {
       dates.add(date); dayLabels.set(date, label);
       let group = groups.get(date);
-      if (!group) { group = element("section", "trip-workspace-day"); group.append(element("h2", "", calendarDayLabel(label))); groups.set(date, group); }
+      if (!group) { group = element("section", "trip-workspace-day"); groups.set(date, group); }
+      group.setAttribute("aria-label", calendarDayLabel(label));
       if (days.children[[...dates].length - 1] !== group) days.insertBefore(group, days.children[[...dates].length - 1] ?? null);
       group.querySelectorAll(".trip-timeline-add").forEach(node => node.remove());
-      let childIndex = 1;
+      let childIndex = 0;
       const addGap = (dayKey: string, afterId?: string, beforeId?: string) => {
         if (controller.source()?.getRole?.() === "viewer") return;
         const button = control("＋ 予定を追加", () => startAdd(trip, dayKey, afterId, beforeId, button));
