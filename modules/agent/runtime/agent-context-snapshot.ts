@@ -48,6 +48,8 @@ export interface AgentContextSnapshot {
 
 export interface AgentTripScheduleItem {
   readonly memo?: string;
+  bookingStatus?: "booked" | "not-required";
+  bookingSemantics?: "user-mark-not-provider-verified";
   weather?: TripItemWeather;
   weatherSemantics?: "saved-forecast-not-current-conditions-check-validUntil";
   observedPrice?: import("@raiquora/trip/money").PriceObservation;
@@ -113,7 +115,7 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
 
 /** Same allowlisted item projection for the full itinerary and ephemeral focused-item context. */
 export function selectedTripItemSnapshot(item: ItineraryItem, trip?: Trip): AgentTripScheduleItem {
-  const core = selectedTripItemCore(item), weather = trip && currentTripWeather(trip, item);
+  const core = { ...selectedTripItemCore(item), ...(item.bookingStatus ? { bookingStatus: item.bookingStatus, bookingSemantics: "user-mark-not-provider-verified" as const } : {}) }, weather = trip && currentTripWeather(trip, item);
   return weather ? { ...core, weather: structuredClone(weather), weatherSemantics: "saved-forecast-not-current-conditions-check-validUntil" } : core;
 }
 function selectedTripItemCore(item: ItineraryItem): AgentTripScheduleItem {

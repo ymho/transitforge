@@ -17,6 +17,7 @@ import { renderTripPartyControl } from "./trip-party-control";
 import { renderTripTravelMode } from "./trip-travel-mode";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import type { Trip } from "@raiquora/trip/trip";
+import { unmarkedBookingItems } from "@raiquora/trip/trip";
 import { canConfirmTrip } from "@raiquora/trip/trip-adoption";
 import type { AiGuidePanelElements } from "../concierge/ai-guide-panel";
 
@@ -52,7 +53,8 @@ export function configureTripWorkspace(options: {
   const adoption = control("この旅程で行く", async () => {
     const trip = controller.current(); if (!trip || !options.changeAdoption) return;
     const action = trip.adoption && !trip.adoption.needsReconfirmation ? "withdraw" : "confirm";
-    const message = action === "confirm" ? "この旅程を確定しますか？" : "確定を取り消して計画へ戻しますか？";
+    const unmarked = unmarkedBookingItems(trip, controller.reservations());
+    const message = action === "confirm" ? unmarked.length ? `予約済・予約不要が未確認の予定があります：${unmarked.map(item => item.title).join("、")}。このまま旅程を確定しますか？` : "この旅程を確定しますか？" : "確定を取り消して計画へ戻しますか？";
     if (!await confirmAction(document, message)) return;
     if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") return;
     adoptionBusy = true; adoption.disabled = true;
