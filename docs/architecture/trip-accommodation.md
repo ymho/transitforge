@@ -9,7 +9,7 @@
 
 | 対象 | 現状 → #400 |
 | --- | --- |
-| travel-candidate.ts / AccommodationOffering | Provider検索・比較のvolatile候補。price/availability/bookingUrl/image/reviewを保持してよいがTrip正本にしない。検索Adapter・候補表示は変更しない |
+| travel-candidate.ts / AccommodationOffering | Provider検索・比較のvolatile候補。価格・空室・写真・評価・詳細URLを持つ検索候補。採用時に許可された参考価格と表示観測だけをTripへ保持する |
 | travel-plan.ts / TripAccommodation | legacy検索応答・reader/writer・地図選択UI用の重複slice。互換性のため残し、新規V2コードから利用しないと明示 |
 | trip.ts / StayItineraryItem | inline accommodationを同じAccommodationSnapshotへ統合。別Stay aggregate/Repositoryを作らない |
 | select-trip-candidate.ts | candidate/task/Trip/expiry・一意なOfferingを解決する既存入口を維持。宿の変換をselect-accommodation.tsへ抽出 |
@@ -29,6 +29,8 @@ interface AccommodationSnapshot {
   checkInDate: LocalDate;
   checkOutDate: LocalDate;
   sources: readonly ExternalSourceEvidence[];
+  observedPrice?: PriceObservation;
+  observedDetails?: AccommodationObservedDetails;
 }
 ```
 
@@ -65,7 +67,7 @@ Money/TravelPriceやJPY固定値は追加しない。#412が必要に応じ同�
 sourceとPlaceのraw extraはallowlist変換で捨て、出力SnapshotへのextraはDomainで拒否する。
 保持可否は信頼済みAdapter/Applicationの責務であり、モデル/UIが任意のOfferingへ許可を付けることはできない。2026-10-04の利用者の保存許可により、本番Rakutenの施設番号・ホテル名・宿泊日・出所/取得時刻に限る旅程参照の保持方針を追加した。外部サービス名は`provider=rakuten-travel`と`sources.attribution=楽天トラベル`で保持する。この最小参照の方針は、提供元のデータ全般の複製権を確認したという意味ではない。
 
-[楽天トラベル施設検索API](https://webservice.rakuten.co.jp/documentation/simple-hotel-search)の`hotelNo`は施設番号であり、施設名`hotelName`との対応を実Adapterで確定する。施設番号を返すことが確認できたこのAPIだけに適用し、汎用の商品ID・legacyの`travel-provider`から施設IDを自動生成しない。Domainの汎用契約・独立resolverの経路も維持する。参考価格はtrusted Adapterの許諾と観測日時を検証して保存する。写真・レビュー・説明文・空室・予約URL・rawは採用Snapshotへ保存しない。
+[楽天トラベル施設検索API](https://webservice.rakuten.co.jp/documentation/simple-hotel-search)の`hotelNo`は施設番号であり、施設名`hotelName`との対応を実Adapterで確定する。施設番号を返すことが確認できたこのAPIだけに適用し、汎用の商品ID・legacyの`travel-provider`から施設IDを自動生成しない。Domainの汎用契約・独立resolverの経路も維持する。参考価格はtrusted Adapterの許諾と観測日時を検証して保存する。利用者の2026-10-11の依頼により、検索時の写真URL・評価・詳細URLは`observedDetails`として採用Snapshotへ保存する。画像バイナリ・説明文・空室・予約状態・rawは保存しない。
 
 候補A→Bは同じitem IDのreplaceで、候補配列や旧Snapshotを書き換えない。
 確認時は既存confirmCandidateSelectionで再解決し、selectedAtだけは確認時刻とする。
@@ -129,3 +131,9 @@ npm run eval:agent:decision:live -- --suite trip-progress --profile full --case 
 ## 宿泊候補の比較画面
 
 相談からの宿泊検索は通常最大10件を要求する。Providerが返した実候補だけを表示し、Evidence・公開カード・採用検証も10件まで保持する。実際の件数は検索条件とProviderの結果に依存する。検索結果の受信では旅程画面へ移動せず、相談画面で前後の矢印と件数表示から1件ずつ比較する。採用ボタンと宿の詳細・最新料金へのリンクを隣に配置する。宿泊カードに追加の詳細検索ボタンは表示しない。
+
+## 検索時の宿情報と予約導線（2026-10-11）
+
+Rakutenのtrusted Adapterは`displayRetention=permitted`を付与し、同じOfferingから公開画像URL・評価・レビュー件数・詳細URLを`observedDetails`へallowlistでコピーする。観測日時は保持証拠の取得日時とし、採用日時より未来を拒否する。参考価格は既存`observedPrice`を使う。画像はHTTPSのみ、リンクは認証情報・秘密値を含まないHTTP(S)だけを許可する。モデル/UIが保持許諾を指定する入口は追加しない。
+
+旅程の宿詳細は写真・星評価・検索時の参考料金・外部予約リンクを表示する。共有閲覧でも同じ保存済みTripを使う。取得失敗した画像は非表示。旧Tripも読め、Rakutenの検証済み施設番号がある宿には施設詳細リンクを生成するが、旧データの写真・評価・価格は推測せず、再検索・採用した時点から保持する。日付変更後も観測情報は検索時点のままであり、現在価格・空室を断定しない。

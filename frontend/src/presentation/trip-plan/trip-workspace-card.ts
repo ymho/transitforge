@@ -1,3 +1,4 @@
+import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
 import type { DayEntry } from "@raiquora/trip/daily-itinerary";
 import { renderTripTimeEditor } from "./trip-time-editor";
@@ -60,6 +61,9 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   for (const r of controller.reservations()?.filter(r => r.itineraryItemId === item.id) ?? []) information.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
   if (item.type === "transport") content.append(renderTripRouteTimeline(item));
   if (information.childElementCount > 1) body.append(information);
+  if (item.type === "stay" && item.selection.status === "selected") {
+    const detail = renderStayDetails(item.selection.accommodation); if (detail) body.append(detail);
+  }
   if (item.type === "activity" && item.research) {
     const source = element("a", "trip-workspace-research-source", `${researchDateLabel(item.research.observedAt)}に参照した資料を開く`);
     source.href = item.research.sourceUrl; source.target = "_blank"; source.rel = "noopener noreferrer";

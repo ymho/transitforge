@@ -66,3 +66,15 @@ describe("AccommodationSnapshot contract", () => {
     expect(next.items[0]).toEqual(reverted); expect(trip.items[0]).toEqual(item());
   });
 });
+
+it("retains safe search display references and rejects unsafe media, extra fields and future observations", () => {
+  const base = snapshot(), observedDetails = { observedAt: at, sourceUrl: "https://example.org/hotel/1", imageUrl: "https://example.org/photo.jpg", reviewAverage: 4.35, reviewCount: 120 };
+  expect(() => validateAccommodationSnapshot({ ...base, observedDetails })).not.toThrow();
+  for (const change of [{ sourceUrl: "javascript:alert(1)" }, { sourceUrl: "https://example.org/?token=secret" }, { sourceUrl: "https://user:pass@example.org/" },
+    { imageUrl: "http://example.org/photo.jpg" }, { imageUrl: "data:image/png;base64,xxx" }, { reviewAverage: 6 }, { reviewAverage: NaN },
+    { reviewCount: -1 }, { reviewCount: 1.5 }, { observedAt: "2026-09-13T00:00:00Z" }, { raw: {} }, { availability: "available" }]) {
+    expect(() => validateAccommodationSnapshot({ ...base, observedDetails: { ...observedDetails, ...change } })).toThrow();
+  }
+  const trip = createTrip(id, "旅", at, [item({ ...base, observedDetails })]);
+  expect(JSON.parse(JSON.stringify(trip)).items[0].selection.accommodation.observedDetails).toEqual(observedDetails);
+});

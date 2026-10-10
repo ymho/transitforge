@@ -2,7 +2,7 @@ import type { AccommodationOffering } from "./travel-candidate";
 import { isPriceObservation, copyPriceObservation } from "./money";
 import type { ExternalSourceEvidence } from "./external-travel-information";
 import { createPlaceSnapshot, copyPlaceSource, validatePlaceSource, type PlaceSnapshot, type PlaceSnapshotRetention } from "./place-snapshot";
-import { validateAccommodationSnapshot, type AccommodationSnapshot } from "./accommodation-snapshot";
+import { accommodationPublicUrl, validateAccommodationSnapshot, type AccommodationSnapshot } from "./accommodation-snapshot";
 
 /** Short-lived trusted resolver metadata. Not model input, a Repository or another Offering. */
 export interface AccommodationSelectionEvidence {
@@ -14,6 +14,7 @@ export interface AccommodationSelectionEvidence {
   priceRetention?: "permitted" | "forbidden" | "unknown";
   /** Resolved facility identity; a provider's documented facility number may also
    * be its offering ID. No generic product-ID conversion or name-based matching. */
+  displayRetention?: "permitted" | "forbidden" | "unknown";
   place: PlaceSnapshot;
   placeRetention: PlaceSnapshotRetention;
   source: ExternalSourceEvidence;
@@ -45,6 +46,16 @@ export function selectAccommodation(offering: AccommodationOffering, proof: Acco
       Date.parse(offering.price.observedAt) <= Date.parse(proof.source.retrievedAt) &&
       Date.parse(offering.price.observedAt) <= Date.parse(selectedAt)
       ? { observedPrice: copyPriceObservation(offering.price) } : {}) };
+  if (proof.displayRetention === "permitted") {
+    const sourceUrl = accommodationPublicUrl(offering.bookingUrl), imageUrl = accommodationPublicUrl(offering.imageUrl, true);
+    const reviewAverage = typeof offering.reviewAverage === "number" && Number.isFinite(offering.reviewAverage) && offering.reviewAverage >= 0 && offering.reviewAverage <= 5 ? offering.reviewAverage : undefined;
+    const reviewCount = typeof offering.reviewCount === "number" && Number.isSafeInteger(offering.reviewCount) && offering.reviewCount >= 0 ? offering.reviewCount : undefined;
+    if (sourceUrl || imageUrl || reviewAverage !== undefined || reviewCount !== undefined) {
+      Object.assign(snapshot, { observedDetails: { observedAt: proof.source.retrievedAt,
+        ...(sourceUrl ? { sourceUrl } : {}), ...(imageUrl ? { imageUrl } : {}),
+        ...(reviewAverage !== undefined ? { reviewAverage } : {}), ...(reviewCount !== undefined ? { reviewCount } : {}) } });
+    }
+  }
   validateAccommodationSnapshot(snapshot);
   return snapshot;
 }

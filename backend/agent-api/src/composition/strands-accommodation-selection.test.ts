@@ -98,10 +98,11 @@ it.each(["multiple", "named", "ordinal", "sole"] as const)(`${live ? "Bedrock" :
     expect(saved?.items[1]).toMatchObject({ type: "stay", selection: { status: "selected", accommodation: {
       provider: "rakuten-travel", providerItemId: sole ? "100" : "101", checkInDate, checkOutDate,
       place: { name: names[sole ? 0 : 1], ref: { provider: "rakuten-travel", providerPlaceId: sole ? "100" : "101" } },
+      observedDetails: { sourceUrl: expect.stringContaining("https://example.org/hotel/"), imageUrl: "https://example.org/photo.jpg", reviewAverage: 4.24, observedAt: expect.any(String) },
       observedPrice: { price: { currency: "JPY", amountMinor: 5100 }, basis: "reference-minimum", observedAt: at },
       sources: [{ provider: "rakuten-travel", sourceId: sole ? "100" : "101", attribution: "楽天トラベル", retrievedAt: expect.any(String) }],
     } } });
-    expect(JSON.stringify(saved)).not.toMatch(/availability|bookingUrl|imageUrl|reviewAverage|fixture-key|fixture-app|affiliateId|latitude|longitude/u);
+    expect(JSON.stringify(saved)).not.toMatch(/availability|bookingUrl|fixture-key|fixture-app|latitude|longitude/u);
   }
   expect(await trips.repository.get(stateB, metadata.tripId)).toBeUndefined();
   const completedHistory = await state.conversations.history(stateA, conversationId);

@@ -52,7 +52,7 @@ it("retains only the verified Rakuten reference price with its original currency
   const selections = new VerifiedAccommodationSelections(); selections.record([priced], [proof], evidence);
   const item = selections.itemsFor(cards(evidence))[0]!;
   expect(item).toMatchObject({ selection: { accommodation: { observedPrice: priced.price } } });
-  expect(JSON.stringify(item)).not.toContain("bookingUrl");
+  expect(item).toMatchObject({ selection: { accommodation: { observedDetails: { sourceUrl: hotel.bookingUrl, observedAt: at } } } });
   const missing = new VerifiedAccommodationSelections(); missing.record([hotel], [rakutenAccommodationSelectionEvidence(hotel, at)!], observe());
   expect(JSON.stringify(missing.itemsFor(cards(observe())))).not.toContain("observedPrice");
 });
