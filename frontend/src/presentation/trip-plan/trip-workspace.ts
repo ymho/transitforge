@@ -6,7 +6,6 @@ import type { ContextViewKind } from "../../domain/context-workspace";
 import { tripWorkspaceProjection, itemAssumptions } from "./trip-workspace-projection";
 import { renderWorkspaceCard, refreshMoveTargets } from "./trip-workspace-card";
 import { tripAddConsultation } from "./trip-add-consultation";
-import { renderWorkspaceCandidates } from "./trip-workspace-candidates";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
 import { element, control } from "./trip-workspace-elements";
 import { tripCoverImage } from "../shared/trip-cover";
@@ -17,8 +16,6 @@ import { renderTripTravelMode } from "./trip-travel-mode";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import type { Trip } from "@raiquora/trip/trip";
 import { canConfirmTrip } from "@raiquora/trip/trip-adoption";
-import { renderPublicPlanPresentation } from "../concierge/public-plan-presentation-view";
-import { previewPlanAdoption } from "../concierge/plan-adoption-view";
 import type { AiGuidePanelElements } from "../concierge/ai-guide-panel";
 
 /** DOM and navigation only. The supplied source owns the current server Trip. */
@@ -87,7 +84,7 @@ export function configureTripWorkspace(options: {
   const pendingCostEditors = new Map<string, { tripId: string; node: Element }>();
   let costSessionVersion = controller.source()?.sessionVersion?.();
   const dayTabs = element("div", "trip-day-tabs"); dayTabs.setAttribute("role", "tablist"); dayTabs.setAttribute("aria-label", "旅程の日付");
-  const days = element("div", "trip-workspace-days"), proposal = element("div"), candidates = element("div");
+  const days = element("div", "trip-workspace-days"), proposal = element("div");
   const selectedDays = new Map<string, string>();
   const itinerary = element("section", "trip-detail-panel");
   itinerary.id = "trip-detail-itinerary";
@@ -123,18 +120,11 @@ export function configureTripWorkspace(options: {
   };
   const addFirst = control("＋ 予定を追加", () => { const trip = controller.current(); if (trip) startAdd(trip, "unscheduled", undefined, undefined, addFirst); });
   const planDraft = element("section", "trip-workspace-plan-draft"); planDraft.hidden = true; let planKey = "";
-  planDraft.addEventListener("raiquora:preview-plan-adoption", event => {
-    if (!options.onPlanAdoption || !options.conversationId) return;
-    const session = controller.sessionId(), trip = controller.current(), conversationId = options.conversationId();
-    previewPlanAdoption(event, { conversationId, adopt: options.onPlanAdoption,
-      isCurrent: () => controller.sessionId() === session && options.conversationId?.() === conversationId &&
-        controller.current()?.id === trip?.id && controller.current()?.revision === trip?.revision });
-  });
   summary.classList.add("trip-itinerary-dates");
   const reorder = control("並べ替え", () => openTripOrderEditor(controller, report));
   reorder.className = "trip-order-open";
-  itinerary.append(planDraft, summary, reorder, dayTabs, days, addFirst, add, candidates);
-  const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal, candidates);
+  itinerary.append(planDraft, summary, reorder, dayTabs, days, addFirst, add);
+  const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal);
   const travelMode = element("div"); travelMode.hidden = true;
   panel.append(detail, travelMode);
   app.append(panel, nav);
@@ -142,7 +132,7 @@ export function configureTripWorkspace(options: {
   const collapsed = new Map<string, boolean>();
   const cards = new Map<string, { node: HTMLElement; key: string }>();
   const groups = new Map<string, HTMLElement>();
-  let activeSession = controller.sessionId(), previousTripId: string | undefined, proposalKey = "", candidateKey = "";
+  let activeSession = controller.sessionId(), previousTripId: string | undefined, proposalKey = "";
   let travelGeneration = 0, detailScroll = 0, travelTripKey = "";
   const viewState = () => {
     if (!views.has(activeSession)) views.set(activeSession, { scroll: 0, chatScroll: 0, view: "chat" });
@@ -199,11 +189,14 @@ export function configureTripWorkspace(options: {
       partyKey = ""; add.hidden = true; addContext = undefined;
     }
     const trip = controller.current();
-    const plan = controller.plan(), nextPlanKey = JSON.stringify([controller.sessionId(), plan]);
+    const hasPending = !!controller.plan() || controller.candidates().length > 0;
+    const nextPlanKey = JSON.stringify([controller.sessionId(), hasPending]);
     if (planKey !== nextPlanKey) {
-      planKey = nextPlanKey; planDraft.replaceChildren(); planDraft.hidden = !plan;
-      if (plan) planDraft.append(element("h2", "", "未保存の旅程案"), element("p", "", "内容を確認して「この案を採用する」から旅程へ保存できます。"),
-        renderPublicPlanPresentation(plan, { idPrefix: "workspace-", detailedResearch: false }));
+      planKey = nextPlanKey; planDraft.replaceChildren(); planDraft.hidden = !hasPending;
+      if (hasPending) {
+        const link = control("相談で確認", () => show("chat")); link.className = "trip-pending-plan-link";
+        planDraft.append(element("span", "", "未採用の提案があります"), link);
+      }
     }
     if (trip && travelTripKey && travelTripKey !== `${trip.id}:${trip.revision}`) { travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false; }
     panel.hidden = nav.hidden = !controller.blocksLegacy();
@@ -229,15 +222,15 @@ export function configureTripWorkspace(options: {
         const editor = card.node.querySelector(".trip-cost-editor");
         if (editor) pendingCostEditors.set(entryKey, { tripId: previousTripId, node: editor });
       }
-      days.replaceChildren(); proposal.replaceChildren(); candidates.replaceChildren();
+      days.replaceChildren(); proposal.replaceChildren();
       dayTabs.replaceChildren();
       party.replaceChildren(); partyKey = "";
-      cards.clear(); groups.clear(); previousTripId = undefined; proposalKey = candidateKey = "";
+      cards.clear(); groups.clear(); previousTripId = undefined; proposalKey = "";
       return;
     }
     if (server) report("");
     if (previousTripId !== trip.id) {
-      cards.clear(); groups.clear(); days.replaceChildren(); proposalKey = candidateKey = "";
+      cards.clear(); groups.clear(); days.replaceChildren(); proposalKey = "";
       add.hidden = true; addContext = undefined; partyKey = "";
       previousTripId = trip.id; panel.scrollTop = viewState().scroll;
     }
@@ -346,8 +339,6 @@ export function configureTripWorkspace(options: {
         catch { report("変更案と現在の旅程が一致しません。提案を確認し直してください。"); }
       }
     }
-    const nextCandidates = JSON.stringify([controller.candidates(), trip.items.map((i) => [i.id, i.title]), controller.uiFocus()]);
-    if (candidateKey !== nextCandidates) { candidateKey = nextCandidates; candidates.replaceChildren(renderWorkspaceCandidates(controller, report)); }
     panel.scrollTop = scroll;
   };
   const canLeave = () => {
