@@ -25,9 +25,10 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const icon = element("span", "trip-workspace-item-icon");
   icon.innerHTML = travelIcon(item.type === "transport" ? "transport" : item.type === "stay" ? "stay" : "activity");
   icon.setAttribute("aria-hidden", "true");
-  const focus = control(item.title, () => { controller.focus(item.id); body.hidden = false; updateDisclosure(); options.collapse(false); });
+  const displayTitle = item.type === "transport" ? item.title.replace(/^経路\s*[0-9０-９]+\s*[:：]\s*/u, "") || item.title : item.title;
+  const focus = control(displayTitle, () => { controller.focus(item.id); body.hidden = false; updateDisclosure(); options.collapse(false); });
   focus.className = "trip-workspace-item-focus";
-  focus.setAttribute("aria-label", `${item.title}を相談対象にする`);
+  focus.setAttribute("aria-label", `${displayTitle}を相談対象にする`);
   const body = element("div", "trip-workspace-item-body");
   body.id = `trip-item-${encodeURIComponent(options.entry?.entryKey ?? item.id)}`;
   body.hidden = options.collapsed;
@@ -37,11 +38,11 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   expand.className = "trip-item-toggle";
   const updateDisclosure = () => {
     expand.setAttribute("aria-expanded", String(!body.hidden));
-    expand.setAttribute("aria-label", `${item.title}の詳細を${body.hidden ? "開く" : "たたむ"}`);
+    expand.setAttribute("aria-label", `${displayTitle}の詳細を${body.hidden ? "開く" : "たたむ"}`);
   };
   expand.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>';
   updateDisclosure(); expand.setAttribute("aria-controls", body.id);
-  header.append(focus, expand);
+  header.append(expand, focus);
   const content = element("div", "trip-timeline-content"), rail = element("span", "trip-timeline-rail"); rail.setAttribute("aria-hidden", "true");
   rail.append(icon);
   content.append(header); card.append(renderTripTimeEditor(trip, item, options.entry, controller, options.report), rail, content);
