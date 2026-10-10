@@ -182,8 +182,8 @@
 @media (min-width:62.001rem) {
   #app[data-primary-view="chat"][data-consultation-mode="landing"]:is([data-primary-view]) {
     & .product-nav { background: transparent; border: 0; box-shadow: none; }
-    & .product-nav :is(a,button) { color: #fff; }
-    & .product-nav [aria-current="page"] { background: #ffffff26; color: #fff; }
+    & .product-nav :is(a,button) { color: #fff; border-radius: 12px; background: #20332f80; border: 1px solid #ffffff40; backdrop-filter: blur(8px); }
+    & .product-nav [aria-current="page"] { background: #fff; color: var(--tf-blue); border-color: #fff; }
     & .product-nav [data-account] { border-color: #ffffff55; }
     & .product-nav .kaiho-logo { color: #fff; }
     & .product-nav .kaiho-logo-ai { background: #fff; color: #68716e; }
@@ -191,7 +191,9 @@
   #app[data-primary-view="map"]:is([data-primary-view]) {
     --product-header-height: 0px;
     & .product-nav { background: transparent; border: 0; box-shadow: none; }
-    & .product-nav :is(a,button) { background: #ffffffb3; color: #37675f; backdrop-filter: blur(8px); }
-    & .product-nav [aria-current="page"] { background: #fcf0edd9; color: var(--tf-blue); }
+    & .product-nav :is(a,button) { border-radius: 12px; background: #fffffff2; color: #37675f; border: 1px solid #ffffff80; box-shadow: 0 2px 8px #152a3326; backdrop-filter: blur(8px); }
+    & .product-nav [aria-current="page"] { background: var(--tf-blue); color: #fff; border-color: var(--tf-blue); }
+    & .product-nav .kaiho-logo { color: #fff; filter: drop-shadow(0 1px 3px #152a3380); }
+    & .product-nav .kaiho-logo-ai { background: #fff; color: #68716e; }
   }
 }
