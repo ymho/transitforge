@@ -15,8 +15,9 @@ async function setup(role: TripRole = "owner") {
     parseLink: parseTripShareLink, makeLink: (link) => makeTripShareLink("https://example.test/", link) });
   ui.dialog.showModal = () => ui.dialog.setAttribute("open", ""); ui.dialog.close = () => ui.dialog.removeAttribute("open");
   ui.open(); await vi.waitFor(() => expect(client.accessible).toHaveBeenCalled());
-  await vi.waitFor(() => expect(ui.dialog.textContent).toContain("更新しました"));
-  const click = (text: string) => [...ui.dialog.querySelectorAll("button")].find((b) => b.textContent === text)!.click();
+  await vi.waitFor(() => expect(client.manage).toHaveBeenCalledTimes(role === "owner" ? 1 : 0));
+  await vi.waitFor(() => expect(ui.dialog.querySelector('[role="status"]')!.getAttribute("aria-busy")).toBe("false"));
+  const click = (text: string) => [...ui.dialog.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") ?? b.textContent) === text)!.click();
   return { client, ui, click, navigate };
 }
 describe("share management UI", () => {
@@ -51,4 +52,18 @@ it("explicit Join hands off to login and resumed login redeems then opens the Tr
   const resumed = configureTripSharing({ ...base, authenticated: () => true, resumeJoin: true });
   await vi.waitFor(() => expect(f.navigate).toHaveBeenCalledWith(id)); expect(f.client.redeem).toHaveBeenCalledTimes(1);
   expect(resumed.dialog.open).toBe(false); resumed.destroy();
+});
+
+it("hides empty sections and keeps refresh silent with close in the header", async () => {
+  const f = await setup();
+  f.client.manage.mockResolvedValue({ participants: [], grants: [] });
+  f.click("再読み込み");
+  await vi.waitFor(() => expect(f.client.manage).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(f.ui.dialog.querySelector('[role="status"]')!.textContent).toBe(""));
+  for (const title of ["参加者", "発行したリンク", "参加している旅程"]) {
+    const heading = [...f.ui.dialog.querySelectorAll("h3, h4")].find(h => h.textContent === title)!;
+    expect((heading.parentElement as HTMLElement).hidden).toBe(true);
+  }
+  expect(f.ui.dialog.querySelector('header button[aria-label="閉じる"]')).not.toBeNull();
+  expect(f.ui.dialog.querySelector("details")!.open).toBe(false);
 });
