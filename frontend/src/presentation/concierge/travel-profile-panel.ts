@@ -65,7 +65,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
     });
   };
   document.addEventListener("transitforge:profile-leave", flush);
-  document.defaultView?.addEventListener("beforeunload", (event) => { if (dirty) { flush(); event.preventDefault(); event.returnValue = ""; } });
+  document.defaultView?.addEventListener("beforeunload", () => { if (dirty) flush(); });
   client.subscribe(() => {
     const current = client.current();
     if (dirty) return;

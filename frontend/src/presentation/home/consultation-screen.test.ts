@@ -158,3 +158,14 @@ it("retains input and enables retry after a failed save", async () => {
   expect(editor.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
   expect(f.showTrip).not.toHaveBeenCalled();
 });
+
+it("keeps the editor on popup cancellation and discards only after explicit acceptance", async () => {
+  const f = setup(); f.panel.querySelector<HTMLButtonElement>('[aria-label="出発地を編集"]')!.click();
+  const editor = f.panel.querySelector(".consultation-condition-editor")!;
+  const cancelled = f.screen.canLeave();
+  expect(editor.isConnected).toBe(true);
+  document.querySelector<HTMLButtonElement>('dialog.app-dialog button[type=button]')!.click();
+  expect(await cancelled).toBe(false); expect(editor.isConnected).toBe(true);
+  const accepted = f.screen.canLeave(); document.querySelector<HTMLButtonElement>('dialog.app-dialog button[type=submit]')!.click();
+  expect(await accepted).toBe(true); expect(editor.isConnected).toBe(false);
+});

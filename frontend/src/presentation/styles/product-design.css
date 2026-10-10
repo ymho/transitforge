@@ -227,3 +227,12 @@
   & .home-trip-manage .home-trip-menu button { display: block; width: 100%; min-height: 30px; margin: 0; padding: 6px 9px; border: 0; font-size: 12px; text-align: left; }
   & .trip-list-copy strong { font-size: 16px; }
 }
+
+.app-dialog { width: min(360px, calc(100vw - 32px)); box-sizing: border-box; padding: 16px; border: 1px solid var(--product-line, #e3e8ef); border-radius: var(--product-radius, 9px); background: var(--product-surface, #fff); color: var(--product-ink, #243043); font: 400 14px/1.55 var(--product-font, sans-serif); box-shadow: 0 16px 60px #17233333; }
+.app-dialog::backdrop { background: #14203366; }
+.app-dialog h2 { margin: 0 0 10px; font-size: 16px; }
+.app-dialog p { margin: 0 0 14px; font-size: 14px; line-height: 1.6; white-space: pre-line; }
+.app-dialog .ds-control { width: 100%; box-sizing: border-box; }
+.app-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+.app-dialog .ds-button { min-height: 32px; padding: 5px 8px; font-size: 14px; font-weight: 500; }

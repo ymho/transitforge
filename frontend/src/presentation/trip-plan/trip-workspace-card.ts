@@ -1,4 +1,6 @@
 import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/reservation";
+import { confirmAction } from "../shared/app-dialog";
+
 import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
 import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itinerary";
@@ -74,8 +76,10 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const actions = element("div", "trip-workspace-actions");
   if (options.changeItemDecision) {
     const action = item.decision && !item.decision.needsReconfirmation ? "withdraw" : "confirm";
-    const decision = control(action === "withdraw" ? "下書きに戻す" : "この予定を確定", () => {
-      if (!document.defaultView?.confirm(action === "confirm" ? "この予定を確定しますか？予約・購入は行いません。" : "この予定を下書きに戻しますか？")) return;
+    const decision = control(action === "withdraw" ? "下書きに戻す" : "この予定を確定", async () => {
+      if (!await confirmAction(document, action === "confirm" ? "この予定を確定しますか？予約・購入は行いません。" : "この予定を下書きに戻しますか？")) return;
+      if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") return;
+
       decision.disabled = true;
       void options.changeItemDecision!(trip, item, action).catch(() => options.report("予定の状態を変更できませんでした。最新の旅程を確認してください。"))
         .finally(() => { decision.disabled = false; });
@@ -95,10 +99,11 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const rename = control("✎", () => { body.hidden = false; updateDisclosure(); options.collapse(false); editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); });
   rename.className = "trip-item-rename"; rename.setAttribute("aria-label", `${displayTitle}の名称を変更`);
   rename.hidden = controller.source()?.getRole?.() === "viewer";
-  const remove = control("削除", () => {
+  const remove = control("削除", async () => {
     const current = controller.current();
     if (!current || current.id !== trip.id || current.revision !== trip.revision || !controller.canConfirm()) { options.report("旅程が更新されたか、編集できません。開き直してください。"); return; }
-    if (!document.defaultView?.confirm(`「${item.title}」を削除しますがよろしいですか？\n予約自体は取り消されません。`)) return;
+    if (!await confirmAction(document, `「${item.title}」を削除しますがよろしいですか？\n予約自体は取り消されません。`)) return;
+    if (controller.current()?.id !== current.id || controller.current()?.revision !== current.revision || controller.source()?.getRole?.() === "viewer") return;
     try {
       const proposal = proposeTripItemChange(current, { action: "remove", itemId: item.id });
       const facts = controller.reservations();

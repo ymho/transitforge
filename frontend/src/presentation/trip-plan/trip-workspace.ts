@@ -1,3 +1,4 @@
+import { confirmAction, requestText } from "../shared/app-dialog";
 import { openTripEditor } from "./trip-editor-dialog";
 import { openTripOrderEditor } from "./trip-order-editor";
 import { iconMarkup, setLoadingStatus } from "../shared/primitives";
@@ -46,11 +47,12 @@ export function configureTripWorkspace(options: {
   const emblem = element("span", "trip-workspace-emblem"); emblem.innerHTML = travelIcon("trip"); emblem.setAttribute("aria-hidden", "true");
   const notice = element("p", "trip-workspace-notice");
   let adoptionBusy = false;
-  const adoption = control("この旅程で行く", () => {
+  const adoption = control("この旅程で行く", async () => {
     const trip = controller.current(); if (!trip || !options.changeAdoption) return;
     const action = trip.adoption && !trip.adoption.needsReconfirmation ? "withdraw" : "confirm";
     const message = action === "confirm" ? "この旅程を確定しますか？" : "確定を取り消して計画へ戻しますか？";
-    if (!document.defaultView?.confirm(message)) return;
+    if (!await confirmAction(document, message)) return;
+    if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") return;
     adoptionBusy = true; adoption.disabled = true;
     void options.changeAdoption(trip, action).then(() => report(action === "confirm" ? "旅程を確定しました。" : "計画中へ戻しました。"))
       .catch(() => report("旅程の状態を変更できませんでした。最新の旅程を確認してください。")).finally(() => { adoptionBusy = false; adoption.disabled = false; });
@@ -63,11 +65,11 @@ export function configureTripWorkspace(options: {
   const identity = element("div", "trip-header-identity");
   const folioBadge = element("p", "trip-header-eyebrow"); folioBadge.hidden = true;
   let titleBusy = false;
-  const editTitle = control("", () => {
+  const editTitle = control("", async () => {
     const trip = controller.current();
     if (!trip || titleBusy || !options.renameTitle || controller.source()?.getRole?.() === "viewer") return;
-    const nextTitle = document.defaultView?.prompt("旅程の名前", trip.title)?.trim();
-    if (!nextTitle || nextTitle === trip.title) return;
+    const nextTitle = (await requestText(document, "旅程の名前", trip.title))?.trim();
+    if (!nextTitle || nextTitle === trip.title || controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") return;
     titleBusy = true; editTitle.disabled = true;
     void options.renameTitle(trip, nextTitle).then(() => { if (controller.current()?.id === trip.id) report("名称を変更しました。"); })
       .catch(() => { if (controller.current()?.id === trip.id) report("名称を変更できませんでした。最新の旅程を確認してください。"); })
@@ -342,17 +344,15 @@ export function configureTripWorkspace(options: {
     }
     panel.scrollTop = scroll;
   };
-  const canLeave = () => {
+  const canLeave = (): boolean | Promise<boolean> => {
     const editors = [...panel.querySelectorAll(".trip-cost-editor"), ...[...pendingCostEditors.values()].map(value => value.node)];
-    if (!editors.length || document.defaultView?.confirm("編集中の費用を破棄して移動しますか？")) { editors.forEach(editor => editor.remove()); pendingCostEditors.clear(); return true; }
-    return false;
+    if (!editors.length) return true;
+    return confirmAction(document, "編集中の費用を破棄して移動しますか？").then(confirmed => { if (confirmed) { editors.forEach(editor => editor.remove()); pendingCostEditors.clear(); } return confirmed; });
   };
-  const beforeUnload = (event: BeforeUnloadEvent) => { if (panel.querySelector(".trip-cost-editor") || pendingCostEditors.size) { event.preventDefault(); event.returnValue = ""; } };
-  document.defaultView?.addEventListener("beforeunload", beforeUnload);
   const unsubscribe = controller.subscribe(render); render();
   return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,
     showPlan() { show("trip"); },
-    destroy() { document.defaultView?.removeEventListener("beforeunload", beforeUnload); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
+    destroy() { unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
 }
 
 /** Display the authored calendar day without using the device timezone. */

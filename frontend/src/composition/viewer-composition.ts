@@ -435,9 +435,9 @@ const tripWorkspace = configureTripWorkspace({
   },
   branchTrip: (trip, title) => openBranchedTrip(trip, title),
 });
-let canLeaveConditions = () => true;
+let canLeaveConditions: () => boolean | Promise<boolean> = () => true;
 const activateConversation = async (sessionId: string) => {
-  if (activeConversationSession.id !== sessionId && !canLeaveConditions()) throw new Error("Navigation cancelled");
+  if (activeConversationSession.id !== sessionId && !await canLeaveConditions()) throw new Error("Navigation cancelled");
   const session = conversationUi.selectLocal(sessionId);
   if (!session) return;
   returnToConversation(); activeConversationSession = session;
@@ -488,7 +488,7 @@ const resetConsultation = () => {
 };
 const startNewConsultation = async (prompt: string) => {
   if (!isSignedIn()) throw new Error("Authentication required");
-  if (!canLeaveConditions()) throw new Error("Navigation cancelled");
+  if (!await canLeaveConditions()) throw new Error("Navigation cancelled");
   const navigation = tripNavigation.cancel(), account = serverTripClient.sessionVersion();
   const attempt = pendingStart?.prompt === prompt && pendingStart.account === account
     ? pendingStart : { tripId: crypto.randomUUID(), prompt, account };
@@ -656,7 +656,7 @@ const consultationScreen = configureConsultationScreen(aiGuidePanel, aiGuideMess
   newConversation: () => { primaryShell?.navigate("chat"); },
 
 });
-canLeaveConditions = () => consultationScreen.canLeave() && tripWorkspace.canLeave();
+canLeaveConditions = async () => await consultationScreen.canLeave() && await tripWorkspace.canLeave();
 if (import.meta.env.DEV && homePreview === "data") {
   void import("../dev/home-preview").then(({ homePreviewSource }) => tripWorkspaceController.attach(activeConversationSession.id, homePreviewSource()));
 }
