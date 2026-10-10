@@ -10,6 +10,7 @@
 
 - transport / stay / activity、日付・window・fixed・未定、相対日とcalendar bindingを同じTripから投影する。
 - 選択済み鉄道は全legs / 乗換間隔と、保持済み種別・列車名・行先を表示する。欠損は推測せず任意時刻編集を拒否する。
+- 選択済み鉄道の経路詳細に「e5489で予約」を表示する。最初の乗車駅・最後の降車駅・計画出発日時（日本時間の暦日）からBrowser内でURLを生成し、新規タブで直接開く。列車・乗換区間・人数は指定せず、予約可否・同一経路の検索結果を保証しない。`no-referrer` / `noreferrer`で遷移元を送らず、生成・クリックの専用APIやログは追加しない。e5489側のアクセスログは制御できない。予約・購入状態やTripは更新しない。大阪→福井の日時のみのURLは利用者の実画面で確認済みで、他区間は未確認。
 - stayは日別にチェックイン / 連泊 / チェックアウトを投影する。plannedTimingは利用者の予定で、施設受付時間・空室・予約ではない。
 - 日付タブは保存済みの現地暦日ごとに一つにまとめる。zone既知／未取得やlogical dayが混在しても同じ日を別タブにせず、同一日内はTrip.itemsの順序を保つ。操作は各entryの元のDomain dayへ戻し、zone・未定時刻・保存済み経路を変更しない。
 - 人数はTripRequest.partyを参照する。Profileから補完しない。participants等の参照がある場合の変更は既存保護を通す。
@@ -26,6 +27,8 @@
 [最新UI差分](product-timeline-design.md)、[Server保存](trip-server-persistence.md)、[候補選択](agent-v2-candidate-selection.md)を参照する。
 
 ## 開発確認
+
+e5489へのリンクは指定の公式ロゴ（`https://www.jr-odekake.net/assets/img/logo_e5489.svg`）を画像として表示し、読み上げ用ラベルを持つ。画像取得も`no-referrer`とする。
 
 ```bash
 npm run dev

@@ -43,6 +43,16 @@ it("renders every rail leg and the actual transfer interval without presenting m
   const item = { id: "route", title: "経路", type: "transport" as const, schedule: projectRailSchedule(journey), detail: { status: "selected" as const, mode: "rail" as const, journey } };
   const route = renderTripRouteTimeline(item); expect(route.querySelectorAll(".trip-route-leg")).toHaveLength(2);
   expect(route.textContent).toContain("B・乗換10分"); expect(route.textContent).toContain("内訳未取得"); expect(route.textContent).not.toContain("徒歩5分");
+  const link = route.querySelector<HTMLAnchorElement>(".trip-route-booking")!;
+  expect(link.textContent).toBe(""); expect(link.target).toBe("_blank");
+  expect(link.getAttribute("aria-label")).toBe("e5489で予約（新しいタブで開く）");
+  const logo = link.querySelector("img")!;
+  expect(logo.src).toBe("https://www.jr-odekake.net/assets/img/logo_e5489.svg");
+  expect(logo.alt).toBe("e5489"); expect(logo.referrerPolicy).toBe("no-referrer");
+  expect(link.rel).toBe("noopener noreferrer"); expect(link.referrerPolicy).toBe("no-referrer");
+  const params = new URL(link.href).searchParams;
+  expect(params.get("inputDepartStName")).toBe("A"); expect(params.get("inputArriveStName")).toBe("C");
+  expect(params.get("inputHour")).toBe("09"); expect(params.get("inputMinute")).toBe("00");
 });
 it("projects a rail trip into the actual workspace without losing its legs", () => {
   const f = railSelectionFixture(), journey = selectRailJourney(f.candidate, f.inputs, f.selectedAt);

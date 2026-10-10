@@ -58,6 +58,8 @@
   & .trip-route { margin: 0 0 0 46px; }
   & .trip-route > summary { min-height: 36px; color: var(--travel-sea); font-size: 12px; }
   & .trip-route-leg { border-left: 1px solid var(--travel-sea); }
+  & .trip-route-booking { display: inline-flex; align-items: center; min-height: 44px; }
+  & .trip-route-booking img { display: block; width: 88px; height: 28px; object-fit: contain; }
   & .trip-workspace-actions { gap: 8px; padding-block: 10px; }
   & .trip-time-editor { inset: 64px 0 auto; }
   & #trip-detail-itinerary > button { margin-left: 84px; padding: 10px 20px; border: 1px dashed var(--tf-line); border-radius: 24px; background: transparent; font-size: 12px; }
