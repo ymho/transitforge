@@ -20,11 +20,11 @@ function setup(bound = true) {
 }
 it("uses the explicit bound Trip and preserves message/composer nodes and listeners", () => {
   const f = setup(); expect(f.panel.classList.contains("ai-guide-panel")).toBe(false);
-  expect(f.panel.textContent).not.toContain("旧見出し"); expect(f.panel.textContent).toContain("広島の旅について相談中");
+  expect(f.panel.textContent).not.toContain("旧見出し"); expect(f.panel.textContent).toContain("広島の旅");
   expect(f.panel.textContent).toContain("大人2人"); expect(f.panel.querySelector("ol")).toBe(f.messages);
   expect(f.panel.querySelector(".consultation-composer")).toBe(f.form); f.form.dispatchEvent(new Event("submit")); expect(f.submit).toHaveBeenCalledOnce();
-  expect(f.panel.querySelector('.consultation-heading button')!.getAttribute("aria-label")).toBe("新しい相談");
-  expect(f.panel.querySelector('.consultation-heading button')!.textContent).toBe("");
+  expect(f.panel.querySelector('.consultation-heading button[aria-label="新しい相談"]')!.getAttribute("aria-label")).toBe("新しい相談");
+  expect(f.panel.querySelector('.consultation-heading button[aria-label="新しい相談"]')!.textContent).toBe("新しい相談");
   expect(f.panel.querySelector<HTMLButtonElement>('.consultation-composer button')!.getAttribute("aria-label")).toBe("送信");
   expect(f.panel.querySelector('.consultation-composer button')!.textContent).toBe("");
 });
@@ -98,8 +98,8 @@ it("uses the existing Trip for inspiration and never exposes a second save-draft
   const f = setup();
   expect([...f.panel.querySelectorAll("button")].map(button => button.textContent)).not.toContain("仮旅程を保存");
   expect(f.panel.textContent).not.toContain("条件はこの相談に保存");
-  const back = [...f.panel.querySelectorAll("button")].find(button => button.textContent === "旅程に戻る")!;
-  expect(back.hidden).toBe(false); back.click(); expect(f.showTrip).toHaveBeenCalledOnce();
+  const back = f.panel.querySelector<HTMLButtonElement>(".consultation-trip-link")!;
+  expect(back.disabled).toBe(false); expect(back.getAttribute("aria-label")).toBe("広島の旅の旅程に戻る"); back.click(); expect(f.showTrip).toHaveBeenCalledOnce();
 });
 
 

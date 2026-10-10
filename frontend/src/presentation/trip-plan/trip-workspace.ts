@@ -1,3 +1,4 @@
+import { openTripEditor } from "./trip-editor-dialog";
 import { setLoadingStatus } from "../shared/primitives";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
@@ -9,6 +10,7 @@ import { tripAddConsultation } from "./trip-add-consultation";
 import { renderWorkspaceCandidates } from "./trip-workspace-candidates";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
 import { element, control, option } from "./trip-workspace-elements";
+import { tripCoverImage } from "../shared/trip-cover";
 import { travelIcon } from "../shared/travel-icon";
 import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
 import { renderTripPartyControl } from "./trip-party-control";
@@ -28,6 +30,7 @@ export function configureTripWorkspace(options: {
   loadInTripContext?(tripId: string): Promise<InTripContextSnapshot | undefined>;
   ask(prompt: string): void; nextItemId(): string;
   showTripList?(): void;
+  folioKind?(trip: Trip): "official" | "shared" | undefined;
   onViewChange?(view: "chat" | "trip"): void;
   openSharing?(): void;
   changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
@@ -38,7 +41,7 @@ export function configureTripWorkspace(options: {
 }) {
   const { controller, app } = options;
   const panel = element("section", "trip-workspace"); panel.id = "trip-workspace"; panel.hidden = true;
-  panel.setAttribute("aria-label", "Trip V2の旅程"); panel.tabIndex = -1;
+  panel.setAttribute("aria-label", "旅程"); panel.tabIndex = -1;
   const nav = element("nav", "trip-workspace-navigation"); nav.setAttribute("aria-label", "会話と旅程の切替"); nav.hidden = true;
   const status = element("p", "trip-workspace-status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   const report = (text: string) => { setLoadingStatus(status, text, controller.loadState() === "loading"); };
@@ -68,10 +71,19 @@ export function configureTripWorkspace(options: {
   });
   const party = element("div", "trip-header-party"); let partyKey = "";
   const back = control("‹ 旅程一覧", () => options.showTripList?.()); back.hidden = !options.showTripList;
-  const management = element("details", "trip-header-management"); management.append(element("summary", "", "旅程の操作"), openConsultation, branch, openTravelMode);
+  const management = element("details", "trip-header-management"); management.append(element("summary", "", "その他の操作"), branch, openTravelMode);
   const share = control("共有", () => options.openSharing?.()); share.hidden = !options.openSharing;
   const adoptionHelp = element("p", "trip-workspace-notice");
-  heading.append(back, emblem, title, summary, party, notice, adoption, adoptionHelp, share, management);
+  adoption.classList.add("trip-confirm-button");
+  const identity = element("div", "trip-header-identity");
+  const folioBadge = element("p", "trip-header-eyebrow"); folioBadge.hidden = true;
+  identity.append(folioBadge, title, party);
+  const headerActions = element("div", "trip-header-actions"); headerActions.append(adoption, openConsultation, share, management);
+  const cover = element("div", "trip-header-cover"); const coverImage = element("img");
+  coverImage.alt = ""; coverImage.setAttribute("aria-hidden", "true");
+  cover.append(coverImage, element("small", "trip-cover-caption", "旅のイメージ"));
+  const coverContent = element("div", "trip-header-content"); coverContent.append(identity, headerActions);
+  heading.append(back, emblem, cover, coverContent, notice, adoptionHelp);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const pendingCostEditors = new Map<string, { tripId: string; node: Element }>();
   let costSessionVersion = controller.source()?.sessionVersion?.();
@@ -94,7 +106,7 @@ export function configureTripWorkspace(options: {
   for (const [value, label] of [["activity", "立ち寄り・食事"], ["transport", "未選択の移動"], ["stay", "未選択の宿泊"]] as const) addKind.append(option(label, value));
   kindLabel.append(addKind);
   const submit = element("button", "", "追加案を確認"); submit.type = "submit";
-  add.append(addLabel, categoryLabel, placeLabel, dayLabel, kindLabel, element("p", "trip-workspace-copy", "場所名は立ち寄り・食事の手入力にだけ使います。移動・宿泊は未選択の枠を作り、時刻・営業・予約は確認しません。"), submit);
+  add.append(addLabel, kindLabel, categoryLabel, placeLabel, dayLabel, element("p", "trip-workspace-copy", "場所名は立ち寄り・食事の手入力にだけ使います。移動・宿泊は未選択の枠を作り、時刻・営業・予約は確認しません。"));
   addKind.addEventListener("change", () => { categoryLabel.hidden = placeLabel.hidden = addKind.value !== "activity"; });
   add.addEventListener("submit", (event) => {
     event.preventDefault(); const trip = controller.current(); if (!trip) return;
@@ -119,10 +131,12 @@ export function configureTripWorkspace(options: {
     const context = tripAddConsultation(trip, addDay.value, addContext.afterId, addTitle.value);
     controller.focus(context.itemId); chat(context.prompt);
   });
-  add.append(consult, control("取消", () => { add.hidden = true; addContext = undefined; }));
-  const startAdd = (trip: Trip, dayKey: string, afterId?: string, anchor?: HTMLElement) => {
+  const addActions = element("div", "trip-form-actions");
+  addActions.append(control("取消", () => { add.hidden = true; addContext = undefined; addFirst.focus(); }), submit);
+  consult.classList.add("trip-add-consult"); add.append(addActions, consult);
+  const startAdd = (trip: Trip, dayKey: string, afterId?: string, _anchor?: HTMLElement) => {
     addContext = { tripId: trip.id, revision: trip.revision, session: controller.sessionId(), ...(afterId ? { afterId } : {}) };
-    addDay.value = dayKey; add.hidden = false; if (anchor) anchor.after(add); else days.after(add); addTitle.focus();
+    addDay.value = dayKey; openTripEditor(add, "予定を追加"); addTitle.focus();
   };
   const addFirst = control("＋ 予定を追加", () => { const trip = controller.current(); if (trip) startAdd(trip, addDay.value); });
   const planDraft = element("section", "trip-workspace-plan-draft"); planDraft.hidden = true; let planKey = "";
@@ -133,7 +147,8 @@ export function configureTripWorkspace(options: {
       isCurrent: () => controller.sessionId() === session && options.conversationId?.() === conversationId &&
         controller.current()?.id === trip?.id && controller.current()?.revision === trip?.revision });
   });
-  itinerary.append(planDraft, dayTabs, days, addFirst, add, candidates);
+  summary.classList.add("trip-itinerary-dates");
+  itinerary.append(planDraft, summary, dayTabs, days, addFirst, add, candidates);
   const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal, candidates);
   const travelMode = element("div"); travelMode.hidden = true;
   panel.append(detail, travelMode);
@@ -247,6 +262,7 @@ export function configureTripWorkspace(options: {
     addDay.value = [...addDay.options].some((entry) => entry.value === chosenDay) ? chosenDay : "unscheduled";
     const evaluation = controller.feasibility()!;
     title.textContent = view.title;
+    const coverPath = tripCoverImage(trip.id); if (coverImage.getAttribute("src") !== coverPath) coverImage.src = coverPath;
     const role = controller.source()?.getRole?.(), personalOwner = role === undefined || role === "owner";
     adoption.hidden = !options.changeAdoption || !personalOwner || ["cancelled", "completed"].includes(trip.lifecycleState);
     adoption.textContent = trip.adoption && !trip.adoption.needsReconfirmation ? "計画へ戻す"
@@ -254,11 +270,14 @@ export function configureTripWorkspace(options: {
     adoption.disabled = adoptionBusy || (!trip.adoption || trip.adoption.needsReconfirmation ? !canConfirmTrip(trip) : false);
     share.hidden = !options.openSharing;
     adoptionHelp.textContent = adoption.hidden || !adoption.disabled || adoptionBusy ? "" : !trip.items.length ? "予定を追加すると確定できます。" : "すべての予定に日程を設定すると確定できます。";
+    adoptionHelp.hidden = !adoptionHelp.textContent;
     const labels = [notice.textContent ?? "", role === "viewer" ? "" : role === "editor" ? "共有された旅程です（共同編集）。" : "", trip.officialOrigin ? `公式しおりから作成（第${trip.officialOrigin.version}版）` : ""].filter(Boolean);
     notice.textContent = labels.join(" "); notice.hidden = role !== "viewer" && role !== "editor" && !trip.officialOrigin;
     branch.hidden = !options.branchTrip || !personalOwner;
     branch.disabled = branchBusy;
     summary.textContent = tripDateLabel(trip);
+    const folioKind = options.folioKind?.(trip) ?? (["editor", "viewer"].includes(controller.source()?.getRole?.() ?? "") ? "shared" : undefined);
+    folioBadge.textContent = folioKind === "official" ? "公式しおり" : folioKind === "shared" ? "共有しおり" : ""; folioBadge.hidden = !folioKind;
     const nextPartyKey = JSON.stringify([trip.id, trip.revision, trip.request.party]);
     if (partyKey !== nextPartyKey) { partyKey = nextPartyKey; party.replaceChildren(renderTripPartyControl(trip, controller, report)); }
     const ids = new Set<string>(), dates = new Set<string>();
@@ -266,7 +285,7 @@ export function configureTripWorkspace(options: {
     for (const [date, entries, label] of view.timelineDays) {
       dates.add(date); dayLabels.set(date, label);
       let group = groups.get(date);
-      if (!group) { group = element("section", "trip-workspace-day"); group.append(element("h2", "", label)); groups.set(date, group); }
+      if (!group) { group = element("section", "trip-workspace-day"); group.append(element("h2", "", calendarDayLabel(label))); groups.set(date, group); }
       if (days.children[[...dates].length - 1] !== group) days.insertBefore(group, days.children[[...dates].length - 1] ?? null);
       entries.forEach((entry, index) => {
         const { item, entryKey } = entry;
@@ -310,11 +329,14 @@ export function configureTripWorkspace(options: {
       for (const button of dayTabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')) {
         const chosen = button.dataset.day === next; button.setAttribute("aria-selected", String(chosen)); button.tabIndex = chosen ? 0 : -1;
       }
-      if (focus) dayTabs.querySelector<HTMLButtonElement>(`[data-day="${CSS.escape(next)}"]`)?.focus();
+      const activeTab = dayTabs.querySelector<HTMLButtonElement>(`[data-day="${CSS.escape(next)}"]`);
+      if (focus) { activeTab?.focus(); activeTab?.scrollIntoView({ block: "nearest", inline: "nearest" }); }
     };
     dayTabs.hidden = availableDays.length < 2; dayTabs.replaceChildren();
     availableDays.forEach((date, index) => {
-      const button = control(dayLabels.get(date) ?? date, () => applySelectedDay(date)); button.setAttribute("role", "tab"); button.dataset.day = date;
+      const dayLabel = dayLabels.get(date) ?? date;
+      const button = control(calendarDayLabel(dayLabel), () => applySelectedDay(date));
+      button.setAttribute("aria-label", dayLabel); button.setAttribute("role", "tab"); button.dataset.day = date;
       button.setAttribute("aria-controls", `trip-day-${index}`); groups.get(date)!.id = `trip-day-${index}`; groups.get(date)!.setAttribute("role", "tabpanel");
       button.addEventListener("keydown", (event) => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -345,4 +367,11 @@ export function configureTripWorkspace(options: {
   return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,
     showPlan() { show("trip"); },
     destroy() { document.defaultView?.removeEventListener("beforeunload", beforeUnload); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
+}
+
+/** Display the authored calendar day without using the device timezone. */
+function calendarDayLabel(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const day = new Date(`${value}T12:00:00Z`);
+  return new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "short", timeZone: "UTC" }).format(day);
 }

@@ -50,6 +50,7 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
     if (epoch !== generation || options.current()?.tripId !== current.tripId) return;
     link.value = options.makeLink({ tripId: current.tripId, grantId: value.grant.id, secret: value.secret }); link.hidden = false; link.select(); await manage();
   }); });
+  create.classList.add("ds-button--primary");
   management.append(element("h3", "", "この旅程の共有管理"), role, expiry, create, link,
     element("h4", "", "参加者"), members, element("h4", "", "発行したリンク"), grants);
   const officialActions = element("section"); officialActions.hidden = true;
@@ -60,6 +61,7 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
   const withdraw = control("公式公開を取り下げる", () => { const current = options.current(); if (!current || !options.official) return;
     void action(async () => { const guide = await options.official!.officialGet(current.tripId); await options.official!.officialWithdraw(guide); });
   });
+  publish.classList.add("ds-button--primary");
   officialActions.append(element("h3", "", "公式しおり"), publish, withdraw);
   const input = element("input"); input.type = "password"; input.autocomplete = "off"; input.setAttribute("aria-label", "共有リンクを貼り付け");
   const redeem = control("共有リンクで参加して開く", () => { void action(async () => {

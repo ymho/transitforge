@@ -73,7 +73,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const f = setup({ getCurrentTrip: multiCityTrip });
     f.ui.showPlan();
     const dayTabs = [...f.ui.panel.querySelectorAll<HTMLButtonElement>(".trip-day-tabs [role=tab]")];
-    expect(dayTabs.map((tab) => tab.textContent)).toEqual(["2026-09-22", "2026-09-23", "日時未定"]);
+    expect(dayTabs.map((tab) => tab.textContent)).toEqual(["9月22日(火)", "9月23日(水)", "日時未定"]);
     expect(f.ui.panel.querySelectorAll<HTMLElement>('.trip-workspace-days [data-item-id="hotel"]').length).toBe(2);
     expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(false);
     dayTabs[2]!.click();
@@ -89,7 +89,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const f = setup({ getCurrentTrip: () => trip, confirmProposal });
     f.ui.showPlan();
     button(f.ui.panel, "＋ 予定を追加").click(); const form = f.ui.panel.querySelector<HTMLFormElement>(".trip-workspace-add")!;
-    const [title, category, day] = [form.querySelector("input")!, form.querySelectorAll("select")[0]!, form.querySelectorAll("select")[1]!];
+    const [title, category, day] = [form.querySelector("input")!, form.querySelectorAll("select")[1]!, form.querySelectorAll("select")[2]!];
     expect([...day.options].map((o) => o.textContent)).toEqual(["日時未定", "2026-10-01", "2026-10-02"]);
     title.value = "昼食"; category.value = "food"; day.value = day.options[2]!.value;
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -109,8 +109,8 @@ describe("Trip workspace DOM and mobile navigation", () => {
     button(f.ui.panel, "＋ 予定を追加").click(); const form = f.ui.panel.querySelector<HTMLFormElement>(".trip-workspace-add")!;
     const [title, place] = form.querySelectorAll<HTMLInputElement>("input");
     title!.value = "昼食"; place!.value = "出雲そばの店";
-    form.querySelectorAll("select")[0]!.value = "food";
-    form.querySelectorAll("select")[1]!.selectedIndex = 1;
+    form.querySelectorAll("select")[1]!.value = "food";
+    form.querySelectorAll("select")[2]!.selectedIndex = 1;
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "add", item: {
       category: "food", place: { name: "出雲そばの店", sources: [] }, schedule: { type: "day", date: "2026-10-01" },
@@ -207,11 +207,11 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.focus("activity"); f.controller.propose("順序変更", [{ type: "move", itemId: "activity" }]);
     button(f.ui.nav, "旅程").click(); f.ui.panel.scrollTop = 330;
     const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
-    button(card, "開く").click(); button(card, "閉じる").click(); expect(button(card, "開く").getAttribute("aria-expanded")).toBe("false");
+    button(card, "詳細").click(); button(card, "閉じる").click(); expect(button(card, "詳細").getAttribute("aria-expanded")).toBe("false");
     button(f.ui.nav, "会話").click();
     expect(f.input.value).toBe("編集中の文章"); expect(document.activeElement).toBe(f.input); expect(f.messages.scrollTop).toBe(240);
     expect(f.controller.sessionId()).toBe("one"); expect(f.controller.uiFocus()?.itemId).toBe("activity"); expect(f.controller.proposal()?.summary).toBe("順序変更");
-    button(f.ui.nav, "旅程").click(); expect(f.ui.panel.scrollTop).toBe(330); expect(button(card, "開く")).toBeDefined();
+    button(f.ui.nav, "旅程").click(); expect(f.ui.panel.scrollTop).toBe(330); expect(button(card, "詳細")).toBeDefined();
     expect(button(f.ui.nav, "旅程").getAttribute("aria-pressed")).toBe("true");
     expect(f.app.contains(f.chat)).toBe(true); expect(f.ui.panel.querySelectorAll(".trip-workspace-diff")).toHaveLength(1);
   });

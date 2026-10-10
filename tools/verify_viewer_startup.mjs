@@ -5,6 +5,7 @@ import { readFile, mkdir } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 
 import { consultationDesignFixture } from "../frontend/src/presentation/concierge/consultation-design.fixture.ts";
+import { officialGuideSnapshot } from "../modules/trip/domain/official-guide.ts";
 import { createTrip } from "../modules/trip/domain/trip.ts";
 import { railSelectionFixture } from "../modules/trip/domain/selected-rail-journey.fixture.ts";
 import { selectRailJourney, projectRailSchedule } from "../modules/trip/domain/selected-rail-journey.ts";
@@ -17,6 +18,7 @@ const trips = [createTrip("11111111-1111-4111-8111-111111111111", "乗換のあ�
   { id: "stay", title: "町の宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14" } }
 ], { constraints: [], assumptions: [], party: { adults: 2, children: [{ age: 7 }], source: "user" } }),
 createTrip("22222222-2222-4222-8222-222222222222", "別の旅", fixture.selectedAt)];
+const guide = { id: trips[0].id, version: 1, publishedAt: new Date(trips[0].createdAt).toISOString(), trip: officialGuideSnapshot(trips[0]) };
 const conversation = trip => ({ conversationId: trip.id, tripId: trip.id, title: trip.title, scope: "trip", summary: "", resolvedTopics: [], pendingTopics: [], createdAt: trip.createdAt, updatedAt: trip.updatedAt, revision: 0, messageCount: 2 });
 await mkdir(".artifacts/product-design", { recursive: true });
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
@@ -58,6 +60,7 @@ try {
       const trip = trips.find(t => t.id === command?.tripId || t.id === command?.conversationId);
       const json = path === "/api/profile/v1" ? { version: "profile-api-v1", profile: null }
         : path === "/api/trips/v1" ? { version: "trip-api-v1", ...(command?.operation === "get" ? { trip, role: "owner" } : { trips }) }
+        : path === "/api/trips/sharing/v1" ? { version: "trip-sharing-v1", ...(command?.operation === "official-list" ? { guides: [guide] } : command?.operation === "official-get" ? { guide } : command?.operation === "official-capabilities" ? { publisher: false } : command?.operation === "manage" ? { participants: [], grants: [] } : { trips: [{ trip: trips[0], role: "owner" }] }) }
         : path === "/api/conversations/v1" ? { version: "conversation-api-v1", ...(command?.operation === "get" ? { conversation: conversation(trip ?? trips[0]) } : command?.operation === "history" ? { items: [{ role: "user", text: "乗換のある経路を比べてください", sequence: 1, createdAt: fixture.selectedAt }, { role: "assistant", sequence: 2, createdAt: fixture.selectedAt, ...consultationDesignFixture() }] } : { items: trips.map(conversation) }) }
         : { version: "conversation-api-v1", items: [] };
       return route.fulfill({ json });
@@ -98,6 +101,12 @@ try {
     });
     await page.goto(origin + "/"); await ready();
     assert.equal(refreshes, 1);
+    if (viewport.width <= 704) {
+      const typography = await page.locator('#home-prompt').evaluate(el => ({font: getComputedStyle(el).fontSize, transform: getComputedStyle(el).transform}));
+      assert.equal(typography.font, "16px");
+      assert.match(typography.transform, /0\.875/);
+    }
+    await page.screenshot({ path: `.artifacts/product-design/home-${viewport.width}.png` });
     await page.locator("[data-account]").click();
     await page.waitForSelector('[data-primary-view="my"]');
     assert.match(await page.locator("[data-my-account-status]").textContent(), /ログイン中/);
@@ -108,7 +117,7 @@ try {
     // Production DOM and existing server contracts, with synthetic owner-scoped data only.
     const checkLayout = async screen => {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${screen} overflow at ${viewport.width}`);
-      assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(255, 255, 255)");
+      assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(250, 250, 250)");
       await page.screenshot({ path: `.artifacts/product-design/${screen}-${viewport.width}.png` });
     };
     await checkLayout("settings");
@@ -117,6 +126,16 @@ try {
     await page.locator('[data-primary="trips"]').click();
     await page.locator("[data-trip]").first().waitFor(); assert.equal(await page.locator("[data-trip]").count(), 2);
     await checkLayout("trip-list");
+    await page.getByRole("tab", { name: "共有中の旅", exact: true }).click();
+    await page.locator(".trip-library-card").waitFor(); await checkLayout("shared-trips");
+    await page.getByRole("tab", { name: "公式しおり", exact: true }).click();
+    await page.getByRole("button", { name: "しおりを見る", exact: true }).waitFor(); await checkLayout("official-guides");
+    await page.getByRole("button", { name: "しおりを見る", exact: true }).click();
+    await page.locator(".trip-sharing-panel[open]").waitFor(); await checkLayout("official-import");
+    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    await page.getByRole("tab", { name: "あなたの旅", exact: true }).click();
+    assert.equal(await page.locator('.trip-timeline-content .trip-workspace-item-icon').count(), 0);
+
     await page.locator(`[data-trip="${trips[0].id}"]`).click();
     await page.waitForLoadState("networkidle");
     await page.locator('.trip-workspace .trip-workspace-card[data-item-id="rail"]').waitFor().catch(async error => {
@@ -124,11 +143,14 @@ try {
       await page.screenshot({ path: `.artifacts/product-design/timeline-failure-${viewport.width}.png` }); throw error;
     });
     await page.waitForFunction(() => document.querySelectorAll(".trip-route-leg").length === 2);
+    assert.equal(await page.locator('.trip-timeline-content .trip-workspace-item-icon').count(), 0);
+    assert.ok(await page.locator('.trip-timeline-rail .trip-workspace-item-icon').count() > 0);
+
     console.log("Timeline render diagnostics", { errors, consoleErrors });
     assert.deepEqual(errors, []);
     assert.equal(await page.locator(".trip-detail-tabs").count(), 0);
     assert.equal(await page.locator(".trip-workspace-readiness, .trip-workspace-checklist, .trip-workspace-feasibility").count(), 0);
-    assert.deepEqual(await page.locator('.trip-day-tabs [role="tab"]').allTextContents(), ["2026-09-13", "2026-09-14"]);
+    assert.deepEqual(await page.locator('.trip-day-tabs [role="tab"]').allTextContents(), ["9月13日(日)", "9月14日(月)"]);
     assert.deepEqual(await page.locator('.trip-workspace-day:not([hidden]) [data-item-id]').evaluateAll(cards => cards.map(card => card.dataset.itemId)), ["rail", "visit", "stay"]);
     assert.match(await page.locator('.trip-workspace-day:not([hidden]) [data-item-id="stay"]').textContent(), /未定.*チェックイン/s);
     await page.getByRole("tab", { name: "2026-09-14", exact: true }).click();
@@ -139,8 +161,14 @@ try {
     await checkLayout("timeline");
     assert.equal(await page.locator(".trip-route-leg").count(), 2);
     assert.match(await page.locator(".trip-route-transfer").textContent(), /乗換10分/);
-    assert.match(await page.locator(".trip-workspace-heading").textContent(), /9月13日ー9月14日・1泊2日/);
+    assert.match(await page.locator(".trip-itinerary-dates").textContent(), /9月13日ー9月14日・1泊2日/);
     await checkLayout("timeline");
+    await page.getByRole("button", { name: "共有", exact: true }).click();
+    await page.locator(".trip-sharing-panel[open]").waitFor(); await checkLayout("trip-sharing");
+    await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.screenshot({ path: `.artifacts/product-design/timeline-dark-${viewport.width}.png` });
+    await page.emulateMedia({ colorScheme: "light" });
     await page.locator('[data-item-id="visit"] button').filter({ hasText: "＋ この後に追加" }).click();
     assert.equal(await page.locator(".trip-workspace-add").isVisible(), true);
     await checkLayout("spot-add");
@@ -151,6 +179,8 @@ try {
     await page.locator('[data-item-id="visit"] .trip-time-editor button').filter({ hasText: "取消" }).click();
     await page.getByRole("button", { name: "人数を変更", exact: true }).click();
     assert.equal(await page.locator(".trip-party-editor").isVisible(), true); await checkLayout("party-editor");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector('.trip-editor-dialog[open]'));
     await page.getByRole("button", { name: "‹ 旅程一覧", exact: true }).click();
     await page.locator(`[data-trip="${trips[1].id}"]`).click();
     await page.waitForFunction(() => document.querySelector(".trip-workspace-heading h1")?.textContent === "別の旅");
@@ -174,14 +204,20 @@ try {
     assert.equal(await page.locator(".ai-guide-message-copy p").first().evaluate(el => getComputedStyle(el).fontSize), "14px");
     await checkLayout("chat");
     await page.emulateMedia({ colorScheme: "dark" });
-    assert.equal(await page.locator(".consultation-page").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(23, 27, 33)");
+    assert.equal(await page.locator(".consultation-page").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(250, 250, 250)");
     await page.screenshot({ path: `.artifacts/product-design/chat-dark-${viewport.width}.png` });
     await page.emulateMedia({ colorScheme: "light" });
     await page.locator('[data-account]').click();
     await page.emulateMedia({ colorScheme: "dark" });
-    assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(23, 27, 33)");
+    assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(250, 250, 250)");
     await page.screenshot({ path: `.artifacts/product-design/settings-dark-${viewport.width}.png` });
     await page.emulateMedia({ colorScheme: "light" });
+
+    await page.locator('[data-map-navigation]').click();
+    await page.waitForSelector('#app[data-primary-view="map"]');
+    await page.getByText('現在、運行マップを表示できません。旅程や相談は引き続きご利用いただけます。').first().waitFor();
+    await checkLayout("operation-unavailable");
+    await page.locator('[data-account]').click();
 
     // Resume a suspended tab after its absolute deadline: no refresh or protected data.
     const beforeExpiry = apiCalls.length;

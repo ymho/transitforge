@@ -17,7 +17,7 @@ it("adds directly after the chosen spot with its day and fences a stale editor a
   const ui = configureTripWorkspace({ app, chat, messages: document.createElement("div"), input: document.createElement("input"), controller, ask, showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => "after", showTripList: vi.fn() });
   const card = app.querySelector<HTMLElement>('[data-item-id="hotel"]')!;
   button(card, "＋ この後に追加").click(); const form = app.querySelector<HTMLFormElement>(".trip-workspace-add")!;
-  expect(form.hidden).toBe(false); expect(card.nextElementSibling).toBe(form);
+  expect(form.hidden).toBe(false); expect(form.closest("dialog")?.open).toBe(true);
   button(form, "相談して追加").click();
   expect(ask).toHaveBeenLastCalledWith(expect.stringContaining(`2026-09-22の「${trip.items.find(i => i.id === "hotel")!.title}」のチェックインの後`));
   expect(controller.uiFocus()).toEqual({ itemId: "hotel" });
@@ -69,7 +69,7 @@ it("shares one date tab for rail and an unknown-zone stay, retaining the correct
   const ui = configureTripWorkspace({ app, chat: document.createElement("section"), messages: document.createElement("div"), input: document.createElement("input"), controller,
     ask: vi.fn(), showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => `after-${++nextItem}` });
   const tabs = () => [...app.querySelectorAll<HTMLButtonElement>('.trip-day-tabs [role="tab"]')];
-  expect(tabs().map(t => t.textContent)).toEqual(["2026-09-13", "2026-09-14"]);
+  expect(tabs().map(t => t.textContent)).toEqual(["9月13日(日)", "9月14日(月)"]);
   const first = app.querySelector<HTMLElement>('.trip-workspace-day:not([hidden])')!;
   expect([...first.querySelectorAll<HTMLElement>('[data-item-id]')].map(c => c.dataset.itemId)).toEqual(["rail", "hotel"]);
   expect(first.querySelectorAll(".trip-route-leg")).toHaveLength(2);
@@ -79,7 +79,7 @@ it("shares one date tab for rail and an unknown-zone stay, retaining the correct
   expect(time.textContent).toBe("未定"); time.click();
   const timeForm = checkIn.querySelector<HTMLFormElement>('.trip-time-editor')!;
   expect(timeForm.querySelector<HTMLInputElement>('input[type="date"]')?.value).toBe("2026-09-13");
-  expect(timeForm.querySelector<HTMLInputElement>('input[type="text"]')?.value).toBe("");
+  expect(timeForm.querySelector<HTMLInputElement>('input[type="text"]')?.value).toBe("Asia/Tokyo");
   button(timeForm, "取消").click();
   button(checkIn, "＋ この後に追加").click();
   const add = app.querySelector<HTMLFormElement>(".trip-workspace-add")!;
@@ -89,7 +89,7 @@ it("shares one date tab for rail and an unknown-zone stay, retaining the correct
   expect(trip.items[0]).toEqual(originalRail);
   const meal = trip.items.find(i => i.id === "after-1")!; expect(meal.schedule).not.toHaveProperty("timeZone");
   trip = JSON.parse(JSON.stringify(trip)); controller.attach("one", source); ui.render();
-  expect(tabs().map(t => t.textContent)).toEqual(["2026-09-13", "2026-09-14"]);
+  expect(tabs().map(t => t.textContent)).toEqual(["9月13日(日)", "9月14日(月)"]);
   expect(app.querySelectorAll('.trip-workspace-day:not([hidden]) [data-item-id]')).toHaveLength(3);
   tabs()[1]!.click();
   const checkout = app.querySelector<HTMLElement>('.trip-workspace-day:not([hidden]) [data-item-id="hotel"]')!;

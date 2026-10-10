@@ -1,6 +1,4 @@
-# Raiquora
-
-Agentic Transit Intelligence
+# KAIHO（懐宝）
 
 実時刻表をもとに列車の計画位置を3D地図へ表示し、旅行の相談から旅程を組み立てる個人開発プロジェクト。
 
@@ -54,5 +52,5 @@ npm run build
 - [Viewer入力](docs/data/viewer-input.md) / [Infrastructure](infra/README.md): データと運用。
 - [ADR索引](docs/decisions/README.md): 当時の判断履歴。Historical節のコマンドやgateを現行手順として使わない。
 
-製品表示名は現行UIのRaiquoraに合わせる。`ymho/transitforge`、`@raiquora/*`、AWS resource名・API path・保存キーは互換性のため維持する。
+製品表示名はKAIHO（懐宝）。[ブランド表示](docs/architecture/kaiho-brand.md)を参照する。`ymho/transitforge`、`@raiquora/*`、AWS resource名・API path・保存キーは互換性のため維持する。
 ライセンス未設定。外部データ・生成物・秘密値をGitへ追加しない。

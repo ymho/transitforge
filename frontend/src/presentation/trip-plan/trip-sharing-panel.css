@@ -1,6 +1,15 @@
-.trip-sharing-panel { width: min(36rem, calc(100vw - 2rem)); max-height: 85dvh; overflow: auto; border-radius: 1rem; padding: 1.25rem; }
-.trip-sharing-panel input, .trip-sharing-panel select { max-width: 100%; margin: .4rem; }
-.trip-sharing-panel input[readonly] { display: block; width: calc(100% - 1rem); }
+/* Shared top-layer dialog, including official guide preview and import. */
+.trip-sharing-panel { box-sizing: border-box; width: min(36rem, calc(100vw - 2rem)); max-height: calc(100dvh - 48px); overflow: auto; border: 1px solid #e9eded; border-radius: 22px; padding: 24px; background: #fff; color: #242b2c; box-shadow: 0 24px 80px #132e3533; font: 13px/1.6 sans-serif; }
+.trip-sharing-panel::backdrop { background: #182f3b55; }
+.trip-sharing-panel h2 { font-size: 18px; font-weight: 600; margin: 0 0 16px; }
+.trip-sharing-panel h3 { font-size: 15px; font-weight: 600; margin-top: 24px; }
+.trip-sharing-panel h4 { font-size: 13px; font-weight: 600; }
+.trip-sharing-panel input, .trip-sharing-panel select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 44px; margin: 6px 0; padding: 10px; border: 1px solid #e9eded; border-radius: 10px; background: #fff; color: #242b2c; font-size: 16px; }
+.trip-sharing-panel label { display: grid; gap: 6px; margin-top: 12px; color: #738080; font-size: 12px; }
+.trip-sharing-panel input[readonly] { display: block; }
 .trip-sharing-panel [hidden] { display: none; }
-.trip-sharing-panel li { margin-block: .7rem; overflow-wrap: anywhere; }
-.trip-sharing-panel button { padding: .5rem .75rem; margin: .25rem; }
+.trip-sharing-panel li { margin-block: 12px; overflow-wrap: anywhere; }
+.trip-sharing-panel button { min-height: 44px; padding: 10px 16px; margin: 6px 6px 6px 0; border: 1px solid #e9eded; border-radius: 12px; background: #fff; color: #68716e; font-size: 13px; cursor: pointer; }
+.trip-sharing-panel button.ds-button--primary { background: #b34337; border-color: #b34337; color: #fff; }
+.trip-sharing-panel button:disabled { opacity: .5; cursor: default; }
+.trip-library-party { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }

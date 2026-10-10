@@ -32,3 +32,8 @@
 @import "../train-viewer/compact-map.css";
 
 @import "./product-design.css";
+
+/* Feature-owned refresh follows the shared legacy product baseline. */
+@import "../home/workspace-chrome.css";
+@import "../trip-plan/workspace-design.css";
+@import "../home/consultation-design.css";

@@ -1,3 +1,4 @@
+import { openTripEditor } from "./trip-editor-dialog";
 import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
 import type { DayEntry } from "@raiquora/trip/daily-itinerary";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
@@ -17,7 +18,7 @@ export function renderTripTimeEditor(trip: Trip, item: ItineraryItem, entry: Day
   const time = displayed?.at.slice(11, 16);
   const provider = item.type === "transport" && item.detail.status === "selected" && (item.detail.mode === "rail" || item.detail.provenance.type === "provider");
   if (provider || controller.source()?.getRole?.() === "viewer") { root.append(element("span", "trip-time-label", time ?? "未定")); return root; }
-  const trigger = control(time ?? "未定", () => { form.hidden = !form.hidden; if (!form.hidden) date.focus(); });
+  const trigger = control(time ?? "未定", () => { openTripEditor(form, "予定の時刻"); date.focus(); });
   trigger.setAttribute("aria-label", `${item.title}の${caption}を登録`);
   const input = (labelText: string, type: string, value: string, required = true) => {
     const label = element("label", "", labelText), field = element("input"); field.type = type; field.value = value; field.required = required; label.append(field); form.append(label); return field;
@@ -26,9 +27,13 @@ export function renderTripTimeEditor(trip: Trip, item: ItineraryItem, entry: Day
   const date = input("日付", "date", dateValue), start = input(caption, "time", instant?.at.slice(11, 16) ?? "");
   const end = item.type === "stay" ? undefined : input("終了時刻（任意・同日）", "time", s.type === "fixed" ? s.endAt?.at.slice(11, 16) ?? "" : "", false);
   const endDate = item.type === "stay" ? undefined : input("終了日（任意）", "date", s.type === "fixed" ? s.endAt?.at.slice(0, 10) ?? "" : "", false);
-  const zone = input("タイムゾーン", "text", instant?.timeZone ?? entry?.timeZone ?? (s.type === "day" ? s.timeZone ?? "" : ""));
+  const zone = input("タイムゾーン", "text", instant?.timeZone ?? entry?.timeZone ?? (s.type === "day" ? s.timeZone ?? "Asia/Tokyo" : "Asia/Tokyo"));
   zone.placeholder = "例：Asia/Tokyo";
   const offset = input("UTC差（夏時間が重複する場合）", "text", "", false); offset.placeholder = "+09:00";
+  const advanced = element("details", "trip-time-advanced");
+  advanced.append(element("summary", "", "タイムゾーン・夏時間の設定"), zone.parentElement!, offset.parentElement!);
+  advanced.open = zone.value !== "Asia/Tokyo";
+  form.append(advanced);
   const submit = element("button", "", "時刻の変更案を確認"); submit.type = "submit";
   form.append(submit, control("取消", () => { form.hidden = true; trigger.focus(); }));
   form.addEventListener("submit", event => {

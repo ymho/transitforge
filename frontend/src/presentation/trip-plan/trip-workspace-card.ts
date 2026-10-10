@@ -18,7 +18,7 @@ import { researchDateLabel } from "../../usecases/trip-plan/research-date";
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
   options: { entry?: DayEntry; addAfter?(): void; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
     changeItemDecision?: (trip: Trip, item: ItineraryItem, action: "confirm" | "withdraw") => Promise<void> }, issues: TripFeasibilityIssue[] = []): HTMLElement {
-  const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id;
+  const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id; card.dataset.itemType = item.type;
   const header = element("header");
   const icon = element("span", "trip-workspace-item-icon");
   icon.innerHTML = travelIcon(item.type === "transport" ? "transport" : item.type === "stay" ? "stay" : "activity");
@@ -29,13 +29,14 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const body = element("div", "trip-workspace-item-body");
   body.id = `trip-item-${encodeURIComponent(options.entry?.entryKey ?? item.id)}`;
   body.hidden = options.collapsed;
-  const expand = control(options.collapsed ? "開く" : "閉じる", () => {
-    body.hidden = !body.hidden; expand.textContent = body.hidden ? "開く" : "閉じる";
+  const expand = control(options.collapsed ? "詳細" : "閉じる", () => {
+    body.hidden = !body.hidden; expand.textContent = body.hidden ? "詳細" : "閉じる";
     expand.setAttribute("aria-expanded", String(!body.hidden)); options.collapse(body.hidden);
   });
   expand.setAttribute("aria-expanded", String(!body.hidden)); expand.setAttribute("aria-controls", body.id);
-  header.append(icon, focus, expand);
+  header.append(focus, expand);
   const content = element("div", "trip-timeline-content"), rail = element("span", "trip-timeline-rail"); rail.setAttribute("aria-hidden", "true");
+  rail.append(icon);
   content.append(header); card.append(renderTripTimeEditor(trip, item, options.entry, controller, options.report), rail, content);
   const stayRole = item.type === "stay" ? options.entry?.role === "end" ? "チェックアウト" : options.entry?.role === "continue" ? "連泊" : "チェックイン" : undefined;
   const placeName = item.type === "stay" ? item.selection.status === "selected" ? item.selection.accommodation.place.name : item.selection.place?.name : item.type === "activity" ? item.place?.name : undefined;
@@ -50,7 +51,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   }
   if (item.type !== "activity") {
     const facts = controller.reservations(), relevant = facts?.filter(r => r.itineraryItemId === item.id);
-    content.append(element("p", "trip-item-meta", facts === undefined ? "予約状況未取得" : relevant?.length ? relevant.map(r => reservationStatusLabels[r.status]).join("・") : "予約記録なし"));
+    body.append(element("p", "trip-item-meta", facts === undefined ? "予約状況未取得" : relevant?.length ? relevant.map(r => reservationStatusLabels[r.status]).join("・") : "予約記録なし"));
   }
   const information = element("details", "trip-item-information"); information.append(element("summary", "", issues.length || itemAssumptions(trip, item.id).length ? "要確認・詳細" : "詳細"));
   for (const issue of issues) information.append(element("p", "trip-workspace-feasibility-issue", feasibilityIssueText(issue)));

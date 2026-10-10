@@ -13,7 +13,8 @@
       @media (prefers-reduced-motion: reduce) { #startup-status .startup-spinner { animation-duration: 2s; } }
       #startup-status button { padding: .75rem 1.5rem; border: 1px solid currentColor; border-radius: 1rem; color: inherit; background: white; font: inherit; cursor: pointer; }
     </style>
-    <title>Raiquora — Agentic Transit Intelligence</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>KAIHO — 旅のすべてを、ひとつに。</title>
   </head>
   <body>
     <section id="startup-status" role="status" aria-live="polite"><span class="startup-spinner" aria-hidden="true"></span><p>画面を読み込んでいます。</p></section>
@@ -31,7 +32,7 @@
           <button id="loading-screen-retry" class="loading-screen-retry" type="button" hidden>再読み込み</button>
         </div>
       </section>
-      <div id="map" aria-label="Raiquora 3D map"></div>
+      <div id="map" aria-label="KAIHO 運行マップ"></div>
       <p class="map-timetable-notice" role="status">ダイヤ上の位置（運行情報未取得）</p>
       <nav id="context-workspace-tabs" class="context-workspace-tabs" aria-label="コンテキスト表示">
         <button id="close-context-workspace" type="button" aria-label="会話に戻る">会話に戻る</button>
@@ -132,7 +133,7 @@
               <small>最大3回の乗換まで検索します</small>
             </section>
             <section data-settings-view="services" hidden>
-              <header><h3>外部サービス</h3><p>Raiquoraが案内と表示のために利用するサービスです</p></header>
+              <header><h3>外部サービス</h3><p>KAIHOが案内と表示のために利用するサービスです</p></header>
               <ul class="external-service-list">
                 <li><strong>Mapbox</strong><span>地図・地形・施設表示・徒歩と車の移動</span><a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">地図の帰属表示</a></li>
                 <li><strong>OpenStreetMap contributors</strong><span>地図データ</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">著作権とライセンス</a></li>

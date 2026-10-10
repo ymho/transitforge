@@ -667,7 +667,7 @@ const [{ default: mapboxgl }, { MapboxThreeTrainLayer }, { createTripMapOverlay 
 ]);
 if (!token) {
   const missingTokenMessage =
-    "Mapbox公開トークンがありません。.env.localにVITE_MAPBOX_ACCESS_TOKENを設定してください。";
+    "現在、運行マップを表示できません。旅程や相談は引き続きご利用いただけます。";
   status.textContent = missingTokenMessage;
   loadingScreen.fail(missingTokenMessage);
 } else {

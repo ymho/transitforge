@@ -29,7 +29,7 @@ it("starts Home without initializing Map or requiring profile/authentication", (
   expect(document.querySelector(".home-rail-feature")).toBeNull();
   expect(document.querySelector("[data-home-live]")).toBeNull();
   const home = document.querySelector<HTMLElement>('[data-page="chat"]')!;
-  expect(home.textContent).not.toContain("次の旅");
+  expect(home.querySelector("h1")!.textContent).toContain("あなただけの旅を、一緒に形にします。");
   expect(home.textContent).not.toContain("旅の候補");
   expect(document.querySelector(".home-prompt")!.hasAttribute("hidden")).toBe(false);
   expect(document.querySelector(".home-prompt")!.classList.contains("ds-composer")).toBe(true);
@@ -69,7 +69,7 @@ it("puts the account icon in the shared navigation and sends signed-in people to
   const signedOut = setup();
   expect(document.querySelector("[data-account] .ds-icon")).not.toBeNull();
   expect(document.querySelector(".product-header")).toBeNull();
-  expect(document.querySelector(".product-brand")).toBeNull();
+  expect(document.querySelector(".product-brand .kaiho-logo")!.getAttribute("aria-label")).toBe("KAIHO");
   expect(document.querySelector(".product-nav [data-account]")!.textContent).toBe("設定");
   expect(document.querySelector("[data-account]")!.getAttribute("aria-label")).toBe("ログイン");
   click("[data-account]"); expect(signedOut.ports.login).toHaveBeenCalledOnce();
@@ -112,7 +112,7 @@ it("places one short consultation example in the prompt placeholder", () => {
   vi.spyOn(Math, "random").mockReturnValue(0);
   setup();
   const example = document.querySelector<HTMLTextAreaElement>("#home-prompt")!;
-  expect(example.placeholder).toBe("例：温泉でゆっくりしたい");
+  expect(example.placeholder).toBe("週末にしたいことは？");
   expect(document.querySelector("[data-example]")).toBeNull();
 });
 it("does not submit IME composition and keeps input across tab navigation / re-render", () => {
@@ -161,7 +161,7 @@ it("all secondary actions use existing feature ports", () => {
 it("opens the actual Trip as a trips subview, not a selected chat tab", async () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
   const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip] }) });
-  expect(document.querySelector('.trip-list-emblem svg[aria-hidden="true"]')).not.toBeNull();
+  expect(document.querySelector('.trip-list-cover[aria-hidden="true"] img')).not.toBeNull();
   click('[data-primary="trips"]'); click("[data-trip]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("trip-loading");
   await vi.waitFor(() => expect(document.querySelector("main")!.dataset.primaryView).toBe("trip"));
@@ -294,6 +294,16 @@ it.each(["/", "/index.html", "/#chat", "/#trip", "/#map", "/#my"])("mounts the a
   shell.refresh(); shell.dispose(); source.dispose();
 });
 
+it("rotates prompt examples in order and preserves typed input", () => {
+  vi.useFakeTimers();
+  const { shell } = setup();
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!;
+  vi.advanceTimersByTime(4000); expect(input.placeholder).toBe("来週、出雲大社にいきたい");
+  vi.advanceTimersByTime(4000); expect(input.placeholder).toBe("リラックスできる旅を提案して");
+  input.value = "入力中"; vi.advanceTimersByTime(4000); expect(input.value).toBe("入力中"); expect(input.placeholder).toBe("リラックスできる旅を提案して");
+  input.value = ""; vi.advanceTimersByTime(4000); expect(input.placeholder).toBe("週末にしたいことは？");
+  shell.dispose(); vi.useRealTimers();
+});
 
 it("keeps a Trip behind the loading status until activation finishes, fences cancelled navigation and reports failure", async () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
