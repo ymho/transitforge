@@ -1,3 +1,4 @@
+import { setLoadingStatus } from "../shared/primitives";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
 import { proposeDayActivity } from "../../usecases/trip-plan/propose-day-activity";
@@ -39,7 +40,7 @@ export function configureTripWorkspace(options: {
   panel.setAttribute("aria-label", "Trip V2の旅程"); panel.tabIndex = -1;
   const nav = element("nav", "trip-workspace-navigation"); nav.setAttribute("aria-label", "会話と旅程の切替"); nav.hidden = true;
   const status = element("p", "trip-workspace-status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
-  const report = (text: string) => { status.textContent = text; };
+  const report = (text: string) => { setLoadingStatus(status, text, controller.loadState() === "loading"); };
   const heading = element("header", "trip-workspace-heading"); const title = element("h1"); const summary = element("p", "trip-workspace-copy");
   const openTravelMode = control("旅行モードを開く", () => { void showTravelMode(); });
   const emblem = element("span", "trip-workspace-emblem"); emblem.innerHTML = travelIcon("trip"); emblem.setAttribute("aria-hidden", "true");
@@ -168,7 +169,8 @@ export function configureTripWorkspace(options: {
     const trip = controller.current(); if (!trip) return;
     const generation = ++travelGeneration, session = controller.sessionId(), revision = trip.revision;
     detailScroll = panel.scrollTop; travelTripKey = `${trip.id}:${trip.revision}`; detail.hidden = true; travelMode.hidden = false;
-    travelMode.replaceChildren(element("p", "", "旅行中の情報を確認しています。")); panel.scrollTop = 0;
+    const waiting = element("p"); waiting.setAttribute("role", "status"); setLoadingStatus(waiting, "旅行中の情報を確認しています。", true);
+    travelMode.replaceChildren(waiting); panel.scrollTop = 0;
     let snapshot: InTripContextSnapshot | undefined, unavailable = false;
     if (trip.lifecycleState === "in_trip" && options.loadInTripContext) {
       try { snapshot = await options.loadInTripContext(trip.id); } catch { unavailable = true; }

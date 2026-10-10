@@ -155,13 +155,13 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         proposeTripRequestUpdate(trip, { ...trip.request, goal: goal.trim() ? boundedConditionText(goal) : undefined }, "user")));
       for (const constraint of effectiveTripConstraints(trip.request)) {
         const r = constraint.requirement;
-        const display = r.type === "origin" ? ["出発地", r.place.name] : r.type === "dates" ? ["日程", `${r.start.earliest}〜${r.end?.latest ?? r.start.latest}`]
+        const display = r.type === "origin" ? ["出発地", r.place.name] : r.type === "dates" ? ["日程", `${r.start.earliest === r.start.latest ? r.start.earliest : `${r.start.earliest}〜${r.start.latest}に出発`}〜${r.end?.latest ?? "終了日未定"}`]
           : r.type === "destinations" ? ["行き先", r.places.map((p) => p.name).join("、")]
           : r.type === "pace" ? ["ペース", r.value <= .4 ? "ゆっくり" : r.value >= .7 ? "いろいろ巡る" : "バランス"]
           : r.type === "experience" ? [r.intent === "avoid" ? "避けたいこと" : "好み", r.text]
           : r.type === "budget" ? ["予算", `${formatMoney(r.limit)}${r.basis === "per-person" ? " / 1人" : ""}`]
           : r.type === "mobility" ? ["移動", [r.maxTravelMinutes ? `移動 ${r.maxTravelMinutes}分まで` : "", r.maxTransfers !== undefined ? `乗換 ${r.maxTransfers}回まで` : "", r.transferPace ? `ペース: ${r.transferPace}` : ""].filter(Boolean).join(" ・ ") || "未定"]
-          : r.type === "duration" ? ["日程", `${r.minimum}〜${r.maximum}${r.unit === "nights" ? "泊" : "日"}`]
+          : r.type === "duration" ? ["泊数・日数", `${r.minimum === r.maximum ? r.minimum : `${r.minimum}〜${r.maximum}`}${r.unit === "nights" ? "泊" : "日"}`]
           : r.type === "depart_after" ? ["出発", r.at.at]
           : r.type === "arrive_by" ? ["到着", r.at.at]
           : r.type === "relative_distance" ? ["距離", r.direction === "nearer" ? "もっと近く" : "もっと遠く"]

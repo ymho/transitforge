@@ -25,3 +25,9 @@
   .ds-button:hover:not(:disabled) { border-color: var(--product-accent); }
   .ds-button--primary:hover:not(:disabled) { background: var(--product-accent-hover); }
 }
+
+.ds-loading { display: inline-flex; align-items: center; gap: .65rem; }
+.ds-spinner { display: inline-block; flex: 0 0 auto; width: 1.15rem; height: 1.15rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: ds-spin .8s linear infinite; }
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ds-spinner { animation-duration: 2s; } }
+.trip-route-progress { padding: 6rem 1.5rem; text-align: center; }

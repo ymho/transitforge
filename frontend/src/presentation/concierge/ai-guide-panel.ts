@@ -1,4 +1,4 @@
-import { iconMarkup } from "../shared/primitives";
+import { iconMarkup, setLoadingStatus } from "../shared/primitives";
 import { previewPlanAdoption } from "./plan-adoption-view";
 import { canCombineAccommodationPlan, renderPublicAccommodationPresentation } from "./public-accommodation-presentation-view";
 import type { JourneyRouteResult } from "@raiquora/journey/direct-route-search";
@@ -496,15 +496,9 @@ function appendPendingMessage(
   if (messageId) item.dataset.messageId = messageId;
 
   const label = document.createElement("span");
-  label.textContent = "考え中";
-  const dots = document.createElement("span");
-  dots.className = "ai-guide-thinking-dots";
-  dots.setAttribute("aria-hidden", "true");
-  for (let index = 0; index < 3; index += 1) {
-    dots.append(document.createElement("i"));
-  }
+  setLoadingStatus(label, "考え中", true);
 
-  item.append(label, dots);
+  item.append(label);
   messages.append(item);
   item.scrollIntoView({ block: "nearest" });
   return item;

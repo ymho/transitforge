@@ -84,7 +84,9 @@ it("recovers hotel search after a rail-only read and party registration without 
   expect(accommodation).not.toHaveBeenCalled();
   expect(stillMissing.response).toContain("目的地の登録が必要");
   const before = await trips.repository.get(stateA, metadata.tripId);
-  const recovered = await turn("出雲大社周辺の宿を探して", [
+  const recovered = await turn("出雲大社周辺の宿を大人2人・子ども0人、2026年10月11日から12日の1泊で探して", [
+    { name: "update_current_party", input: { action: "set", party: { kind: "composition", adults: 2, children: 0 }, quote: "大人2人・子ども0人" } },
+    { name: "update_current_travel_period", input: { action: "set", period: { start: { kind: "calendar_date", year: 2026, month: 10, day: 11 }, end: { kind: "calendar_date", day: 12 }, duration: { unit: "nights", amount: 1 } }, quote: "2026年10月11日から12日の1泊" } },
     { name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社" } },
     search, output({ kind: "uncertainty" }),
   ]);
@@ -95,6 +97,7 @@ it("recovers hotel search after a rail-only read and party registration without 
   expect(saved?.request.party).toEqual(before?.request.party);
   expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "destinations" && requirement.places.some(place => place.name === "出雲大社"))).toBe(true);
   expect(saved?.items).toEqual(before?.items);
+  expect(saved?.request.constraints.find(c => c.requirement.type === "dates")?.requirement).toMatchObject({ start: { earliest: "2026-10-11" }, end: { latest: "2026-10-12" } });
   const history = await state.conversations.history(stateA, conversationId);
   expect(history.items.at(-1)?.publicAccommodationPresentation).toEqual(recovered.publicAccommodationPresentation);
 });

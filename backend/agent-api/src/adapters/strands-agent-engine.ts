@@ -159,12 +159,12 @@ export class StrandsAgentEngine {
             ? { target: "origin", place: value.place!, quote: value.quote }
             : { target: "origin", place: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_party", inputSchema: partyConditionUpdateInputSchema,
-          description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・比較では使わず、consider_trip_scenarioを使う。プロフィールは変更しない。",
+          description: "今回の旅行で実際に採用する現在の人数条件だけを永続更新する。検索依頼に新しく述べた実際の人数も受理対象であり、別の登録指示を待たず検索前に更新する。受理済みで変更のない人数は再更新しない。利用者が現在条件として採用・訂正した場合はaction=set、人数を未定に戻す明示はaction=clear。合計人数だけならparty.kind=countを使い、大人/子どもの内訳を推測しない。大人/子どもの人数が明示された場合だけparty.kind=compositionを使う。年齢・年代・関係性は扱わない。仮定・反実仮想・what-if・比較では使わず、consider_trip_scenarioを使う。プロフィールは変更しない。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "party_size", party: value.party!, quote: value.quote }
             : { target: "party_size", party: null, quote: value.quote }, context?.cancelSignal) }),
         tool({ name: "update_current_travel_period", inputSchema: travelPeriodUpdateInputSchema,
-          description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。start/end/durationは今回の発言で明示したものだけ指定する。外側quoteをApplicationが月・日・泊数/日数の根拠として検証する。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
+          description: "今回の旅行で実際に採用する旅行期間の最終状態を1回で永続更新する。設定・訂正はaction=set、日程全体を未定へ戻す明示はaction=clear。検索依頼に新しく述べた実際の日程も検索前に受理する。start/end/durationは今回の発言で明示した全要素を一度に指定する。「2026年10月24日から25日の1泊」はstartの年月日、endの25日、durationの1泊すべてを指定し、quoteは期間全体を含める。省略表記の終了日を落とさない。外側quoteをApplicationが月・日・泊数/日数の根拠として検証する。日付はcalendar_dateでdayを必須、monthは明示または開始日から同月と読める場合、yearは利用者が年を明示した場合だけ設定する。年未指定はApplicationが基準日以降で最初に来る月日へ決める。今日/明日/明後日はrelative_date。以前のduration等を持ち越さず、日付や日数を推測・補完しない。what-if・比較ではconsider_trip_scenarioを使う。",
           callback: (value, context) => apply(value.action === "set"
             ? { target: "travel_period", period: value.period!, quote: value.quote }
             : { target: "travel_period", period: null, quote: value.quote }, context?.cancelSignal) }),
