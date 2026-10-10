@@ -84,3 +84,12 @@ describe("Trip HTTP client", () => {
     await expect(client.get(trip.id)).rejects.toThrow("Wrong Trip");
   });
 });
+
+it("reads scope rejection without treating it as a created Trip", async () => {
+  const message = "旅行の相談をお手伝いできます。";
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ version: "trip-api-v1", status: "out-of-scope", message })));
+  const client = new HttpServerTripClient("/api/trips/v1", request);
+  const input = { tripId: trip.id, title: "数学", userRequest: "積分の公式を教えて" };
+  expect(await client.startConsultation(input)).toEqual({ status: "out-of-scope", message });
+  expect(JSON.parse(request.mock.calls[0]![1]!.body as string)).toMatchObject(input);
+});

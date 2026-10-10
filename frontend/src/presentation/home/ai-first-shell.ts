@@ -19,7 +19,7 @@ export interface AiFirstShellPorts {
   logout(): void;
   subscribe(listener: () => void): () => void;
   retry(): Promise<void>;
-  newConsultation(prompt: string): Promise<void | { tripId: string }>;
+  newConsultation(prompt: string): Promise<void | { tripId: string } | { message: string }>;
   resetConsultation(): void;
   cancelNavigation?(): void;
   openChat(): void;
@@ -134,6 +134,10 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     try {
       const started = await ports.newConsultation(prompt);
       if (generation !== entryGeneration || !root.isConnected || !isSignedIn()) return;
+      if (started && "message" in started) {
+        consultationMode = "landing"; entryError.textContent = started.message;
+        replaceRoute("chat", { consultation: "new" }); return;
+      }
       textarea.value = ""; saveDraft();
       consultationMode = "conversation";
       if (started?.tripId) showConversation(started.tripId); else paintRoute();

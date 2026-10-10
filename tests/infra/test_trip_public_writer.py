@@ -34,7 +34,8 @@ class TripPublicWriterContractTest(unittest.TestCase):
     def test_public_entrypoint_exposes_authenticated_sharing_without_internal_features(self):
         source = (ROOT / "backend/agent-api/src/trip-api-composition.ts").read_text()
         self.assertIn('"/api/trips/v1"', source)
-        self.assertIn('const applications = createAuthorizedTripApplications(options.tripTable, options.stateTable)', source)
+        self.assertIn('const applications = createAuthorizedTripApplications(options.tripTable, options.stateTable,', source)
+        self.assertIn('options.consultationScope ?? new BedrockConsultationScope', source)
         self.assertIn('if (!options.tripTable || !options.stateTable)', source)
         self.assertIn('new DynamoDbItineraryCandidateRepository(options.tripTable)', source)
         self.assertIn('new PlanCandidateAdoptionApplication(', source)

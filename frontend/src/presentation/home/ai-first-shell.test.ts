@@ -364,6 +364,16 @@ it("dismisses trip menus outside their own bounds and unregisters on dispose", (
   shell.dispose(); header.open = true; document.body.click(); expect(header.open).toBe(true);
 });
 
+it("shows an out-of-scope reply without opening a conversation or losing the original prompt", async () => {
+  const message = "旅行やお出かけの相談をお手伝いできます。";
+  const { ports } = setup({ authState: signedIn, newConsultation: vi.fn(async () => ({ message })) });
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!; input.value = "積分の公式を教えて";
+  document.querySelector(".home-prompt")!.dispatchEvent(new Event("submit", { cancelable: true }));
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("landing"));
+  expect(document.querySelector("[data-consultation-error]")?.textContent).toBe(message);
+  expect(input.value).toBe("積分の公式を教えて"); expect(input.disabled).toBe(false);
+  expect(ports.openChat).not.toHaveBeenCalled(); expect(ports.openTrip).not.toHaveBeenCalled();
+});
 it("regenerates a long title without opening the trip and suppresses duplicate clicks", async () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "長い旅のタイトル".repeat(10), "2026-09-18T00:00:00Z", [{ id: "visit", type: "activity", title: "出雲大社", category: "sightseeing", schedule: { type: "unscheduled" } }]);
   let finish!: () => void;

@@ -512,6 +512,7 @@ const startNewConsultation = async (prompt: string) => {
     submit: value => aiGuideController.ask(value),
   });
   pendingStart = undefined;
+  if ("status" in started) return { message: started.message };
   void serverTripList.refresh().catch(() => undefined);
   return { tripId: started.trip.id };
 };

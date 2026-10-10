@@ -1,3 +1,4 @@
+import type { ConsultationStartResult } from "../../usecases/trip-plan/server-trip-client";
 import { requestSessionVersion, subscribeRequestSession } from "./authenticated-fetch";
 import { ApiAuthenticationError } from "../../usecases/auth/api-authentication-error";
 import { personalApiFetch } from "./personal-api-fetch";
@@ -65,8 +66,12 @@ export class HttpServerTripClient implements ServerTripClient {
     if ((result!.trip as Trip).id !== trip.id) throw new Error("Wrong Trip response");
     return structuredClone(result!.trip as Trip);
   }
-  async startConsultation(input: { tripId: string; title: string }): Promise<{ trip: Trip; conversationId: string }> {
-    const result = await this.execute({ operation: "start-consultation", tripId: input.tripId, title: input.title });
+  async startConsultation(input: { tripId: string; title: string; userRequest?: string }): Promise<ConsultationStartResult> {
+    const result = await this.execute({ operation: "start-consultation", ...input });
+    if (result?.status === "out-of-scope") {
+      if (typeof result.message !== "string" || !result.message.trim() || result.trip !== undefined || result.conversationId !== undefined) throw new Error("Invalid scope response");
+      return { status: "out-of-scope", message: result.message };
+    }
     validateTrip(result?.trip as Trip);
     if ((result!.trip as Trip).id !== input.tripId || result?.conversationId !== input.tripId) throw new Error("Wrong Trip consultation response");
     return { trip: structuredClone(result.trip as Trip), conversationId: result.conversationId as string };

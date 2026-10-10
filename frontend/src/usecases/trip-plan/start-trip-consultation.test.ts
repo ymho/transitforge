@@ -11,8 +11,9 @@ function fixture() {
 }
 it("activates both server-created resources before sending the original prompt once", async () => {
   const f = fixture(), result = await startTripConsultation(f);
+  if ("status" in result) throw new Error("Unexpected scope refusal");
   expect(result.trip).toMatchObject({ id: tripId, planningState: "inspiration", items: [] });
-  expect(f.start).toHaveBeenCalledExactlyOnceWith({ tripId, title: f.prompt });
+  expect(f.start).toHaveBeenCalledExactlyOnceWith({ tripId, title: f.prompt, userRequest: f.prompt });
   expect(f.activate).toHaveBeenCalledExactlyOnceWith(tripId, tripId);
   expect(f.submit).toHaveBeenCalledExactlyOnceWith(f.prompt);
   expect(f.start.mock.invocationCallOrder[0]).toBeLessThan(f.activate.mock.invocationCallOrder[0]!);
@@ -42,4 +43,18 @@ it("requires read-back of the actual active Trip, not just its Conversation meta
 it("rejects another Trip or history identity without selecting it", async () => {
   const f = fixture(); f.start.mockResolvedValueOnce({ trip: createTrip(tripId, "旅", "2026-09-27T12:00:00Z"), conversationId: "75300000-0000-4000-8000-000000000002" });
   await expect(startTripConsultation(f)).rejects.toThrow("Wrong Trip"); expect(f.activate).not.toHaveBeenCalled();
+});
+
+it("never activates or submits an out-of-scope request", async () => {
+  const f = fixture(), start = vi.fn(async () => ({ status: "out-of-scope" as const, message: "旅行の相談をお手伝いできます。" }));
+  const result = await startTripConsultation({ ...f, prompt: "積分の公式を教えて", start });
+  expect(result).toEqual({ status: "out-of-scope", message: "旅行の相談をお手伝いできます。" });
+  expect(start).toHaveBeenCalledWith({ tripId, title: "積分の公式を教えて", userRequest: "積分の公式を教えて" });
+  expect(f.activate).not.toHaveBeenCalled(); expect(f.submit).not.toHaveBeenCalled();
+});
+it("sends the complete request for scope admission even when its title is shortened", async () => {
+  const f = fixture(), prompt = "旅行のことではなく数学についての質問です。".repeat(4) + "積分の公式を教えて";
+  await startTripConsultation({ ...f, prompt });
+  expect(f.start.mock.calls[0]![0]).toMatchObject({ userRequest: prompt });
+  expect(f.start.mock.calls[0]![0].title.length).toBe(40);
 });

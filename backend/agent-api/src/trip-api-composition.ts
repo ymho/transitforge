@@ -1,3 +1,4 @@
+import { BedrockConsultationScope } from "./adapters/bedrock-consultation-scope.js";
 import { createTripSharingHandler } from "./trip-sharing-handler.js";
 import { createCognitoAccessTokenVerifier } from "./adapters/cognito-access-token-verifier.js";
 import { createHttpPrincipalResolver } from "./http-auth-composition.js";
@@ -16,11 +17,13 @@ export function createTripApiPublicHandler(options: {
   tripTable: string;
   stateTable: string;
   verifier?: AccessTokenVerifier;
+  consultationScope?: import("./ports/consultation-scope.js").ConsultationScope;
+  scopeModelId?: string;
 }) {
   if (!options.enabled) return async (_event: LambdaHttpEvent, _context?: LambdaContext) => jsonResponse(503, { error: "unavailable" });
   if (!options.tripTable || !options.stateTable) throw new Error("Missing Trip API configuration");
   const authenticate = createHttpPrincipalResolver(options.verifier ?? createCognitoAccessTokenVerifier(options.auth), options.auth.requiredScopes);
-  const applications = createAuthorizedTripApplications(options.tripTable, options.stateTable);
+  const applications = createAuthorizedTripApplications(options.tripTable, options.stateTable, options.consultationScope ?? new BedrockConsultationScope(options.scopeModelId ?? "jp.amazon.nova-2-lite-v1:0"));
   const sharingHandler = createTripSharingHandler(applications.sharing, { authenticate });
   const candidates = new DynamoDbItineraryCandidateRepository(options.tripTable);
   const adoption = new PlanCandidateAdoptionApplication(candidates, applications.repository, candidates, applications.trips,

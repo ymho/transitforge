@@ -17,7 +17,7 @@ import { TripSharingApplication } from "./usecases/trip-sharing-application.js";
 import { DynamoDbConversationTurnRepository } from "./adapters/dynamodb-conversation-turn-repository.js";
 
 /** Install only in a host with reviewed end-user authentication and explicit confirmation authority. */
-export function createAuthorizedTripApplications(table: string, stateTable?: string) {
+export function createAuthorizedTripApplications(table: string, stateTable?: string, consultationScope?: import("./ports/consultation-scope.js").ConsultationScope) {
   const trips = new DynamoDbTripRepository(table), sharingRepository = new DynamoDbTripSharing(table);
   const reservations = new ReservationApplication(trips, new DynamoDbReservationRepository(table));
   const sharing = new TripSharingApplication(trips, sharingRepository, new CryptographicShareSecret(), sharingRepository, undefined, reservations,
@@ -25,7 +25,7 @@ export function createAuthorizedTripApplications(table: string, stateTable?: str
   return { sharing, repository: trips, trips: new TripApplication(trips, trips, undefined, reservations, undefined, sharing,
     stateTable ? new DynamoDbConversationTurnRepository(stateTable) : undefined,
     stateTable ? new DynamoDbTripConsultationRepository(table, stateTable) : undefined,
-    process.env.TRIP_TITLE_MODEL_ID ? new BedrockTripTitleGenerator(process.env.TRIP_TITLE_MODEL_ID) : undefined) };
+    process.env.TRIP_TITLE_MODEL_ID ? new BedrockTripTitleGenerator(process.env.TRIP_TITLE_MODEL_ID) : undefined, consultationScope) };
 }
 
 /** IAM/internal worker composition only. Every operation still requires an explicit trusted owner. */
