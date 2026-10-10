@@ -17,7 +17,7 @@ const memberView = (m: TripParticipant): TripParticipantView => ({ id: m.id, tri
 export class TripSharingApplication implements TripAuthorizer {
   constructor(private readonly trips: TripRepository, private readonly sharing: TripSharingRepository,
     private readonly secrets: ShareSecret, private readonly abuse: ShareAbuseGuard,
-    private readonly clock: TripClock = { now: () => new Date() }, private readonly reservations?: ReservationReader) {}
+    private readonly clock: TripClock = { now: () => new Date() }, private readonly reservations?: ReservationReader, private readonly official?: { execute(principal: TripPrincipal, input: unknown): Promise<Record<string, unknown>> }) {}
   private validGrant(g: ShareGrant | undefined): g is ShareGrant {
     return !!g && !g.revokedAt && Date.parse(g.expiresAt) > this.clock.now().getTime();
   }
@@ -36,7 +36,24 @@ export class TripSharingApplication implements TripAuthorizer {
     requireTripPrincipal(principal);
     // Rate limiting precedes parsing/verification for every share operation. No secret in limiter key.
     await this.abuse.consume(principal);
+    if (typeof (value as { operation?: unknown })?.operation === "string" && (value as { operation: string }).operation.startsWith("official-")) {
+      if (!this.official) throw new TripResourceError("unavailable");
+      return this.official.execute(principal, value);
+    }
     const c = parseSharingCommand(value), now = this.clock.now().toISOString(), version = sharingVersion;
+    if (c.operation === "owned-shared") {
+      const page = await this.trips.list(principal, { limit: 20, afterTripId: c.afterTripId }), trips = [];
+      for (const trip of page.trips) {
+        let after: string | undefined, shared = false;
+        do {
+          const sharing = await this.sharing.management(principal, trip.id, after);
+          shared = sharing.grants.some(g => this.validGrant(g));
+          after = sharing.after;
+        } while (!shared && after);
+        if (shared) trips.push({ trip, role: "owner" });
+      }
+      return { version, trips, ...(page.nextAfterTripId ? { afterTripId: page.nextAfterTripId } : {}) };
+    }
     if (c.operation === "accessible") {
       const page = await this.sharing.memberships(principal, c.afterTripId), trips = [];
       for (const member of page.members) {

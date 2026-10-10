@@ -150,3 +150,8 @@
 .consultation-entry-error { max-width: 42rem; margin: .75rem 1rem; padding: .5rem .75rem; border-radius: .5rem; background: var(--product-paper); }
 .consultation-entry-progress { min-height: 70svh; display: grid; place-content: center; justify-items: center; gap: .75rem; padding: 5rem 1rem; }
 .consultation-entry-progress[hidden], .consultation-entry-error[hidden], .home-hero[hidden] { display: none; }
+
+.trip-library-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin-block: 1rem; }
+.trip-library-tabs button { min-height: 44px; min-width: 0; padding: .7rem .4rem; border: 1px solid var(--product-line); border-radius: .75rem; background: white; color: inherit; font: inherit; overflow-wrap: anywhere; }
+.trip-library-tabs [aria-selected="true"] { background: #e7f0f7; border-color: #587b98; font-weight: 700; }
+.trip-library-tabs + [hidden], #trip-library-catalog[hidden] { display: none; }

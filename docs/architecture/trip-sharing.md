@@ -81,16 +81,27 @@ editorの確認は既存ServerTripWorkspaceSource/ServerTripWriterを再利用�
 Agentには`featureContext.tripRole`だけを追加し、owner/principal/secret/hashは追加しない。
 ToolやPromptを変更せず、最終適用のsecurity boundaryはserver authorization。
 
-## 公開gate / migration / 非対象
+## 認証付き公開ルート / migration / 非対象
 
-`createAuthorizedTripApplications`はtrusted authenticated host用composition。
-public lambdaのTrip/sharing handlerには認証を注入せず、従来どおり**501 gate**。
-リンクからの匿名参照や仮ownerによる動作はしない。公開認証Provider、session/CSRF検証、
-confirmation authority、writer rolloutを別途レビューして接続する必要がある。
-このPRでは公開利用/デプロイを有効化せず、同じApplication/RepositoryとSDK transaction fixtureで2利用者経路を検証する。
+本番の専用Trip API hostは`/api/trips/v1`と`/api/trips/sharing/v1`を提供する。
+API Gateway Cognito authorizer + scope、LambdaのAccess Token検証、Trip本人/参加者認可を維持する。
+共有ルートもPOSTのみ、キャッシュ・request bodyログを無効にし、Agentより緩いJSON用throttleを設定する。
+未接続の汎用Lambda sharing handlerは501のまま。匿名アクセス、owner移譲、他resourceの自動共有はない。
 
-Trip migration、LocalStorage writer切替、shared merge、owner移譲、他resourceの自動共有はない。
-Terraformは疎GSI/IAM Queryの追加のみでapplyしない。既存データを走査・変換しない。
+一覧の「あなたの旅」は本人所有Trip。「共有中の旅」はactiveなGrantを持つ本人所有Tripと、
+現時点で認可された参加Tripを合流してTrip IDで重複除去する。本人所有Tripは個人一覧にも表示する。
+owner/editor/viewerを「あなたの旅/共同編集/閲覧のみ」で示し、Cognito subjectを表示名として公開しない。
+個人・共有・公式それぞれ独立したloading/error/empty/cursorを持ち、共有・公式には再読み込みを設ける。
+旅程ヘッダーの「共有」からGrant管理へ進む。「旅程を確定」はヘッダーに表示し、日程不足時は理由を添える。
+確定は既存TripAdoptionで、予約確定や公式公開とは別の操作。
+
+共有リンクsecretはfragmentを直ちに消去し、通常はメモリのみで保持する。
+未ログイン時に利用者が「共有リンクで参加して開く」を押した場合だけ、ログインの引継ぎとして
+tab内sessionStorageへ10分の期限付きで保存する。戻った時に一度だけ取り出して即削除し、
+ログイン完了時は参加→本人の新しいConversation→Trip詳細へ進む。無効・期限切れ・失効時は
+汎用エラーで止まる。localStorage、ログ、Agent、URL queryへsecretを送らない。
+
+公式公開と取り込みは[公式しおり仕様](official-guides.md)を参照。
 
 ## 検証責務
 

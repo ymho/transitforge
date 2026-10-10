@@ -1,11 +1,14 @@
+import type { Trip } from "@raiquora/trip/trip";
+import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
 import { setLoadingStatus } from "../shared/primitives";
 import type { TripSharingClient, TripShareLink } from "../../usecases/trip-plan/trip-sharing-client";
 import type { TripRole, SharedTripRole } from "@raiquora/trip/trip-sharing";
 import { element, control, option } from "./trip-workspace-elements";
 
-/** No persisted secret or identity. The authenticated server is the security boundary. */
+/** Secrets stay in this dialog; an explicit login handoff is owned by the browser adapter. */
 export function configureTripSharing(options: { root: HTMLElement; button: HTMLElement; client: TripSharingClient;
-  current(): { tripId: string; role?: TripRole } | undefined; navigate(tripId: string): Promise<void>;
+  official?: TripLibraryClient; authenticated?(): boolean; login?(link: TripShareLink): Promise<void>; resumeJoin?: boolean;
+  current(): { tripId: string; role?: TripRole; trip?: Trip } | undefined; navigate(tripId: string): Promise<void>;
   parseLink(text: string): TripShareLink | undefined; makeLink(link: TripShareLink): string; initialLink?: TripShareLink }) {
   const dialog = element("dialog", "trip-sharing-panel"); dialog.setAttribute("aria-label", "旅程の共有");
   const status = element("p"); status.setAttribute("role", "status");
@@ -49,10 +52,20 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
   }); });
   management.append(element("h3", "", "この旅程の共有管理"), role, expiry, create, link,
     element("h4", "", "参加者"), members, element("h4", "", "発行したリンク"), grants);
+  const officialActions = element("section"); officialActions.hidden = true;
+  const publish = control("公式しおりとして公開・更新", () => { const current = options.current(); if (!current?.trip || !options.official) return;
+    if (!document.defaultView?.confirm("この旅程を全ユーザー向けに公式公開しますか？日付・人数・列車・宿の選択・予約・価格を除いたモデル旅程を公開します。")) return;
+    void action(async () => { await options.official!.officialPublish(current.trip!); });
+  });
+  const withdraw = control("公式公開を取り下げる", () => { const current = options.current(); if (!current || !options.official) return;
+    void action(async () => { const guide = await options.official!.officialGet(current.tripId); await options.official!.officialWithdraw(guide); });
+  });
+  officialActions.append(element("h3", "", "公式しおり"), publish, withdraw);
   const input = element("input"); input.type = "password"; input.autocomplete = "off"; input.setAttribute("aria-label", "共有リンクを貼り付け");
   const redeem = control("共有リンクで参加して開く", () => { void action(async () => {
     const value = pending ?? options.parseLink(input.value); input.value = ""; if (!value) throw new Error("Invalid link");
     const epoch = generation;
+    if (options.authenticated && !options.authenticated()) { if (!options.login) throw new Error("Authentication required"); await options.login(value); return; }
     const result = await options.client.redeem(value); pending = undefined;
     if (epoch !== generation) return; await options.navigate(result.tripId); close();
   }); });
@@ -63,12 +76,14 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
       li.append(control("共有旅程を開く", () => { void action(async () => { await options.navigate(entry.trip.id); close(); }); })); list.append(li); }
     if (page.afterTripId) list.append(control("次の共有旅程", () => { void action(() => accessible(page.afterTripId)); }));
   }
-  const refresh = () => action(async () => { const current = options.current(); management.hidden = current?.role !== "owner"; await accessible(); if (!management.hidden) await manage(); });
+  const refresh = () => action(async () => { const epoch = generation; const current = options.current(); management.hidden = current?.role !== "owner"; await accessible(); if (!management.hidden) await manage();
+    officialActions.hidden = true; if (options.official && current?.role === "owner" && current.trip && await options.official.officialCapabilities() && epoch === generation && options.current()?.tripId === current.tripId) officialActions.hidden = false; });
   dialog.append(element("h2", "", "旅程の共有"), control("閉じる", close), warning, status, input, redeem,
-    control("再読み込み", () => { void refresh(); }), management, element("h3", "", "参加している旅程"), list);
+    control("再読み込み", () => { void refresh(); }), management, officialActions, element("h3", "", "参加している旅程"), list);
   options.root.append(dialog);
-  const open = () => { ++generation; if (!dialog.open) dialog.showModal(); management.hidden = options.current()?.role !== "owner"; void refresh(); };
+  const open = () => { ++generation; if (!dialog.open) dialog.showModal(); management.hidden = options.current()?.role !== "owner"; officialActions.hidden = true;
+    if (options.authenticated && !options.authenticated()) status.textContent = "共有リンクで参加して開くと、ログイン後にこの旅程へ移動します。"; else void refresh(); };
   options.button.addEventListener("click", open); dialog.addEventListener("cancel", close);
-  if (pending) open();
+  if (pending) { if (options.resumeJoin) { ++generation; dialog.showModal(); redeem.click(); } else open(); }
   return { dialog, open, destroy() { close(); options.button.removeEventListener("click", open); dialog.remove(); } };
 }

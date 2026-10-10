@@ -1,3 +1,4 @@
+import { validateOfficialGuide, type OfficialGuide } from "@raiquora/trip/official-guide";
 import { personalApiFetch } from "./personal-api-fetch";
 import { validateTrip, type Trip } from "@raiquora/trip/trip";
 import { validateReservationFact, type ReservationFact } from "@raiquora/trip/reservation";
@@ -45,6 +46,22 @@ export class HttpTripSharingClient implements TripSharingClient {
     const v = await this.execute({ operation: "accessible", ...(afterTripId ? { afterTripId } : {}) });
     return { trips: array(v.trips).map((v) => { const r = record(v); validateTrip(r.trip as Trip); return { trip: structuredClone(r.trip as Trip), role: role(r.role) }; }),
       ...(v.afterTripId ? { afterTripId: text(v.afterTripId) } : {}) };
+  }
+  async ownedShared(afterTripId?: string) {
+    const v = await this.execute({ operation: "owned-shared", ...(afterTripId ? { afterTripId } : {}) });
+    return { trips: array(v.trips).map(value => { const r = record(value); validateTrip(r.trip as Trip); return { trip: structuredClone(r.trip as Trip), role: role(r.role) }; }), ...(v.afterTripId ? { afterTripId: text(v.afterTripId) } : {}) };
+  }
+  async officialCapabilities() { const v = await this.execute({ operation: "official-capabilities" }); if (typeof v.publisher !== "boolean") throw invalid(); return v.publisher; }
+  async officialList(afterTripId?: string) {
+    const v = await this.execute({ operation: "official-list", ...(afterTripId ? { afterTripId } : {}) });
+    const guides = array(v.guides).map(value => { const g = record(value); validateOfficialGuide(g); return structuredClone(g); });
+    return { guides, ...(v.after ? { after: text(v.after) } : {}) };
+  }
+  async officialGet(tripId: string) { const v = await this.execute({ operation: "official-get", tripId }); const g = record(v.guide); validateOfficialGuide(g); return structuredClone(g); }
+  async officialPublish(trip: Trip) { await this.execute({ operation: "official-publish", tripId: trip.id, baseRevision: trip.revision }); }
+  async officialWithdraw(guide: OfficialGuide) { await this.execute({ operation: "official-withdraw", tripId: guide.id, guideVersion: guide.version }); }
+  async officialImport(guide: OfficialGuide, newTripId: string, startDate: string, adults: number, children: number) {
+    const v = await this.execute({ operation: "official-import", tripId: guide.id, guideVersion: guide.version, newTripId, startDate, adults, children }); validateTrip(v.trip as Trip); if ((v.trip as Trip).id !== newTripId || (v.trip as Trip).officialOrigin?.guideId !== guide.id) throw invalid(); return structuredClone(v.trip as Trip);
   }
   async reservationFacts(tripId: string): Promise<ReservationFact[]> {
     const v = await this.execute({ operation: "reservation-facts", tripId });

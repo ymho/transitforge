@@ -8,6 +8,7 @@ export type SharingCommand =
   | { version: typeof sharingVersion; operation: "manage"; tripId: string; after?: string }
   | { version: typeof sharingVersion; operation: "participant"; tripId: string; participantId: string; role: SharedTripRole; active: boolean; baseVersion: number }
   | { version: typeof sharingVersion; operation: "accessible"; afterTripId?: string }
+  | { version: typeof sharingVersion; operation: "owned-shared"; afterTripId?: string }
   | { version: typeof sharingVersion; operation: "reservation-facts"; tripId: string };
 export function parseSharingCommand(value: unknown): SharingCommand {
   const fail = () => { throw new TripResourceError("invalid-input"); };
@@ -17,11 +18,11 @@ export function parseSharingCommand(value: unknown): SharingCommand {
   const fields: Record<string, string[]> = {
     "create-grant": ["tripId", "role", "expiresAt"], redeem: ["tripId", "grantId", "secret"],
     "revoke-grant": ["tripId", "grantId", "baseVersion"], manage: ["tripId", "after"],
-    participant: ["tripId", "participantId", "role", "active", "baseVersion"], accessible: ["afterTripId"], "reservation-facts": ["tripId"],
+    participant: ["tripId", "participantId", "role", "active", "baseVersion"], accessible: ["afterTripId"], "owned-shared": ["afterTripId"], "reservation-facts": ["tripId"],
   };
   const keys = typeof v.operation === "string" && Object.hasOwn(fields, v.operation) ? fields[v.operation] : undefined;
   if (!keys || Object.keys(v).some((k) => !["version", "operation", ...keys].includes(k))) return fail();
-  if (v.operation !== "accessible") tripIdentifier(v.tripId);
+  if (v.operation !== "accessible" && v.operation !== "owned-shared") tripIdentifier(v.tripId);
   for (const key of ["grantId", "participantId", "afterTripId"]) if (keys.includes(key) && (v[key] !== undefined || key !== "afterTripId")) tripIdentifier(v[key]);
   if (keys.includes("role") && v.role !== "viewer" && v.role !== "editor") return fail();
   if (keys.includes("baseVersion") && (!Number.isSafeInteger(v.baseVersion) || Number(v.baseVersion) < 0 || Number(v.baseVersion) >= Number.MAX_SAFE_INTEGER - 1)) return fail();

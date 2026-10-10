@@ -176,3 +176,13 @@ describe("Trip sharing independent authorization and existing CAS", () => {
     expect(f.commands.some((c) => (c as object).constructor.name === "ScanCommand")).toBe(false);
   });
 });
+
+it("owned-shared lists active shares only and excludes revoked/expired links", async () => {
+  const f = setup(); expect((await f.call(owner, "owned-shared")).trips).toEqual([]);
+  const g = await f.grant(); expect((await f.call(owner, "owned-shared")).trips).toMatchObject([{ trip: { id }, role: "owner" }]);
+  expect((await f.call(guest, "owned-shared")).trips).toEqual([]);
+  await f.call(owner, "revoke-grant", { tripId: id, grantId: g.grant.id, baseVersion: 0 });
+  expect((await f.call(owner, "owned-shared")).trips).toEqual([]);
+  await f.grant(); vi.spyOn(f.clock, "now").mockReturnValue(new Date("2026-12-01T00:00:00.000Z"));
+  expect((await f.call(owner, "owned-shared")).trips).toEqual([]);
+});

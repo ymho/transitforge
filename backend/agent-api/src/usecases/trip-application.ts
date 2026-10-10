@@ -91,6 +91,7 @@ export class TripApplication {
         if (!this.consultations) throw new TripResourceError("unavailable");
         return { version, ...await this.consultations.branch(actor, command) };
       case "create": {
+        if (command.trip.officialOrigin !== undefined) throw new TripResourceError("invalid-input");
         if (command.trip.adoption !== undefined || command.trip.items.some(item => item.decision !== undefined)) throw new TripResourceError("confirmation-required");
         if (command.trip.planningState === "ready") await this.ready(principal, command.trip);
         return { version, trip: await this.trips.create(principal, command.trip) };

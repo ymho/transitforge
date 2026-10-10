@@ -1,3 +1,5 @@
+import { DynamoDbOfficialGuide } from "./adapters/dynamodb-official-guide.js";
+import { OfficialGuideApplication } from "./usecases/official-guide-application.js";
 import { DynamoDbTripConsultationRepository } from "./adapters/dynamodb-trip-consultation-repository.js";
 import { DynamoDbTripRepository } from "./adapters/dynamodb-trip-repository.js";
 import { TripApplication } from "./usecases/trip-application.js";
@@ -17,7 +19,8 @@ import { DynamoDbConversationTurnRepository } from "./adapters/dynamodb-conversa
 export function createAuthorizedTripApplications(table: string, stateTable?: string) {
   const trips = new DynamoDbTripRepository(table), sharingRepository = new DynamoDbTripSharing(table);
   const reservations = new ReservationApplication(trips, new DynamoDbReservationRepository(table));
-  const sharing = new TripSharingApplication(trips, sharingRepository, new CryptographicShareSecret(), sharingRepository, undefined, reservations);
+  const sharing = new TripSharingApplication(trips, sharingRepository, new CryptographicShareSecret(), sharingRepository, undefined, reservations,
+    new OfficialGuideApplication(trips, new DynamoDbOfficialGuide(table), (process.env.OFFICIAL_PUBLISHER_SUBJECTS ?? "").split(",").map(s => s.trim()).filter(Boolean)));
   return { sharing, repository: trips, trips: new TripApplication(trips, trips, undefined, reservations, undefined, sharing,
     stateTable ? new DynamoDbConversationTurnRepository(stateTable) : undefined,
     stateTable ? new DynamoDbTripConsultationRepository(table, stateTable) : undefined) };

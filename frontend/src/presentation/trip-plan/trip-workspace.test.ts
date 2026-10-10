@@ -185,7 +185,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const changeAdoption = vi.fn(async () => undefined), branchTrip = vi.fn(async () => undefined);
     vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "雨の日案"));
     const f = setup({ getCurrentTrip: () => trip }, undefined, { changeAdoption, branchTrip });
-    button(f.ui.panel, "この旅程で行く").click();
+    button(f.ui.panel, "旅程を確定").click();
     await vi.waitFor(() => expect(changeAdoption).toHaveBeenCalledWith(trip, "confirm"));
     button(f.ui.panel, "この旅程を分岐").click();
     await vi.waitFor(() => expect(branchTrip).toHaveBeenCalledWith(trip, "雨の日案"));
@@ -264,4 +264,11 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.activateSession("one");
     expect([...f.ui.panel.querySelectorAll<HTMLButtonElement>(".trip-day-tabs [role=tab]")].find(tab => tab.textContent === "日時未定")?.getAttribute("aria-selected")).toBe("true");
   });
+});
+it("puts Trip confirmation and sharing in the header and explains missing schedules", () => {
+  const trip = createTrip(placesTripId, "計画中", placesAt, [{ id: "a", type: "activity", category: "sightseeing", title: "海", schedule: { type: "unscheduled" } }]);
+  const f = setup({ getCurrentTrip: () => trip }, undefined, { changeAdoption: vi.fn(async () => {}) });
+  const heading = f.ui.panel.querySelector("header")!;
+  expect(button(heading, "旅程を確定").disabled).toBe(true); expect(heading.textContent).toContain("日程を設定すると確定");
+  expect(heading.querySelector("details")?.textContent).not.toContain("旅程を確定");
 });

@@ -23,6 +23,7 @@ export interface Trip {
   readonly title: string;
   /** Display/search hint only. Never a place, requested destination or feasibility fact. */
   readonly summaryDestination?: string;
+  readonly officialOrigin?: { readonly guideId: string; readonly version: number };
   readonly request: TripRequest;
   readonly costs?: TripCosts;
   readonly planningState: PlanningState;
@@ -103,7 +104,7 @@ export function validateSummaryDestination(value: string): void {
 }
 
 export function validateTrip(trip: Trip): void {
-  exactKeys(trip, ["id", "title", "summaryDestination", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "timeline", "structureIntent", "request", "planningState", "lifecycleState", "adoption", "costs"]);
+  exactKeys(trip, ["id", "title", "summaryDestination", "officialOrigin", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "timeline", "structureIntent", "request", "planningState", "lifecycleState", "adoption", "costs"]);
   if (trip.costs !== undefined) validateTripCosts(trip.costs, trip.id, trip.revision);
   if (trip.adoption !== undefined) validateTripAdoption(trip.adoption);
   if (trip.summaryDestination !== undefined) validateSummaryDestination(trip.summaryDestination);
@@ -116,6 +117,10 @@ export function validateTrip(trip: Trip): void {
   if (trip.timeline !== undefined) validateTripTimeline(trip.timeline);
   if (trip.structureIntent !== undefined) validateTripStructureIntent(trip.structureIntent, new Set(trip.items.map(({ id }) => id)),
     new Set(trip.timeline?.logicalDays.map(({ id }) => id) ?? []));
+  if (trip.officialOrigin !== undefined) {
+    exactKeys(trip.officialOrigin, ["guideId", "version"]);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(trip.officialOrigin.guideId) || !Number.isSafeInteger(trip.officialOrigin.version) || trip.officialOrigin.version < 1) throw new Error("Invalid official origin");
+  }
   trip.items.forEach((item) => { validateItem(item, trip.timeline); validateScheduleReferences(item.schedule, trip.timeline, item.logicalDayId); });
   for (const line of trip.costs?.lines ?? []) {
     if (!line.id.startsWith("item-estimate:")) continue;
@@ -343,6 +348,7 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
   // Preview keeps revision/updatedAt. Only a successful server CAS increments them.
   let result: Trip = { id: trip.id, schemaVersion: timeline === undefined && structureIntent === undefined ? trip.schemaVersion : 3, revision: trip.revision, title,
     ...(trip.summaryDestination === undefined ? {} : { summaryDestination: trip.summaryDestination }),
+    ...(trip.officialOrigin ? { officialOrigin: trip.officialOrigin } : {}),
     createdAt: trip.createdAt, updatedAt: trip.updatedAt, items, request, planningState, ...(timeline ? { timeline } : {}),
     ...(structureIntent ? { structureIntent } : {}), ...(costs ? { costs } : {}),
     lifecycleState: lifecyclePatch?.state ?? trip.lifecycleState };

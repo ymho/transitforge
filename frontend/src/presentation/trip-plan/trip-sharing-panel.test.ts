@@ -41,3 +41,14 @@ describe("share management UI", () => {
     expect(input.value).toBe(""); expect(f.ui.dialog.open).toBe(false);
   });
 });
+it("explicit Join hands off to login and resumed login redeems then opens the Trip once", async () => {
+  const f = await setup(); f.ui.destroy(); const link = { tripId: id, grantId, secret: "s".repeat(43) }, login = vi.fn(async () => {});
+  const base = { root: document.body, button: document.createElement("button"), client: f.client, current: () => undefined,
+    navigate: f.navigate, parseLink: parseTripShareLink, makeLink: (v: typeof link) => makeTripShareLink("https://example.test/", v), initialLink: link };
+  const signedOut = configureTripSharing({ ...base, authenticated: () => false, login });
+  [...signedOut.dialog.querySelectorAll("button")].find(b => b.textContent === "共有リンクで参加して開く")!.click();
+  await vi.waitFor(() => expect(login).toHaveBeenCalledWith(link)); expect(f.client.redeem).not.toHaveBeenCalled(); signedOut.destroy();
+  const resumed = configureTripSharing({ ...base, authenticated: () => true, resumeJoin: true });
+  await vi.waitFor(() => expect(f.navigate).toHaveBeenCalledWith(id)); expect(f.client.redeem).toHaveBeenCalledTimes(1);
+  expect(resumed.dialog.open).toBe(false); resumed.destroy();
+});
