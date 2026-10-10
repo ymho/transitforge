@@ -95,7 +95,7 @@ import { configureNotificationCenter } from "../presentation/notifications/notif
 import { configureTripSharing } from "../presentation/trip-plan/trip-sharing-panel";
 import "../presentation/trip-plan/trip-sharing-panel.css";
 import { HttpTripSharingClient } from "../adapters/http/trip-sharing-client";
-import { consumeTripShareLink, makeTripShareLink, parseTripShareLink } from "../adapters/browser/trip-share-link";
+import { consumeTripShareLink, consumeShareLogin, saveShareLogin, makeTripShareLink, parseTripShareLink } from "../adapters/browser/trip-share-link";
 import { configureTripWorkspace } from "../presentation/trip-plan/trip-workspace";
 import { projectTripPlaces } from "@raiquora/trip/trip-places";
 import type { TripMapOverlay, TripMapPoint, TripMapRoute } from "../adapters/mapbox/trip-map-overlay";
@@ -107,7 +107,9 @@ import { createContextWorkspaceController } from "../usecases/context-workspace/
 import { createMobileContextNavigation } from "../presentation/concierge/mobile-context-navigation";
 
 export async function startViewer(): Promise<void> {
-const initialShareLink = consumeTripShareLink(window.location, window.history);
+let resumedShareLink;
+try { resumedShareLink = consumeShareLogin(window.sessionStorage); } catch { /* Storage may be unavailable. */ }
+const initialShareLink = consumeTripShareLink(window.location, window.history) ?? resumedShareLink;
 
 const realtimeUpdateDependencies = {
   pollingEnvironment: browserPollingEnvironment,
@@ -408,6 +410,7 @@ const tripWorkspace = configureTripWorkspace({
   },
   showMap: focusTripMap, loadInTripContext: (tripId) => inTripContextClient.read(tripId),
   ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
+  openSharing: () => tripSharing.open(),
   changeAdoption: async (trip, action) => {
     if (!serverTripClient.previewTripAdoption || !serverTripClient.confirmTripAdoption) throw new Error("Trip adoption unavailable");
     const target = { tripId: trip.id, baseTripRevision: trip.revision, mutationId: crypto.randomUUID(), action };
@@ -541,9 +544,11 @@ configureNotificationCenter({ root: document.body,
     tripWorkspace.show("trip");
   } });
 const sharingButton = document.createElement("button"); sharingButton.type = "button"; sharingButton.textContent = "旅程の共有";
-document.getElementById("sidebar-notifications")?.after(sharingButton);
-configureTripSharing({ root: document.body, button: sharingButton, client: new HttpTripSharingClient(), initialLink: initialShareLink,
-  current: () => { const trip = tripWorkspaceController.current(); return trip ? { tripId: trip.id, role: tripWorkspaceController.source()?.getRole?.() } : undefined; },
+// Shared dialog is opened from the current Trip header.
+const tripSharing = configureTripSharing({ root: document.body, button: sharingButton, client: new HttpTripSharingClient(), official: new HttpTripSharingClient(), initialLink: initialShareLink,
+  authenticated: isSignedIn, resumeJoin: !!resumedShareLink && isSignedIn(),
+  async login(link) { saveShareLogin(window.sessionStorage, link); await currentAuthentication().login(); },
+  current: () => { const trip = tripWorkspaceController.current(); return trip ? { tripId: trip.id, role: tripWorkspaceController.source()?.getRole?.(), trip } : undefined; },
   parseLink: parseTripShareLink, makeLink: (link) => makeTripShareLink(window.location.href, link),
   async navigate(tripId) {
     const trip = await serverTripClient.get(tripId); if (!trip) throw new Error("Trip unavailable");
@@ -595,6 +600,7 @@ startMap = async () => {
   catch { mapStarted = false; status.hidden = false; status.textContent = "地図を起動できませんでした。もう一度開くと再試行できます。相談は引き続き利用できます。"; loadingScreen.fail(status.textContent); }
 };
 primaryShell = configureAiFirstShell(document, app, {
+  library: new HttpTripSharingClient(), librarySession: () => serverTripClient.sessionVersion(),
   read: () => {
     const listState = serverTripList.getState();
     return {

@@ -19,3 +19,18 @@ export function consumeTripShareLink(location: Pick<Location, "href">, history: 
   if (url.hash.startsWith("#trip-share=")) { url.hash = ""; history.replaceState(null, "", url.href); }
   return link;
 }
+
+const pendingKey = "raiquora:share-login";
+/** Explicit Join → login handoff only. Tab-scoped, ten minute TTL, consumed once. */
+export function saveShareLogin(storage: Pick<Storage, "setItem">, link: TripShareLink, now = Date.now()): void {
+  if (!parseTripShareLink(makeTripShareLink("https://example.invalid/", link))) throw new Error("Invalid share link");
+  storage.setItem(pendingKey, JSON.stringify({ expiresAt: now + 600_000, link }));
+}
+export function consumeShareLogin(storage: Pick<Storage, "getItem" | "removeItem">, now = Date.now()): TripShareLink | undefined {
+  const raw = storage.getItem(pendingKey); storage.removeItem(pendingKey);
+  try {
+    const value = JSON.parse(raw ?? "null") as { expiresAt: number; link: TripShareLink } | null;
+    if (!value || !Number.isFinite(value.expiresAt) || value.expiresAt <= now || value.expiresAt > now + 600_000) return undefined;
+    return parseTripShareLink(makeTripShareLink("https://example.invalid/", value.link));
+  } catch { return undefined; }
+}

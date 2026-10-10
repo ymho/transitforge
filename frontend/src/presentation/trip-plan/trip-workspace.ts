@@ -29,6 +29,7 @@ export function configureTripWorkspace(options: {
   ask(prompt: string): void; nextItemId(): string;
   showTripList?(): void;
   onViewChange?(view: "chat" | "trip"): void;
+  openSharing?(): void;
   changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
   changeItemDecision?(trip: Trip, item: Trip["items"][number], action: "confirm" | "withdraw"): Promise<void>;
   branchTrip?(trip: Trip, title: string): Promise<void>;
@@ -67,8 +68,10 @@ export function configureTripWorkspace(options: {
   });
   const party = element("div", "trip-header-party"); let partyKey = "";
   const back = control("‹ 旅程一覧", () => options.showTripList?.()); back.hidden = !options.showTripList;
-  const management = element("details", "trip-header-management"); management.append(element("summary", "", "旅程の操作"), openConsultation, adoption, branch, openTravelMode);
-  heading.append(back, emblem, title, summary, party, notice, management);
+  const management = element("details", "trip-header-management"); management.append(element("summary", "", "旅程の操作"), openConsultation, branch, openTravelMode);
+  const share = control("共有", () => options.openSharing?.()); share.hidden = !options.openSharing;
+  const adoptionHelp = element("p", "trip-workspace-notice");
+  heading.append(back, emblem, title, summary, party, notice, adoption, adoptionHelp, share, management);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   const pendingCostEditors = new Map<string, { tripId: string; node: Element }>();
   let costSessionVersion = controller.source()?.sessionVersion?.();
@@ -218,6 +221,7 @@ export function configureTripWorkspace(options: {
     addFirst.hidden = !trip || controller.source()?.getRole?.() === "viewer";
     openTravelMode.hidden = openConsultation.hidden = adoption.hidden = branch.hidden = !trip;
     if (!trip) {
+      share.hidden = true; adoptionHelp.textContent = "";
       title.textContent = "旅程"; summary.textContent = "";
       report(controller.loadState() === "loading" ? "サーバから旅程を読み込んでいます。" : "旅程を取得できません。認証と接続、参照先の状態を確認して再試行してください。端末の旧旅程へは切り替えていません。");
       if (previousTripId) for (const [entryKey, card] of cards) {
@@ -246,8 +250,12 @@ export function configureTripWorkspace(options: {
     const role = controller.source()?.getRole?.(), personalOwner = role === undefined || role === "owner";
     adoption.hidden = !options.changeAdoption || !personalOwner || ["cancelled", "completed"].includes(trip.lifecycleState);
     adoption.textContent = trip.adoption && !trip.adoption.needsReconfirmation ? "計画へ戻す"
-      : trip.adoption?.needsReconfirmation ? "変更後の旅程を再確認" : "この旅程で行く";
+      : trip.adoption?.needsReconfirmation ? "変更後の旅程を再確認" : "旅程を確定";
     adoption.disabled = adoptionBusy || (!trip.adoption || trip.adoption.needsReconfirmation ? !canConfirmTrip(trip) : false);
+    share.hidden = !options.openSharing;
+    adoptionHelp.textContent = adoption.hidden || !adoption.disabled || adoptionBusy ? "" : !trip.items.length ? "予定を追加すると確定できます。" : "すべての予定に日程を設定すると確定できます。";
+    const labels = [notice.textContent ?? "", role === "viewer" ? "" : role === "editor" ? "共有された旅程です（共同編集）。" : "", trip.officialOrigin ? `公式しおりから作成（第${trip.officialOrigin.version}版）` : ""].filter(Boolean);
+    notice.textContent = labels.join(" "); notice.hidden = role !== "viewer" && role !== "editor" && !trip.officialOrigin;
     branch.hidden = !options.branchTrip || !personalOwner;
     branch.disabled = branchBusy;
     summary.textContent = tripDateLabel(trip);

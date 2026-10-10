@@ -1,12 +1,13 @@
 """Static contracts for the dedicated authenticated Trip public writer."""
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class TripPublicWriterContractTest(unittest.TestCase):
-    def test_dedicated_lambda_has_only_trip_route_and_minimum_permissions(self):
+    def test_dedicated_lambda_has_trip_and_sharing_routes_and_minimum_permissions(self):
         source = (ROOT / "infra/terraform/environments/dev/agent-stream.tf").read_text()
         for required in [
             'resource "aws_lambda_function" "trip_api"',
@@ -22,12 +23,12 @@ class TripPublicWriterContractTest(unittest.TestCase):
             '"dynamodb:ConditionCheckItem"',
             '["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:TransactWriteItems"], Resource = aws_dynamodb_table.server_state.arn',
         ]:
-            self.assertIn(required, source)
+            self.assertRegex(source, re.escape(required).replace(r'\ ', r'\s+'))
         role = source.split('resource "aws_iam_role_policy" "trip_api"')[1].split('resource "aws_lambda_function" "trip_api"')[0]
         for forbidden in ['"dynamodb:Scan"', '"dynamodb:*"', 'resources = ["*"]', 'bedrock:', 'vpc_config']:
             self.assertNotIn(forbidden, role)
 
-    def test_public_entrypoint_does_not_expose_other_trip_features(self):
+    def test_public_entrypoint_exposes_authenticated_sharing_without_internal_features(self):
         source = (ROOT / "backend/agent-api/src/trip-api-composition.ts").read_text()
         self.assertIn('"/api/trips/v1"', source)
         self.assertIn('const applications = createAuthorizedTripApplications(options.tripTable, options.stateTable)', source)
@@ -35,7 +36,15 @@ class TripPublicWriterContractTest(unittest.TestCase):
         self.assertIn('new DynamoDbItineraryCandidateRepository(options.tripTable)', source)
         self.assertIn('new PlanCandidateAdoptionApplication(', source)
         self.assertIn('executeAdoption: adoption.execute.bind(adoption)', source)
-        for forbidden in ['sharing.', 'notification', 'in-trip', 'createPersonalApiHandler',
+        self.assertIn('"/api/trips/sharing/v1"', source)
+        self.assertIn('createTripSharingHandler', source)
+        infra = (ROOT / "infra/terraform/environments/dev/agent-stream.tf").read_text()
+        for required in ['"trip_sharing_post"', '"trip_sharing_v1"', '"trip_sharing"', 'OFFICIAL_PUBLISHER_SUBJECTS', 'api/trips/sharing/v1/POST']:
+            self.assertIn(required, infra)
+        sharing_method = infra.split('resource "aws_api_gateway_method" "trip_sharing_post"')[1].split('resource "aws_api_gateway_integration"')[0]
+        self.assertRegex(sharing_method, r'authorization\s*=\s*"COGNITO_USER_POOLS"')
+        self.assertIn('authorization_scopes', sharing_method)
+        for forbidden in ['notification' , 'in-trip', 'createPersonalApiHandler',
                           'createInternalReservationApplication', 'createInternalChecklistApplication']:
             self.assertNotIn(forbidden, source)
 

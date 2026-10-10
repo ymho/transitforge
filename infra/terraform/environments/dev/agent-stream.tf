@@ -111,11 +111,12 @@ resource "aws_lambda_function" "trip_api" {
   memory_size      = 256
   timeout          = 15
   environment { variables = {
-    TRIP_API_ENABLED        = "true"
-    TRIP_TABLE_NAME         = aws_dynamodb_table.trips.name
-    SERVER_STATE_TABLE_NAME = aws_dynamodb_table.server_state.name
-    COGNITO_USER_POOL_ID    = aws_cognito_user_pool.users.id
-    COGNITO_CLIENT_ID       = aws_cognito_user_pool_client.spa.id
+    OFFICIAL_PUBLISHER_SUBJECTS = join(",", var.official_publisher_subjects)
+    TRIP_API_ENABLED            = "true"
+    TRIP_TABLE_NAME             = aws_dynamodb_table.trips.name
+    SERVER_STATE_TABLE_NAME     = aws_dynamodb_table.server_state.name
+    COGNITO_USER_POOL_ID        = aws_cognito_user_pool.users.id
+    COGNITO_CLIENT_ID           = aws_cognito_user_pool_client.spa.id
   } }
   depends_on = [aws_iam_role_policy.trip_api]
 }
@@ -353,7 +354,7 @@ resource "aws_api_gateway_deployment" "agent_stream" {
   for_each    = local.agent_stream_instances
   rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
   triggers = { configuration = sha1(jsonencode([
-    aws_api_gateway_integration.agent_stream_route[each.key], aws_api_gateway_method.agent_stream_post[each.key], aws_api_gateway_authorizer.agent_stream_cognito[each.key], aws_api_gateway_integration.personal_state_conversations[each.key], aws_api_gateway_integration.personal_state_profile[each.key], aws_api_gateway_method.personal_state_post[each.key], aws_api_gateway_method.personal_profile_post[each.key], aws_api_gateway_integration.trip_api[each.key], aws_api_gateway_method.trip_api_post[each.key]
+    aws_api_gateway_integration.agent_stream_route[each.key], aws_api_gateway_method.agent_stream_post[each.key], aws_api_gateway_authorizer.agent_stream_cognito[each.key], aws_api_gateway_integration.personal_state_conversations[each.key], aws_api_gateway_integration.personal_state_profile[each.key], aws_api_gateway_method.personal_state_post[each.key], aws_api_gateway_method.personal_profile_post[each.key], aws_api_gateway_integration.trip_api[each.key], aws_api_gateway_method.trip_api_post[each.key], aws_api_gateway_integration.trip_sharing[each.key], aws_api_gateway_method.trip_sharing_post[each.key]
   ])) }
   lifecycle { create_before_destroy = true }
 }
@@ -519,4 +520,67 @@ resource "aws_iam_role_policy" "agent_stream_otp_invoke" {
   policy = jsonencode({ Version = "2012-10-17", Statement = [{
     Effect = "Allow", Action = ["lambda:InvokeFunction"], Resource = aws_lambda_function.otp_bridge[0].arn
   }] })
+}
+
+variable "official_publisher_subjects" {
+  type        = list(string)
+  default     = []
+  description = "Cognito subject IDs permitted to publish official guides."
+  validation {
+    condition     = alltrue([for subject in var.official_publisher_subjects : can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", subject))])
+    error_message = "Official publishers must be Cognito sub UUIDs, not display names or email addresses."
+  }
+}
+resource "aws_api_gateway_resource" "trip_sharing" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.trip_api[each.key].id
+  path_part   = "sharing"
+}
+resource "aws_api_gateway_resource" "trip_sharing_v1" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.trip_sharing[each.key].id
+  path_part   = "v1"
+}
+resource "aws_api_gateway_method" "trip_sharing_post" {
+  for_each             = local.agent_stream_instances
+  rest_api_id          = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id          = aws_api_gateway_resource.trip_sharing_v1[each.key].id
+  http_method          = "POST"
+  authorization        = "COGNITO_USER_POOLS"
+  authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
+  authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
+}
+resource "aws_api_gateway_integration" "trip_sharing" {
+  for_each                = local.agent_stream_instances
+  rest_api_id             = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id             = aws_api_gateway_resource.trip_sharing_v1[each.key].id
+  http_method             = aws_api_gateway_method.trip_sharing_post[each.key].http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.trip_api[each.key].invoke_arn
+}
+resource "aws_lambda_permission" "trip_sharing_gateway" {
+  for_each      = local.agent_stream_instances
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.trip_api[each.key].function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.agent_stream[each.key].execution_arn}/${var.environment}/POST/api/trips/sharing/v1"
+}
+
+resource "aws_api_gateway_method_settings" "trip_sharing" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  stage_name  = aws_api_gateway_stage.agent_stream[each.key].stage_name
+  method_path = "api/trips/sharing/v1/POST"
+  settings {
+    logging_level          = "OFF"
+    caching_enabled        = false
+    data_trace_enabled     = false
+    metrics_enabled        = true
+    throttling_burst_limit = 10
+    throttling_rate_limit  = 5
+  }
+  depends_on = [aws_api_gateway_method_settings.agent_stream]
 }

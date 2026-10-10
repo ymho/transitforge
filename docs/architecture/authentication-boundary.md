@@ -109,7 +109,7 @@ Cognito UIやTrip公開writerの完成待ちは不要。テストはport fakeを
 | 同route: `representative_timetable_search`, `journey_search`, `daily_congestion_analysis`, `daily_congestion_peak`, `train_delay_analysis` | authenticated user | 専用headerのCognito Access Tokenと`raiquora/user`を実行前に検証する |
 | 同route: `travel_accommodation_search`, `place_media_search`, `place_detail_research`, `web_search`, `web_page_read`, `travel_alert_search`, `ground_access_search`, `restaurant_search` | authenticated user | 同上。OAC/IAMだけを利用者principalとして扱わない |
 | POST `/api/trips/v1`: `create`, `mutate`, `get`, `list`, `archive`, `attach`, `detach`, `reference` | authenticated user | Gateway Cognito authorizerと共通Backend verifier→専用Trip API Lambda→`TripApplication`→既存owner-scoped Repository。未知operation/replaceは拒否 |
-| POST `/api/trips/sharing/v1`: `create-grant`, `redeem`, `revoke-grant`, `manage`, `participant`, `accessible`, `reservation-facts` | authenticated user | 共通認証→`TripSharingApplication`の本人/参加者認可。公開501 gateは維持。grant secretだけで認証しない |
+| POST `/api/trips/sharing/v1`: `create-grant`, `redeem`, `revoke-grant`, `manage`, `participant`, `accessible`, `owned-shared`, `reservation-facts`, `official-*` | authenticated user | 専用Trip hostの共通認証→`TripSharingApplication`の本人/参加者認可。公式公開は設定済みpublisherと本人所有を追加検証。grant secretだけで認証しない |
 | POST `/api/trips/in-trip/v1`: read（operationなし） | authenticated user | 共通認証→`InTripContextApplication.read`のowner読取。公開501 gateは維持 |
 | POST `/api/trips/notifications/v1`: `list`, `read` | authenticated user | 共通認証→`NotificationApplication`のowner読取/CAS既読。公開501 gateは維持 |
 | Reservation: `create`, `get`, `list`, `update`, `cancel`, `link`, `unlink` | authenticated user | Applicationのみで対応handler/clientなし。新routeは作らず未接続。予約自体の実行APIではない |

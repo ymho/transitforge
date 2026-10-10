@@ -32,3 +32,13 @@ describe("share transport privacy", () => {
     request.mockResolvedValueOnce(new Response("", { status: 404 })); await client.get(tripId); expect(client.getRole(tripId)).toBeUndefined();
   });
 });
+it("official metadata is validated and import returns only the requested independent Trip", async () => {
+  const request = vi.fn<typeof fetch>(), client = new HttpTripSharingClient(request), at = "2026-09-18T00:00:00.000Z", trip = createTrip(tripId, "公式", at);
+  const guide = { id: tripId, version: 1, publishedAt: at, trip };
+  request.mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-sharing-v1", guides: [guide], after: grantId })));
+  expect(await client.officialList()).toEqual({ guides: [guide], after: grantId });
+  request.mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-sharing-v1", guide: { ...guide, version: -1 } })));
+  await expect(client.officialGet(tripId)).rejects.toThrow();
+  request.mockResolvedValueOnce(new Response(JSON.stringify({ version: "trip-sharing-v1", trip })));
+  await expect(client.officialImport(guide, grantId, "2026-12-31", 1, 0)).rejects.toThrow();
+});

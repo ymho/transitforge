@@ -189,7 +189,7 @@ terraform output -json cognito_frontend_config > ../../../../frontend/public/aut
 ```
 
 `cognito_api_auth_config`のpool / client / requiredScopesは専用Lambdaの共通verifierへ接続済み。
-Trip公開writerは認証済み専用hostから有効。共有・通知・in-tripの未公開gateは別境界で維持する。
+Trip公開writerは認証済み専用hostから有効。共有も同じ専用hostで有効。通知・in-tripの未公開gateは別境界で維持する。
 ID TokenはAPIへ送らない。残存Function URLのOACはorigin保護であり、利用者認証を代替しない。
 
 アカウント入口の「ログイン」から日本語Managed Loginへ進む。User Poolの自己登録は無効で、
@@ -241,3 +241,11 @@ resource action一覧をstep summaryへ出す。AWS lockfileも作らず、apply
 stream Lambdaの`SERVER_AGENT_MAX_EXECUTION_MS`はTerraformの`server_agent_max_execution_ms`
 から生成する。推奨・既定150000ms、許容範囲は整数1000〜180000ms。Lambda240秒とは別のbusiness
 実行上限で、旧Browser Runtimeは撤去済み。35/90/180秒のtransport fixtureとは分ける。
+
+## 公式しおりの発行アカウント (#821)
+
+Cognito管理者が公式用アカウントを作成し、その`sub`をdev EnvironmentのGitHub Variable
+`OFFICIAL_PUBLISHER_SUBJECTS_JSON`へJSON配列で設定する。CDは`TF_VAR_official_publisher_subjects`として渡す。
+未設定時は空配列で、一般ユーザーには公開操作を出さない。Frontendへsubject一覧を渡さない。
+次回デプロイ後、公式アカウントは通常の旅程画面から「共有」→「公式しおりとして公開・更新」を行う。
+公開は通常の共有Grantと独立した全ユーザー向けsnapshot。詳細は[公式しおり仕様](../../../../docs/architecture/official-guides.md)。

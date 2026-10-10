@@ -1,3 +1,5 @@
+import { configureTripLibrary } from "./trip-library-panel";
+import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
 import { homeReadModel, tripDisplayLabels, type HomeReadInput } from "../../usecases/trip-plan/home-read-model";
 import { adoptComposer, iconMarkup, pageHeadingMarkup, loadingMarkup, setLoadingStatus, type ProductIconName } from "../shared/primitives";
 import type { Trip } from "@raiquora/trip/trip";
@@ -7,6 +9,8 @@ import type { AuthState } from "../../usecases/auth/auth-session";
 
 export type PrimaryView = "chat" | "trips" | "my";
 export interface AiFirstShellPorts {
+  library?: TripLibraryClient;
+  librarySession?(): number;
   read(): HomeReadInput;
   authState(): AuthState;
   login(): void;
@@ -65,6 +69,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const summary = document.createElement("summary"); summary.innerHTML = `${iconMarkup(icon)}<span>${label}</span>`;
     wrapper.append(summary, section); settings.append(wrapper);
   }
+  let libraryUi: ReturnType<typeof configureTripLibrary> | undefined;
   let current: PrimaryView = "chat", composing = false;
   let consultationMode: "landing" | "starting" | "conversation" | "unavailable" = "landing";
   let entryGeneration = 0, appliedRoute = "";
@@ -132,6 +137,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   root.querySelector("[data-notifications]")!.addEventListener("click", ports.openNotifications);
   const render = () => {
     if (!root.isConnected) return;
+    libraryUi?.refresh();
     let input: HomeReadInput;
     try { input = ports.read(); } catch { input = { state: "unavailable", trips: [] }; }
     const view = homeReadModel(input, ports.now());
@@ -229,6 +235,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     else window.history.replaceState({ tripId }, "", "#trip");
     appliedRoute = routeKey(); paintRoute();
   }
+  let tripNavigationResult: Promise<void> = Promise.resolve();
   function apply(force = false) {
     if (!root.isConnected || !force && appliedRoute === routeKey()) return;
     let route = window.location.hash.slice(1);
@@ -266,9 +273,10 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       if (route === "trips") void ports.retry();
       if (route === "trip" && typeof window.history.state?.tripId === "string") {
         const tripId = window.history.state.tripId;
-        void (async () => {
+        tripNavigationResult = (async () => {
           if (generation === entryGeneration && isSignedIn()) await ports.openTrip(tripId);
-        })().then(() => {
+        })();
+        void tripNavigationResult.then(() => {
           if (generation !== entryGeneration || !root.isConnected) return;
           pendingTripId = undefined; tripEntry = "loaded"; paintRoute();
         }, () => {
@@ -306,9 +314,13 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     if (textarea.value.trim() !== prompt) return;
     homeForm.requestSubmit();
   };
+  if (ports.library) libraryUi = configureTripLibrary(root.querySelector<HTMLElement>('[data-page="trips"]')!, root.querySelector<HTMLElement>("[data-trip-list]")!, ports.library, {
+    openTrip: async id => { window.history.pushState({ tripId: id }, "", "#trip"); apply(); await tripNavigationResult; },
+    authenticated: isSignedIn, session: () => ports.librarySession?.() ?? 0,
+  });
   const unsubscribe = ports.subscribe(() => { render(); resumePending(); }); render(); apply(); resumePending();
   return { navigate, showMap, showConversation, showTrip, refresh: render, dispose() {
-    ++entryGeneration; unsubscribe();
+    ++entryGeneration; unsubscribe(); libraryUi?.dispose();
     window.removeEventListener("popstate", historyChanged); window.removeEventListener("hashchange", historyChanged);
     document.removeEventListener("transitforge:travel-profile-changed", render); root.remove();
   } };
