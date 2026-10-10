@@ -111,3 +111,7 @@ owner→viewer→editor→CAS→revoke、旧envelope、IDOR、偽owner、wrong/e
 SDK fixtureはlive DynamoDBではないが式とtransactionのall-or-nothingを検証する。
 frontendはsecret fragmentの消去、DTO allowlist、UI role/期限/取消/redeem、viewer confirm拒否、Agent roleのみを検証。
 既存Agent Smoke/Full・AJ〜AU scriptedケースを変更せず維持。新しいLLM判断やLiveケースは追加しない。
+
+### 共有ダイアログの表示
+
+閉じる操作はタイトル右端に配置する。権限と期限は横並びとし、参加者・発行したリンク・参加している旅程は取得結果が空なら見出しごと非表示にする。共有リンクでの参加は折りたたみ、参加リンクからの起動時とowner以外では開く。読込成功の通知は表示せず、変更操作の完了とエラーは下部のstatus領域で通知する。

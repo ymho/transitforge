@@ -101,6 +101,17 @@
   }
 }
 /* Icons belong to the time axis; card text shares a single left edge. */
+.trip-warning-box { background: #fff7dc; border: 1px solid #ead28c; border-radius: 10px; padding: 10px 14px; color: #66501a; margin-block: 10px; font-size: 12px; }
+.trip-warning-box summary { cursor: pointer; font-weight: 600; }
+.trip-warning-box summary span { margin-right: 8px; }
+.trip-warning-box li { margin-block: 6px; }
+.trip-order-list { list-style: none; padding: 0; }
+.trip-order-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--tf-line); padding: 10px 0; }
+.trip-order-title { flex: 1; min-width: 0; }
+.trip-order-row small { color: var(--tf-muted); }
+.trip-order-handle { cursor: grab; font-size: 22px; }
+.trip-order-row button { min-width: 44px; min-height: 44px; }
+.trip-order-open { margin-block: 8px; }
 #app[data-primary-view]:not([data-primary-view="map"]) {
   & .trip-workspace-card { grid-template-columns: 54px 34px minmax(0,1fr); gap: 12px; padding-bottom: 24px; }
   & .trip-timeline-rail::after { display: none; }

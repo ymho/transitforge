@@ -13,3 +13,30 @@
 .trip-sharing-panel button.ds-button--primary { background: #b34337; border-color: #b34337; color: #fff; }
 .trip-sharing-panel button:disabled { opacity: .5; cursor: default; }
 .trip-library-party { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+
+/* Compact sharing controls; other guide dialogs keep their existing layout. */
+.trip-sharing-panel--compact { width: min(32rem, calc(100vw - 2rem)); padding: 18px 20px; border-radius: 16px; }
+.trip-sharing-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.trip-sharing-panel--compact h2 { margin: 0; font-size: 16px; }
+.trip-sharing-panel--compact h3 { margin: 16px 0 8px; font-size: 13px; }
+.trip-sharing-panel--compact h4 { margin: 12px 0 4px; }
+.trip-sharing-panel--compact p { margin: 10px 0; }
+.trip-sharing-panel--compact input, .trip-sharing-panel--compact select { min-height: 36px; margin: 0; padding: 6px 8px; border-radius: 6px; font-size: 14px; }
+.trip-sharing-panel--compact button { min-height: 34px; padding: 6px 10px; margin: 6px 6px 0 0; border-radius: 6px; font-size: 12px; }
+.trip-sharing-panel--compact .trip-sharing-close { flex: 0 0 36px; height: 36px; margin: 0; padding: 0; border: 0; background: transparent; font-size: 24px; }
+.trip-sharing-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); gap: 10px; }
+.trip-sharing-panel--compact label { gap: 4px; margin: 0; }
+.trip-sharing-panel--compact input[readonly] { margin-top: 8px; }
+.trip-sharing-panel--compact ul { padding: 0; margin: 0; list-style: none; }
+.trip-sharing-panel--compact li { margin: 0; padding: 8px 0; border-bottom: 1px solid #e9eded; }
+.trip-sharing-join { margin-top: 16px; border-top: 1px solid #e9eded; padding-top: 10px; }
+.trip-sharing-join summary { cursor: pointer; color: #68716e; }
+.trip-sharing-join input { margin-top: 8px; }
+.trip-sharing-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.trip-sharing-panel--compact .trip-sharing-status { margin: 0; color: #68716e; font-size: 12px; }
+.trip-sharing-status:empty { display: none; }
+.trip-sharing-footer button { margin: 0 0 0 auto; border: 0; background: transparent; }
+@media (max-width: 480px) {
+  .trip-sharing-panel--compact { padding: 14px; }
+  .trip-sharing-panel--compact input, .trip-sharing-panel--compact select { font-size: 16px; }
+}

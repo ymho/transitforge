@@ -1,4 +1,5 @@
 import { openTripEditor } from "./trip-editor-dialog";
+import { openTripOrderEditor } from "./trip-order-editor";
 import { setLoadingStatus } from "../shared/primitives";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
@@ -132,7 +133,9 @@ export function configureTripWorkspace(options: {
         controller.current()?.id === trip?.id && controller.current()?.revision === trip?.revision });
   });
   summary.classList.add("trip-itinerary-dates");
-  itinerary.append(planDraft, summary, dayTabs, days, addFirst, add, candidates);
+  const reorder = control("並べ替え", () => openTripOrderEditor(controller, report));
+  reorder.className = "trip-order-open";
+  itinerary.append(planDraft, summary, reorder, dayTabs, days, addFirst, add, candidates);
   const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal, candidates);
   const travelMode = element("div"); travelMode.hidden = true;
   panel.append(detail, travelMode);
@@ -218,6 +221,7 @@ export function configureTripWorkspace(options: {
     retry.hidden = controller.loadState() !== "unavailable" || !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
     addFirst.hidden = !trip || trip.items.length > 0 || controller.source()?.getRole?.() === "viewer";
+    reorder.hidden = !trip || trip.items.length < 2 || controller.source()?.getRole?.() === "viewer";
     openTravelMode.hidden = openConsultation.hidden = adoption.hidden = branch.hidden = !trip;
     if (!trip) {
       share.hidden = true; adoptionHelp.textContent = "";

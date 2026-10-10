@@ -110,7 +110,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
       research: { sourceUrl: "https://example.org/garden", observedAt: "2026-09-26T10:00:00Z" } }]);
     const f = setup({ getCurrentTrip: () => trip }); f.ui.showPlan();
     const item = f.ui.panel.querySelector<HTMLElement>('[data-item-id="garden"]')!;
-    expect(item.textContent).toContain("参照資料は2026/9/26時点");
+    expect(item.textContent).toContain("2026/9/26に参照した資料を開く");
     const source = item.querySelector<HTMLAnchorElement>(".trip-workspace-research-source")!;
     expect(source.href).toBe("https://example.org/garden");
     expect(source.rel).toBe("noopener noreferrer");
@@ -199,7 +199,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.controller.sessionId()).toBe("one"); expect(f.controller.uiFocus()?.itemId).toBe("activity"); expect(f.controller.proposal()?.summary).toBe("順序変更");
     button(f.ui.nav, "旅程").click(); expect(f.ui.panel.scrollTop).toBe(330); expect(button(card, "詳細")).toBeDefined();
     expect(button(f.ui.nav, "旅程").getAttribute("aria-pressed")).toBe("true");
-    expect(f.app.contains(f.chat)).toBe(true); expect(f.ui.panel.querySelectorAll(".trip-workspace-diff")).toHaveLength(1);
+    expect(f.app.contains(f.chat)).toBe(true); expect(f.ui.panel.querySelectorAll(".trip-order-preview")).toHaveLength(1);
   });
   it("direct edits only preview, then update one card at explicit in-memory confirmation", async () => {
     let trip = multiCityTrip(); const f = setup({ getCurrentTrip: () => trip, confirmProposal: async (p) => { trip = applyTripProposal(trip, p); } });
@@ -210,15 +210,15 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(trip.items[2]?.title).toBe("Zürich"); expect(f.ui.panel.textContent).toContain("変更後");
     button(f.ui.panel, "確認して、この画面内に反映").click(); await vi.waitFor(() => expect(trip.items[2]?.title).toBe("ゆっくり散策"));
     expect(f.ui.panel.querySelector('[data-item-id="hotel"]')).toBe(oldHotel);
-    expect(oldHotel?.querySelector('option[value="activity"]')?.textContent).toContain("ゆっくり散策");
+    expect(oldHotel?.querySelector(".trip-workspace-move-target")).toBeNull();
     await vi.waitFor(() => expect(f.ui.panel.querySelector('[role="status"]')?.textContent).toContain("永続保存はしていません"));
   });
   it("remove/move use the shared proposal path and consultation sends intent with focus", () => {
     const trip = multiCityTrip(), f = setup({ getCurrentTrip: () => trip });
     const activity = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
     button(activity, "削除案").click(); expect(f.controller.proposal()?.patches).toEqual([{ type: "remove", itemId: "activity" }]);
-    activity.querySelector<HTMLSelectElement>("select")!.value = ""; button(activity, "移動案").click();
-    expect(f.controller.proposal()?.patches).toEqual([{ type: "move", itemId: "activity" }]);
+    expect(activity.querySelector(".trip-workspace-move-target")).toBeNull();
+    expect(button(f.ui.panel, "並べ替え")).toBeDefined();
     const day = activity.querySelector<HTMLSelectElement>(".trip-workspace-day-target")!;
     day.value = [...day.options].find(option => option.textContent === "2026-09-22")!.value;
     button(activity, "日付変更案").click();
@@ -236,8 +236,8 @@ describe("Trip workspace DOM and mobile navigation", () => {
   it("session change drops neither proposals nor selection; another Trip does not receive them", () => {
     const f = setup({ getCurrentTrip: multiCityTrip }); f.controller.focus("activity"); f.controller.propose("削除", [{ type: "remove", itemId: "activity" }]);
     f.controller.attach("two", { getCurrentTrip: () => createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt, [placeActivity("other")]) });
-    f.controller.activateSession("two"); expect(f.ui.panel.textContent).not.toContain("変更案（まだ反映"); expect(f.controller.uiFocus()).toBeUndefined();
-    f.controller.activateSession("one"); expect(f.ui.panel.textContent).toContain("変更案（まだ反映"); expect(f.controller.uiFocus()?.itemId).toBe("activity");
+    f.controller.activateSession("two"); expect(f.ui.panel.textContent).not.toContain("変更内容を確認"); expect(f.controller.uiFocus()).toBeUndefined();
+    f.controller.activateSession("one"); expect(f.ui.panel.textContent).toContain("変更内容を確認"); expect(f.controller.uiFocus()?.itemId).toBe("activity");
   });
   it("restores the selected day when returning to a conversation", () => {
     const f = setup({ getCurrentTrip: multiCityTrip }); f.ui.showPlan();
