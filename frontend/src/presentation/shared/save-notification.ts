@@ -10,13 +10,21 @@ export function notifySaved(document: Document, message: string): void {
   const close = document.createElement("button"); close.type = "button"; close.textContent = "×"; close.setAttribute("aria-label", "通知を閉じる");
   let timer: ReturnType<typeof setTimeout> | undefined;
   const pause = () => { clearTimeout(timer); };
-  const dismiss = () => { pause(); notice.remove(); if (active.get(document) === dismiss) active.delete(document); };
+  const observer = new MutationObserver(() => mount());
+  const dismiss = () => { pause(); observer.disconnect(); notice.remove(); if (active.get(document) === dismiss) active.delete(document); };
   const resume = () => { pause(); timer = setTimeout(dismiss, 6000); };
   close.addEventListener("click", dismiss);
   notice.addEventListener("mouseenter", pause); notice.addEventListener("mouseleave", resume);
   notice.addEventListener("focusin", pause); notice.addEventListener("focusout", resume);
-  notice.append(text, close); document.body.append(notice);
-  // Popovers remain visible above an open editor or sharing dialog without taking focus.
-  if (typeof notice.showPopover === "function") { notice.setAttribute("popover", "manual"); notice.showPopover(); }
+  function mount() {
+    // Modal descendants stay interactive; moving out when it closes preserves the notice.
+    const host = [...document.querySelectorAll("dialog[open]")].at(-1) ?? document.body;
+    if (notice.parentElement !== host) {
+      host.append(notice);
+      if (typeof notice.showPopover === "function") { notice.setAttribute("popover", "manual"); notice.showPopover(); }
+    }
+  }
+  notice.append(text, close); mount();
+  observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open"] });
   active.set(document, dismiss); resume();
 }
