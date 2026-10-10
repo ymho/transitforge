@@ -1,5 +1,5 @@
 import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/reservation";
-import { confirmAction } from "../shared/app-dialog";
+import { confirmAction, requestText } from "../shared/app-dialog";
 
 import { renderTripWeather } from "./trip-weather-view";
 import { tripWeatherTargets } from "@raiquora/trip/trip-weather";
@@ -52,10 +52,8 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const content = element("div", "trip-timeline-content"), rail = element("span", "trip-timeline-rail"); rail.setAttribute("aria-hidden", "true");
   rail.append(icon);
   content.append(header); card.append(renderTripTimeEditor(trip, item, options.entry, controller, options.report), rail, content);
-  const stayRole = item.type === "stay" ? options.entry?.role === "end" ? "チェックアウト" : options.entry?.role === "continue" ? "連泊" : "チェックイン" : undefined;
   const placeName = item.type === "stay" ? item.selection.status === "selected" ? item.selection.accommodation.place.name : item.selection.place?.name : item.type === "activity" ? item.place?.name : undefined;
   if (placeName && placeName !== item.title) body.append(element("p", "trip-item-meta", placeName));
-  if (stayRole) body.append(element("p", "trip-item-meta", stayRole));
   const weather = renderTripWeather(trip, item, options.entry?.localDate); if (weather) body.append(weather);
   const decisionStatus = element("span", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" : item.decision ? "確定" : "未確定");
   decisionStatus.title = "予定の状態です。予約・購入の確認ではありません。";
@@ -76,6 +74,27 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     source.href = item.research.sourceUrl; source.target = "_blank"; source.rel = "noopener noreferrer";
     body.append(source);
   }
+  const memoSession = controller.sessionId(), memoSource = controller.source();
+  const memoForm = element("form", "trip-item-memo");
+  const memoLabel = element("label", "", "メモ"), memoInput = element("textarea", "ds-control");
+  memoInput.value = item.memo ?? ""; memoInput.rows = 3; memoInput.maxLength = 4000;
+  memoInput.readOnly = controller.source()?.getRole?.() === "viewer";
+  memoLabel.append(memoInput); memoForm.append(memoLabel);
+  if (!memoInput.readOnly) {
+    const saveMemo = element("button", "ds-button", "保存"); saveMemo.type = "submit"; memoForm.append(saveMemo);
+    memoForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      const current = controller.current();
+      if (!current || controller.sessionId() !== memoSession || controller.source() !== memoSource || current.id !== trip.id || current.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") {
+        options.report("旅程が更新されたか、編集できません。開き直してください。"); return;
+      }
+      saveMemo.disabled = true;
+      try { await controller.applyConfirmed(proposeTripItemChange(current, { action: "set-memo", itemId: item.id, memo: memoInput.value })); }
+      catch { options.report("メモを保存できませんでした。最新の旅程を確認してください。"); }
+      finally { saveMemo.disabled = false; }
+    });
+  }
+  if (!memoInput.readOnly || item.memo) body.append(memoForm);
   const safe = (action: () => void) => { try { if (controller.current()?.id !== trip.id || controller.source()?.getRole?.() === "viewer") throw new Error("Stale or readonly Trip"); action(); } catch { options.report("この変更では条件・仮定との整合が取れません。会話で変更内容を相談してください。"); } };
   const actions = element("div", "trip-workspace-actions");
   if (options.changeItemDecision) {
@@ -109,7 +128,17 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   };
   const consult = control("相談", () => askAboutItem("この予定を相談したい"));
   consult.className = "trip-item-consult";
-  const rename = control("✎", () => { body.hidden = false; updateDisclosure(); options.collapse(false); editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); });
+  const renameSession = controller.sessionId();
+  const rename = control("✎", async () => {
+    if (!controller.canConfirm() || controller.source()?.getRole?.() === "viewer") return;
+    const name = await requestText(document, "予定の名称", item.title);
+    if (!name || name === item.title) return;
+    if (controller.sessionId() !== renameSession || controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") { options.report("旅程が更新されました。最新の予定から編集し直してください。"); return; }
+    rename.disabled = true;
+    try { await controller.applyConfirmed(proposeTripItemChange(trip, { action: "rename", itemId: item.id, title: name })); }
+    catch (error) { options.report(error instanceof Error ? error.message : "名称を変更できませんでした。"); }
+    finally { rename.disabled = false; }
+  });
   rename.className = "trip-item-rename"; rename.setAttribute("aria-label", `${displayTitle}の名称を変更`);
   rename.hidden = controller.source()?.getRole?.() === "viewer";
   const remove = control("削除", async () => {
@@ -136,13 +165,6 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       : "この移動区間の交通手段を相談したい");
   }));
 
-  const editor = element("form", "trip-workspace-editor"); editor.hidden = true;
-  const label = element("label", "", "予定の名称 "); const title = element("input"); title.value = item.title; title.required = true; title.maxLength = 200;
-  label.append(title); const submit = element("button", "", "変更案を確認"); submit.type = "submit";
-  editor.append(label, submit);
-  editor.addEventListener("submit", (event) => {
-    event.preventDefault(); safe(() => controller.preview(proposeTripItemChange(controller.current()!, { action: "rename", itemId: item.id, title: title.value })));
-  });
   let manualActivityForm: HTMLElement | undefined;
   if (item.type === "activity") {
     const form = element("form", "trip-workspace-manual-activity"), label = element("label", "", "場所名（手入力） ");
@@ -177,7 +199,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     body.append(form);
   }
   const editing = element("div", "trip-workspace-editing");
-  editing.append(actions, editor);
+  editing.append(actions);
   if (manualActivityForm) editing.append(manualActivityForm);
   const titleGroup = element("div", "trip-item-title-group"); focus.replaceWith(titleGroup);
   titleGroup.append(focus, rename); header.append(decisionStatus);

@@ -1,4 +1,4 @@
-import { type TripUpdateProposal, validateActivityResearchReference } from "./trip";
+import { type TripUpdateProposal, validateActivityResearchReference, validateItemMemo } from "./trip";
 import { exactKeys } from "./snapshot-validation";
 import { parsePublicRequestProposal } from "./public-request-proposal";
 
@@ -14,15 +14,20 @@ export function parsePublicTripProposal(value: unknown): TripUpdateProposal {
       !proposal.summary.trim() || proposal.summary.length > 500 || proposal.intentBinding !== undefined ||
       !Array.isArray(proposal.patches) || ![1, 2].includes(proposal.patches.length)) throw new Error("Invalid item proposal");
   const [first, second] = proposal.patches;
-  if (!first || !["add", "replace", "remove", "move"].includes(first.type) ||
+  if (!first || !["add", "replace", "remove", "move", "item_memo"].includes(first.type) ||
       second && (second.type !== "planning" || !["itinerary_draft", "itinerary_refinement"].includes(second.state))) throw new Error("Invalid item patches");
-  if (first.type === "add" || first.type === "replace") {
+  if (first.type === "item_memo") {
+    exactKeys(first, ["type", "itemId", "memo"]);
+    if (typeof first.itemId !== "string" || !first.itemId.trim() || first.itemId.length > 200 || second) throw new Error("Invalid memo target");
+    validateItemMemo(first.memo);
+  } else if (first.type === "add" || first.type === "replace") {
     exactKeys(first, first.type === "add" ? ["type", "item", "afterId"] : ["type", "itemId", "item"]);
     const item = first.item;
     if (!item || typeof item !== "object" || !["activity", "transport", "stay"].includes(item.type)) throw new Error("Invalid public item");
-    exactKeys(item, item.type === "activity" ? ["type", "id", "title", "schedule", "logicalDayId", "decision", "category", "place", "research"]
-      : item.type === "transport" ? ["type", "id", "title", "schedule", "logicalDayId", "decision", "detail"]
-        : ["type", "id", "title", "schedule", "logicalDayId", "decision", "selection"]);
+    exactKeys(item, item.type === "activity" ? ["type", "id", "title", "schedule", "logicalDayId", "decision", "memo", "category", "place", "research"]
+      : item.type === "transport" ? ["type", "id", "title", "schedule", "logicalDayId", "decision", "memo", "detail"]
+        : ["type", "id", "title", "schedule", "logicalDayId", "decision", "memo", "selection"]);
+    if (item.memo !== undefined) validateItemMemo(item.memo);
     const manual = (place: { name?: unknown; sources?: readonly unknown[] }) =>
       !!place && typeof place === "object" && !Array.isArray(place) && Object.keys(place).every(key => ["name", "sources"].includes(key)) && typeof place.name === "string" && !!place.name.trim() &&
       place.name.length <= 200 && Array.isArray(place.sources) && place.sources.length === 0;

@@ -40,7 +40,7 @@ export interface Trip {
 }
 
 export interface ItemDecision { readonly confirmedAt: string; readonly needsReconfirmation?: true; }
-interface ItineraryItemBase { readonly id: string; readonly title: string; readonly schedule: ItinerarySchedule; readonly logicalDayId?: string; readonly decision?: ItemDecision; }
+interface ItineraryItemBase { readonly memo?: string; readonly id: string; readonly title: string; readonly schedule: ItinerarySchedule; readonly logicalDayId?: string; readonly decision?: ItemDecision; }
 export interface TransportItineraryItem extends ItineraryItemBase {
   readonly type: "transport";
   readonly detail: TransportDetail;
@@ -77,6 +77,7 @@ export type TripPatch = { readonly type: "replace"; readonly itemId: string; rea
   | { readonly type: "timeline"; readonly timeline?: TripTimeline }
   | { readonly type: "structure_intent"; readonly structureIntent?: TripStructureIntent }
   | { readonly type: "adoption"; readonly action: TripAdoptionAction }
+  | { readonly type: "item_memo"; readonly itemId: string; readonly memo: string }
   | { readonly type: "item_decision"; readonly itemId: string; readonly action: "confirm" | "withdraw" }
   | { readonly type: "lifecycle"; readonly state: LifecycleState; readonly basis: "schedule" | "user_confirmation" };
 export interface TripUpdateProposal {
@@ -144,10 +145,11 @@ export function validateTrip(trip: Trip): void {
 
 function validateItem(item: ItineraryItem, timeline?: TripTimeline): void {
   if (typeof item.id !== "string" || !item.id.trim() || typeof item.title !== "string") throw new Error("Invalid itinerary identity");
+  if (item.memo !== undefined) validateItemMemo(item.memo);
   if (item.decision !== undefined) validateTripAdoption(item.decision);
   validateItinerarySchedule(item.schedule);
   if (item.type === "transport") {
-    exactKeys(item, ["id", "title", "type", "detail", "schedule", "logicalDayId", "decision"]);
+    exactKeys(item, ["id", "title", "type", "detail", "schedule", "logicalDayId", "decision", "memo"]);
     if (item.detail.status === "selected" && item.detail.mode === "rail") {
       exactKeys(item.detail, ["status", "mode", "journey"]);
       const projected = projectRailSchedule(item.detail.journey);
@@ -160,7 +162,7 @@ function validateItem(item: ItineraryItem, timeline?: TripTimeline): void {
       exactKeys(item.detail, ["status", "mode"]);
     } else throw new Error("Invalid transport selection");
   } else if (item.type === "stay") {
-    exactKeys(item, ["id", "title", "type", "selection", "schedule", "logicalDayId", "decision", "plannedTiming"]);
+    exactKeys(item, ["id", "title", "type", "selection", "schedule", "logicalDayId", "decision", "memo", "plannedTiming"]);
     if (item.plannedTiming !== undefined) {
       const selected = item.selection.status === "selected" ? item.selection.accommodation : undefined;
       const dated = item.schedule.type === "day" ? item.schedule : item.schedule.type === "relative" && timeline ? bindRelativeSchedule(item.schedule, timeline) : undefined;
@@ -180,7 +182,7 @@ function validateItem(item: ItineraryItem, timeline?: TripTimeline): void {
     if (item.schedule.type !== "day" || item.schedule.date !== projected.date ||
         item.schedule.endDate !== projected.endDate || item.schedule.timeZone !== projected.timeZone) throw new Error("Stay schedule differs from adopted stay dates");
   } else if (item.type === "activity") {
-    exactKeys(item, ["id", "title", "type", "category", "place", "research", "schedule", "logicalDayId", "decision"]);
+    exactKeys(item, ["id", "title", "type", "category", "place", "research", "schedule", "logicalDayId", "decision", "memo"]);
     if (!item.title.trim() || !activityCategories.includes(item.category)) throw new Error("Invalid activity");
     if (item.place !== undefined) validatePlaceSnapshot(item.place);
     if (item.research !== undefined) {
@@ -228,6 +230,15 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
           ["cancelled", "completed"].includes(trip.lifecycleState) ||
           authority.confirmedAdoption !== tripAdoptionConfirmationKey(proposal)) throw new Error("Explicit adoption confirmation required");
       adoptionAction = patch.action;
+      continue;
+    }
+    if (patch.type === "item_memo") {
+      exactKeys(patch, ["type", "itemId", "memo"]);
+      validateItemMemo(patch.memo);
+      const index = items.findIndex(item => item.id === patch.itemId);
+      if (index < 0) throw new Error("Memo requires an existing item");
+      const { memo: _oldMemo, ...item } = items[index]!;
+      items[index] = { ...item, ...(patch.memo.trim() ? { memo: patch.memo } : {}) } as ItineraryItem;
       continue;
     }
     if (patch.type === "item_decision") {
@@ -393,4 +404,9 @@ export function upgradeTripV2(trip: Trip): Trip {
   const migrated: Trip = { ...structuredClone(trip), schemaVersion: 3 };
   validateTrip(migrated);
   return migrated;
+}
+
+/** Plain text only; presentation must never interpret markup. */
+export function validateItemMemo(value: unknown): asserts value is string {
+  if (typeof value !== "string" || value.length > 4000) throw new Error("Invalid item memo");
 }

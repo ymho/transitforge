@@ -236,3 +236,14 @@
 .app-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
 .app-dialog .ds-button { min-height: 32px; padding: 5px 8px; font-size: 14px; font-weight: 500; }
+
+#app[data-primary-view] .trip-cost-input-group { display: flex; align-items: stretch; width: min(100%, 260px); border: 1px solid var(--tf-line); border-radius: 7px; background: var(--tf-bg); overflow: hidden; }
+#app[data-primary-view] .trip-cost-input-group input { flex: 1; width: 0; min-width: 0; }
+#app[data-primary-view] .trip-cost-input-group select { flex: 0 0 72px; width: 72px; border-left: 1px solid var(--tf-line); }
+#app[data-primary-view] .trip-cost-input-group :is(input, select) { min-height: 32px; margin: 0; padding: 5px 7px; border-top: 0; border-bottom: 0; border-right: 0; border-radius: 0; background: transparent; }
+#app[data-primary-view] .trip-cost-input-group input { border-left: 0; }
+
+.trip-item-memo { display: grid; gap: 6px; margin: 10px 0; }
+.trip-item-memo label { display: grid; gap: 4px; font-size: 13px; }
+.trip-item-memo textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; min-height: 64px; }
+.trip-item-memo button { justify-self: start; min-height: 30px; padding: 4px 8px; font-size: 13px; }

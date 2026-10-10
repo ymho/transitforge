@@ -26,7 +26,7 @@ export function canConfirmTrip(trip: Pick<Trip, "items" | "lifecycleState" | "ti
 /** Compare plan semantics, not copy or explanatory labels. Prices/notes in separate resources do not invalidate intent. */
 export function adoptionNeedsReview(before: Trip, after: Trip): boolean {
   const relevant = (trip: Trip) => ({
-    items: trip.items.map(({ title: _title, decision: _decision, ...item }) => item),
+    items: trip.items.map(({ title: _title, decision: _decision, memo: _memo, ...item }) => item),
     party: trip.request.party,
     partialConditions: trip.request.partialConditions,
     conditions: trip.request.constraints.filter(({ requirement }) =>

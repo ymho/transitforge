@@ -87,6 +87,7 @@ export function previewInTripReplan(trip: Trip, proposal: TripUpdateProposal, in
     if (!mutable.has(id) && !added.has(id)) throw new Error("過去・対象外・保護された予定は変更できません。変更対象を画面で明示してください。");
   };
   for (const patch of proposal.patches) {
+    if (patch.type === "item_memo") continue;
     if (patch.type === "planning") {
       if (patch.state !== "itinerary_draft" && patch.state !== "itinerary_refinement") throw new Error("再計画で準備完了を自動認定しません");
       continue;
