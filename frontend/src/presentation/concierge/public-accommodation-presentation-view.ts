@@ -9,6 +9,14 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
   const combined = plan && canCombineAccommodationPlan(value, plan) ? plan : undefined;
   const actions = combined ? renderPublicPlanPresentation(combined, { detailedResearch: false }) : undefined;
 
+  const commonLines = value.cards[0]!.summary.split("\n").filter(line =>
+    (/^\d{4}-\d{2}-\d{2}〜/u.test(line) || /^検索人数[:：]/u.test(line)) &&
+    value.cards.every(card => card.summary.split("\n").includes(line)));
+  if (commonLines.length) {
+    const conditions = document.createElement("p"); conditions.className = "accommodation-conditions";
+    conditions.textContent = commonLines.map(line => line.replace(/^検索人数[:：]\s*/u, "")).join(" ・ ");
+    section.append(conditions);
+  }
   const panels: HTMLElement[] = [];
   for (const [index, hotel] of value.cards.entries()) {
     const card = document.createElement("article"); card.className = "public-place-card";
@@ -21,11 +29,16 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
     card.append(name);
     const facts = document.createElement("dl"); facts.className = "accommodation-facts";
     const notices: string[] = [];
-    const addFact = (label: string, value: string) => {
-      const term = document.createElement("dt"), detail = document.createElement("dd"); term.textContent = label; detail.textContent = value; facts.append(term, detail);
-    };
+    const introductions: string[] = [];
+    const rows: [string, string][] = [];
+    const addFact = (label: string, value: string) => { rows.push([label, value]); };
     for (const line of hotel.summary.split("\n").filter(Boolean)) {
-      if (/^評価[:：]/u.test(line)) continue;
+      if (commonLines.includes(line) || /^評価[:：]/u.test(line)) continue;
+      const introduction = line.match(/^(特徴|口コミ（投稿例）)[:：]\s*(.*)$/u);
+      if (introduction) { introductions.push(introduction[1] === "特徴" ? introduction[2]! : `口コミの一例：${introduction[2]}`); continue; }
+      if (line === "料金は未確認") { addFact("参考最安値", "未確認"); continue; }
+      if (/^空室あり/u.test(line)) { addFact("空室", "あり（検索時の条件）"); continue; }
+      if (/^空室は未確認/u.test(line)) { addFact("空室", "未確認"); continue; }
       if (/空室|未確認/u.test(line)) { notices.push(line); continue; }
       const price = line.match(/^(.*?料金|参考最安値|参考最低料金)[:：]\s*(.*?)(?:（(.*?)）)?$/u);
       if (price) { addFact(price[1]!, price[2]!); if (price[3]) notices.push(price[3]); continue; }
@@ -34,15 +47,26 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
       else if (/^\d{4}-\d{2}-\d{2}〜/u.test(line)) addFact("宿泊日", line);
       else addFact("情報", line);
     }
+    const priority = (label: string) => /料金|参考最安値|参考最低料金/u.test(label) ? 1 : label === "空室" ? 2 : 3;
+    rows.sort((a, b) => priority(a[0]) - priority(b[0]));
+    for (const [label, value] of rows) {
+      const term = document.createElement("dt"), detail = document.createElement("dd");
+      term.textContent = label; detail.textContent = value; facts.append(term, detail);
+    }
     const legacyRating = hotel.summary.match(/^評価[:：]\s*([0-5](?:\.\d+)?)\/5$/mu);
     const rating = hotel.reviewAverage ?? (legacyRating ? Number(legacyRating[1]) : undefined);
     if (rating !== undefined && rating >= 0 && rating <= 5) {
       const term = document.createElement("dt"), detail = document.createElement("dd"), stars = document.createElement("span"), fill = document.createElement("span");
       term.textContent = "評価"; detail.className = "accommodation-rating"; stars.className = "accommodation-stars";
       stars.setAttribute("aria-hidden", "true"); stars.textContent = "★★★★★"; fill.textContent = "★★★★★"; fill.style.width = `${Number((rating * 20).toFixed(2))}%`; stars.append(fill);
-      detail.setAttribute("aria-label", `5点満点中${rating}`); detail.append(stars, document.createTextNode(` ${rating.toFixed(2)}`)); facts.append(term, detail);
+      detail.setAttribute("aria-label", `5点満点中${rating}`); detail.append(stars, document.createTextNode(` ${rating.toFixed(2)}`)); facts.prepend(term, detail);
     }
     card.append(facts);
+    if (introductions.length) {
+      const introduction = document.createElement("div"); introduction.className = "accommodation-introduction";
+      for (const text of introductions) { const paragraph = document.createElement("p"); paragraph.textContent = text; introduction.append(paragraph); }
+      card.append(introduction);
+    }
     if (notices.length) {
       const notice = document.createElement("aside"), title = document.createElement("strong"), content = document.createElement("p");
       notice.className = "accommodation-notice"; title.textContent = "お知らせ"; content.textContent = notices.join("。\n"); notice.append(title, content); card.append(notice);
@@ -91,7 +115,7 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       event.preventDefault(); show(current + (event.key === "ArrowRight" ? 1 : -1));
     });
-    navigation.append(previous, position, next); section.prepend(navigation); show(0);
+    navigation.append(previous, position, next); section.insertBefore(navigation, panels[0]!); show(0);
   }
   return section;
 }

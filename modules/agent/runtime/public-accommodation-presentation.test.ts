@@ -7,6 +7,7 @@ import { validateEvidenceAndClaims } from "./evidence-model";
 it("publishes ten hotel comparisons even when the answer selected one name, without inventing a stay total", () => {
   const evidence = externalTravelEvidence({ searchAdults: 1, accommodations: Array.from({ length: 10 }, (_, i) => i + 1).map(id => ({ kind: "accommodation", provider: "fixture", providerItemId: String(id), name: `宿${id}`,
     checkInDate: "2026-10-04", checkOutDate: "2026-10-05", availability: id === 1 ? "available" : "unknown",
+    description: "温泉付きの宿です。", reviewExcerpt: "接客が丁寧でした。",
     bookingUrl: `https://example.org/hotel/${id}`, reviewAverage: 4.24, imageUrl: `https://example.org/hotel/${id}.jpg`,
     price: { price: { currency: "JPY", amountMinor: 5100 }, observedAt: "2026-10-03T00:00:00Z", basis: "reference-minimum" } })) },
   { retrievedAt: "2026-10-03T00:00:00Z", executionId: "execution", toolCallId: "hotels", toolName: "search_accommodations", queryFingerprint: "query" });
@@ -16,6 +17,7 @@ it("publishes ten hotel comparisons even when the answer selected one name, with
   for (const invalid of ["javascript:alert(1)", "http://example.org/photo.jpg", "https://example.org/photo?token=secret"]) {
     expect(() => parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [{ ...final.publicAccommodationPresentation!.cards[0], imageUrl: invalid }] })).toThrow();
   }
+  expect(final.publicAccommodationPresentation?.cards[0]?.summary).toContain("特徴: 温泉付きの宿です。\n口コミ（投稿例）: 接客が丁寧でした。");
   expect(final.evidence).toHaveLength(10);
   const panelOnly = admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: evidence[0]!.id, field: "accommodationSummary" }] }, { executionId: "execution", evidence });
   expect(panelOnly.text).toBe("宿泊候補をパネルで比較できます。");

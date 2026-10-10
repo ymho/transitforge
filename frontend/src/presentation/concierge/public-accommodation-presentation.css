@@ -12,8 +12,12 @@
 .accommodation-footer { display: flex; align-items: center; justify-content: space-between; gap: .7rem; margin-top: .75rem; color: var(--product-muted); }
 .accommodation-footer small { font-size: 10px; }
 .accommodation-credit { margin-left: auto; flex-shrink: 0; font-size: 10px; }
-.accommodation-credit img { display: block; width: 72px; height: auto; }
+.accommodation-credit img { display: block; width: 140px; max-width: 38vw; height: auto; }
 
 .accommodation-navigation { display: flex; align-items: center; justify-content: center; gap: .8rem; margin-bottom: .65rem; font-size: 12px; }
 #app .public-accommodation-presentation button { min-height: 30px; padding: 4px 9px; font-size: 12px; border-radius: 6px; }
 .accommodation-navigation button:disabled { opacity: .4; cursor: default; }
+
+.accommodation-conditions { margin: 0 0 .6rem; color: var(--product-muted); font-size: 12px; line-height: 1.6; }
+.accommodation-introduction { margin: .6rem 0; font-size: 12px; line-height: 1.7; }
+.accommodation-introduction p { margin: .3rem 0; }

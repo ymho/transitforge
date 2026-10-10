@@ -110,3 +110,7 @@ retryableを維持する。Runtimeは全体deadlineとTool回数上限内でモ�
 
 root全量test/buildはGitHub CIへ委ねる。専用format/lint scriptはなく、既存styleとarchitecture checkを使う。
 Smoke/Full/Live Evalは意思決定ロジックを変更しないため省略する。実AWSテストは統合gateへ残す。
+
+宿泊候補の詳細リンクはProviderの`planListUrl`を優先し、楽天トラベルの宿泊プランページへ検索時のチェックイン・チェックアウト日、大人人数、1室を渡す。施設URLのみの場合は施設番号を保ったプランページへ変換する。アフィリエイトURLは帰属情報を保持し、内包する遷移先へ条件を付与する。生成したURLは検索候補から採用済み旅程にも保存される。空室APIが未設定・失敗・該当施設を返さない場合は`unknown`を維持し、満室とは断定しない。
+
+固定egressの宿泊応答は任意の`description`（施設特色）と`reviewExcerpt`（口コミの投稿例）を各160文字以内の単一行で許可する。ProviderのHTMLを除去し、長文は文境界を優先して抜粋する。空室確認で特色・口コミが欠落した場合は同じ施設番号の施設検索結果を引き継ぐ。

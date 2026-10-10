@@ -34,10 +34,14 @@ export class HttpAccommodationProvider implements AccommodationProvider {
       // Vacancy search may confirm fewer hotels than discovery. Keep the other
       // comparison options with unknown availability instead of dropping them.
       const confirmedIds = new Set(available?.map(result => result.providerItemId) ?? []);
-      const candidates = available ? [...available, ...discovered.filter(result => !confirmedIds.has(result.providerItemId))].slice(0, request.limit) : discovered;
+      const confirmed = available?.map(result => ({ ...discovered.find(hotel => hotel.providerItemId === result.providerItemId), ...result }));
+      const candidates = confirmed ? [...confirmed, ...discovered.filter(result => !confirmedIds.has(result.providerItemId))].slice(0, request.limit) : discovered;
       // This adapter implements Rakuten Travel's hotel catalog: hotelNo is a
       // facility number, not a room/plan identifier or a name-derived identity.
-      return candidates.map((result) => createAccommodationOffering("rakuten-travel", request, result));
+      return candidates.map((result) => createAccommodationOffering("rakuten-travel", request, {
+        ...result,
+        ...(result.bookingUrl ? { bookingUrl: datedBookingUrl(result.bookingUrl, request) } : {}),
+      }));
     } catch (error) {
       throw new Error("宿泊提供者の検索を利用できません。", { cause: error });
     } finally { clearTimeout(timeout); }
@@ -91,7 +95,9 @@ function providerResults(value: unknown, limit: number, observedAt: string, avai
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
       .join("");
     return [{ providerItemId: String(basic.hotelNo), name: basic.hotelName,
-      ...stringField("bookingUrl", basic.hotelInformationUrl), ...stringField("areaName", basic.address1),
+      ...stringField("bookingUrl", basic.planListUrl || basic.hotelInformationUrl), ...stringField("areaName", basic.address1),
+      ...stringField("description", providerExcerpt(basic.hotelSpecial)),
+      ...stringField("reviewExcerpt", providerExcerpt(basic.userReview)),
       ...stringField("imageUrl", basic.hotelImageUrl), ...stringField("address", address),
       ...numberField("latitude", basic.latitude), ...numberField("longitude", basic.longitude),
       ...numberField("reviewAverage", basic.reviewAverage), ...integerField("reviewCount", basic.reviewCount),
@@ -107,6 +113,34 @@ function hotelBasicInfo(value: unknown): Record<string, unknown> | undefined {
   if (!isRecord(value)) return undefined;
   return isRecord(value.hotelBasicInfo) ? value.hotelBasicInfo : undefined;
 }
+
+// Keep provider attribution and affiliate routing while passing the search conditions
+// to Rakuten's plan page. Other providers' URLs remain unchanged.
+function datedBookingUrl(value: string, request: TravelProviderSearch): string {
+  let url: URL;
+  try { url = new URL(value); } catch { return value; }
+  if (url.protocol !== "https:" || url.username || url.password) return value;
+  if (url.hostname === "hb.afl.rakuten.co.jp") {
+    for (const key of ["pc", "m"]) {
+      const destination = url.searchParams.get(key);
+      if (destination) url.searchParams.set(key, datedBookingUrl(destination, request));
+    }
+    return url.toString();
+  }
+  if (!["travel.rakuten.co.jp", "hotel.travel.rakuten.co.jp"].includes(url.hostname)) return value;
+  const facility = url.pathname.match(/^\/HOTEL\/(\d+)\/\1\.html$/u);
+  if (facility) { url.hostname = "hotel.travel.rakuten.co.jp"; url.pathname = `/hotelinfo/plan/${facility[1]}`; }
+  for (const [suffix, date] of [["1", request.checkInDate], ["2", request.checkOutDate]] as const) {
+    const [year, month, day] = date.split("-");
+    url.searchParams.set(`f_nen${suffix}`, year!);
+    url.searchParams.set(`f_tuki${suffix}`, String(Number(month)));
+    url.searchParams.set(`f_hi${suffix}`, String(Number(day)));
+  }
+  url.searchParams.set("f_otona_su", String(request.adults));
+  url.searchParams.set("f_heya_su", "1");
+  url.searchParams.set("f_static", "0");
+  return url.toString();
+}
 function stringField<K extends string>(key: K, value: unknown): Partial<Record<K, string>> {
   return typeof value === "string" && value.trim() ? { [key]: value.trim() } as Record<K, string> : {};
 }
@@ -117,3 +151,15 @@ function integerField<K extends string>(key: K, value: unknown): Partial<Record<
   return Number.isSafeInteger(value) && (value as number) >= 0 ? { [key]: value } as Record<K, number> : {};
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+
+/** Extract a short provider-authored introduction without more HTTP/model calls. */
+function providerExcerpt(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const clean = value.replace(/<[^>]*>/gu, " ").replace(/&nbsp;/gu, " ").replace(/&amp;/gu, "&")
+    .replace(/[\u0000-\u001f\u007f]/gu, " ").replace(/\s+/gu, " ").trim();
+  if (!clean) return undefined;
+  if (clean.length <= 160) return clean;
+  const excerpt = clean.slice(0, 159);
+  const sentenceEnd = Math.max(excerpt.lastIndexOf("。"), excerpt.lastIndexOf("！"), excerpt.lastIndexOf("？"));
+  return sentenceEnd >= 30 ? excerpt.slice(0, sentenceEnd + 1) : `${excerpt}…`;
+}

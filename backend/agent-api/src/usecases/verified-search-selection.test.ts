@@ -236,3 +236,18 @@ it("adds accommodation to the same trip after adopting rail, preserving the sele
     }
   }
 });
+
+it("retains all ten accommodation choices for adoption instead of dropping the buttons", async () => {
+  const lodging = hotel();
+  const item = verifiedAccommodationSelectionItems([lodging.offering], [lodging.proof], at)[0]!;
+  const items = Array.from({ length: 10 }, (_, index) => ({ ...structuredClone(item), id: `hotel-${index}`, title: `宿${index + 1}` }));
+  const trip = createTrip(tripId, "宿の比較", at);
+  const draft = searchSelectionDraft(items, trip)!;
+  expect(draft.variants).toHaveLength(10);
+  const fixture = tripDynamoFixture(); fixture.clock.now = () => new Date(at);
+  const retention = new PlanCandidateRetentionApplication(new DynamoDbItineraryCandidateRepository("trips", fixture.client), () => new Date(at));
+  const retained = await retention.retain({ principal: stateA, executionId: "ten-hotels", conversationId, tripId, baseTripRevision: 0, userRequest: "宿を比較" }, draft, []);
+  expect(retained.presentation.candidates).toHaveLength(10);
+  expect(retained.presentation.target?.tripId).toBe(tripId);
+  expect(searchSelectionDraft([...items, { ...item, id: "hotel-11" }], trip)).toBeUndefined();
+});

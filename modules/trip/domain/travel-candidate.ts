@@ -23,6 +23,8 @@ export interface AccommodationOffering extends TravelOffering {
   longitude?: number;
   reviewAverage?: number;
   reviewCount?: number;
+  description?: string;
+  reviewExcerpt?: string;
   availability?: "available" | "unknown";
 }
 
