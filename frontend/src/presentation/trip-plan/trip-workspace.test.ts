@@ -11,7 +11,7 @@ import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 
 function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string) => Promise<InTripContextSnapshot | undefined>,
-  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "regenerateTitle" | "changeAdoption" | "changeItemDecision" | "branchTrip" | "conversationId" | "onPlanAdoption">> = {}) {
+  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "renameTitle" | "changeAdoption" | "changeItemDecision" | "branchTrip" | "conversationId" | "onPlanAdoption">> = {}) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
   const chat = document.createElement("section"); chat.id = "chat";
   const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
@@ -302,13 +302,16 @@ it("puts Trip confirmation and sharing in the header and explains missing schedu
   expect(heading.textContent).not.toContain("旅行モード");
 });
 
-it("regenerates the header title from the current trip and hides the action for shared viewers", async () => {
-  const trip = multiCityTrip(); const regenerateTitle = vi.fn(async () => {});
-  const f = setup({ getCurrentTrip: () => trip }, undefined, { regenerateTitle }); f.ui.showPlan();
-  f.ui.panel.querySelector<HTMLButtonElement>('[aria-label="旅のタイトルを再生成"]')!.click();
-  await vi.waitFor(() => expect(regenerateTitle).toHaveBeenCalledExactlyOnceWith(trip));
+it("edits the header title manually and hides editing for shared viewers", async () => {
+  const trip = multiCityTrip(); const renameTitle = vi.fn(async () => {});
+  const prompt = vi.fn(() => "  新しい旅の名称  "); vi.stubGlobal("prompt", prompt);
+  const f = setup({ getCurrentTrip: () => trip }, undefined, { renameTitle }); f.ui.showPlan();
+  const edit = f.ui.panel.querySelector<HTMLButtonElement>('[aria-label="旅程の名称を編集"]')!;
+  expect(edit.querySelector("svg")).not.toBeNull(); edit.click();
+  await vi.waitFor(() => expect(renameTitle).toHaveBeenCalledExactlyOnceWith(trip, "新しい旅の名称"));
+  expect(prompt).toHaveBeenCalledWith("旅程の名前", trip.title);
   f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
-  expect(f.ui.panel.querySelector<HTMLButtonElement>('[aria-label="旅のタイトルを再生成"]')!.hidden).toBe(true);
+  expect(edit.hidden).toBe(true); edit.click(); expect(renameTitle).toHaveBeenCalledTimes(1);
 });
 
 it("hides consultation for confirmed items and permits returning to draft", async () => {

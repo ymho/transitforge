@@ -21,10 +21,6 @@
   & .trip-list-copy strong { font-size: 19px; line-height: 1.45; font-weight: 600; margin-bottom: 10px; }
   & .trip-list-copy small { font-size: 12px; line-height: 1.6; }
   & .trip-party-pair { margin-top: 8px; }
-  & .trip-list-open { display: flex; justify-content: space-between; padding: 16px 22px 22px; font-size: 12px; color: var(--tf-blue); font-weight: 600; }
-  & .home-trip-manage { right: 12px; top: 12px; border-radius: 50%; background: #fff; color: #242b2c; }
-  & .home-trip-manage summary { border-radius: 50%; }
-  & .home-trip-manage[open] { border-radius: 14px; background: var(--tf-bg); color: var(--tf-ink); }
   & .product-nav { background: var(--tf-bg); border-color: var(--tf-line); box-shadow: 0 -2px 18px #253d3508; }
   & .product-nav [aria-current="page"] { color: var(--tf-blue); background: var(--workspace-accent-soft); }
   & .home-welcome { text-align: left; width: min(660px, calc(100vw - 48px)); color: #fff; }
@@ -66,7 +62,6 @@
     & [data-trip-list] { grid-template-columns: 1fr; gap: 24px; }
     & .trip-list-cover { height: 188px; }
     & .trip-list-copy { padding: 18px 20px 6px; }
-    & .trip-list-open { padding: 14px 20px 20px; }
     & .home-hero-copy { padding-bottom: 100px; }
   }
 }
@@ -226,13 +221,22 @@
   & .trip-list-title-open strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; overflow-wrap: anywhere; }
   & .trip-list-title-row { margin-bottom: 10px; }
   & .trip-header-title-row h1 { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
-  & .trip-title-regenerate { flex: 0 0 28px; display: grid; place-items: center; width: 28px; min-width: 28px; height: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: var(--tf-muted); border-radius: 0; box-shadow: none; }
-  & .trip-title-regenerate .ds-icon { width: 16px; height: 16px; }
-  & .trip-title-regenerate:disabled { opacity: .45; cursor: default; }
-  & .trip-title-regenerate[aria-busy="true"] .ds-icon { animation: trip-title-spin 1s linear infinite; }
-  & .trip-header-title-row .trip-title-regenerate { color: #fff; }
-  & .trip-list-open { background: transparent; border: 0; width: 100%; }
-  & .trip-title-status { font-size: 12px; }
+  & .trip-title-edit { flex: 0 0 28px; display: grid; place-items: center; width: 28px; min-width: 28px; height: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: var(--tf-muted); border-radius: 0; box-shadow: none; }
+  & .trip-title-edit .ds-icon { width: 16px; height: 16px; }
+  & .trip-title-edit:disabled { opacity: .45; cursor: default; }
+  & .trip-header-title-row .trip-title-edit { color: #fff; }
 }
-@keyframes trip-title-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { #app .trip-title-regenerate[aria-busy="true"] .ds-icon { animation: none; } }
+
+#app[data-primary-view]:is([data-primary-view]) {
+  & .home-trip-card { cursor: pointer; }
+  & .trip-list-copy { padding-bottom: 20px; }
+  & .home-trip-card > .home-trip-manage, & .home-trip-card > .home-trip-manage[open] { position: absolute; right: 12px; top: 12px; box-sizing: border-box; width: 36px; height: 36px; padding: 0; margin: 0; border: 0; border-radius: 50%; background: transparent; box-shadow: none; }
+  & .home-trip-manage > summary { box-sizing: border-box; display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; background: #fff; color: var(--tf-ink); line-height: 1; cursor: pointer; }
+  & .home-trip-manage > summary:hover { background: var(--tf-soft); }
+  & .home-trip-manage > summary:focus-visible { outline: 2px solid var(--tf-blue); outline-offset: 2px; }
+  & .trip-status-chip { display: inline-flex; width: fit-content; align-items: center; margin-top: 10px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1.5; background: #fff1dc; color: #80551c; }
+  & .trip-status-chip:is([data-trip-status="next"], [data-trip-status="scheduled"]) { background: #e8f0fa; color: #325c84; }
+  & .trip-status-chip[data-trip-status="current"] { background: #e4f2ec; color: #28654b; }
+  & .trip-status-chip:is([data-trip-status="past-plan"], [data-trip-status="completed"]) { background: #eef0f2; color: #59636d; }
+  & .trip-status-chip[data-trip-status="cancelled"] { background: #fce9e8; color: #9b433d; }
+}
