@@ -41,6 +41,7 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
   const sessions = new Map<string, { source: TripWorkspaceSource; itemId?: string; proposal?: TripUpdateProposal; base?: string; confirming?: boolean; plan?: PublicPlanPresentation }>();
   const subscriptions = new Map<string, () => void>();
   const listeners = new Set<() => void>();
+  const savedListeners = new Set<(proposal: TripUpdateProposal) => void>();
   const state = () => sessions.get(sessionId);
   const current = () => {
     const trip = state()?.source.getCurrentTrip();
@@ -127,6 +128,7 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
     },
     activateSession(id: string) { sessionId = id; publish(); },
     refresh: publish,
+    subscribeSaved(listener: (proposal: TripUpdateProposal) => void) { savedListeners.add(listener); return () => { savedListeners.delete(listener); }; },
     subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); },
     focus(itemId?: string) {
       const s = state();
@@ -154,7 +156,7 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
     },
     dismiss() { const s = state(); if (s) { delete s.proposal; delete s.base; } publish(); },
     async saveConditions(proposal: TripUpdateProposal) {
-      const s = state(), trip = current();
+      const selectedSession = sessionId, s = state(), trip = current();
       if (!s || !trip || s.confirming || !s.source.confirmProposal) throw new Error("旅程を保存できません");
       if (s.source.getRole?.() === "viewer") throw new TripWriteRejected("この旅程は閲覧専用です");
       if (proposal.tripId !== trip.id || proposal.baseRevision !== trip.revision) throw new TripRevisionConflict();
@@ -162,7 +164,7 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
       applyTripProposal(trip, proposal);
       assertItineraryEditingAllowed(trip, proposal);
       s.confirming = true;
-      try { await s.source.confirmProposal(structuredClone(proposal)); }
+      try { await s.source.confirmProposal(structuredClone(proposal)); if (sessionId === selectedSession) for (const listener of savedListeners) listener(proposal); }
       finally { s.confirming = false; publish(); }
     },
     canConfirm() { return state()?.source.getRole?.() !== "viewer" && !!state()?.source.confirmProposal; },
@@ -198,7 +200,7 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
       finally { s.confirming = false; }
       // A delayed confirmation cannot clear another session or a newer proposal.
       if (s.proposal === shown) { delete s.proposal; delete s.base; }
-      if (sessionId === selectedSession) publish();
+      if (sessionId === selectedSession) { publish(); for (const listener of savedListeners) listener(shown); }
     },
     candidates() {
       return (state()?.source.getCandidates?.() ?? []).map((entry) => {

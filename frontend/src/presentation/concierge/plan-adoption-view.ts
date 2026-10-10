@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import type { AiGuidePanelElements } from "./ai-guide-panel";
 
 /** Same preview/confirm flow in chat and itinerary. Rendering never writes a Trip. */
@@ -18,7 +19,7 @@ export function previewPlanAdoption(event: Event, options: {
     confirm.addEventListener("click", () => {
       if (!options.isCurrent()) { status.textContent = "対象が変わりました。最新の旅程で確認し直してください。"; return; }
       confirm.disabled = true;
-      void result.confirm().then(() => { status.textContent = "旅程へ保存し、最新状態を再読込しました。"; })
+      void result.confirm().then(() => { status.textContent = ""; notifySaved(status.ownerDocument, "選んだ案を旅程へ保存しました。"); })
         .catch(() => { confirm.disabled = false; status.textContent = "保存できませんでした。最新の旅程で案を作り直してください。"; });
     });
     status.replaceChildren(summary, confirm);

@@ -27,9 +27,10 @@ describe("share management UI", () => {
     f.ui.dialog.querySelector<HTMLInputElement>('input[type="datetime-local"]')!.value = new Date(Date.now() + 86400000).toISOString().slice(0, 16);
     f.click("リンク作成"); await vi.waitFor(() => expect(f.client.create).toHaveBeenCalledWith(id, "editor", expect.any(String)));
     await vi.waitFor(() => expect(f.ui.dialog.querySelector<HTMLInputElement>("input[readonly]")!.value).toContain("#trip-share="));
-    await vi.waitFor(() => expect(f.ui.dialog.textContent).toContain("更新しました"));
+    await vi.waitFor(() => expect(document.querySelector(".app-save-notification")?.textContent).toContain("共有設定を更新しました"));
     f.click("リンクと由来アクセスを失効"); await vi.waitFor(() => expect(f.client.revoke).toHaveBeenCalledWith(id, grant));
-    await vi.waitFor(() => expect(f.ui.dialog.textContent).toContain("更新しました"));
+    await vi.waitFor(() => expect(document.querySelector(".app-save-notification")?.textContent).toContain("共有設定を更新しました"));
+    await vi.waitFor(() => expect(f.ui.dialog.querySelector('[role="status"]')!.getAttribute("aria-busy")).toBe("false"));
     f.click("権限を変更"); await vi.waitFor(() => expect(f.client.participant).toHaveBeenCalled());
     f.click("閉じる"); expect(f.ui.dialog.querySelector<HTMLInputElement>("input[readonly]")!.value).toBe("");
   });
@@ -53,7 +54,7 @@ describe("share management UI", () => {
     await vi.waitFor(() => expect(f.ui.dialog.querySelector('[role="status"]')!.getAttribute("aria-busy")).toBe("false"));
     const link = f.ui.dialog.querySelector<HTMLInputElement>("input[readonly]")!; f.click("コピー");
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(link.value));
-    await vi.waitFor(() => expect(f.ui.dialog.textContent).toContain("コピーしました"));
+    await vi.waitFor(() => expect(document.querySelector(".app-save-notification")?.textContent).toContain("コピーしました"));
     expect(copy.parentElement).toBe(link.parentElement); f.click("閉じる"); expect(copy.disabled).toBe(true); expect(link.value).toBe("");
   });
   it("formats issued roles and timestamps for people instead of exposing enum and ISO values", async () => {

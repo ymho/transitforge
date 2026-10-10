@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import { confirmAction, requestText } from "../shared/app-dialog";
 import { openTripEditor } from "./trip-editor-dialog";
 import { openTripOrderEditor } from "./trip-order-editor";
@@ -55,7 +56,7 @@ export function configureTripWorkspace(options: {
     if (!await confirmAction(document, message)) return;
     if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") return;
     adoptionBusy = true; adoption.disabled = true;
-    void options.changeAdoption(trip, action).then(() => report(action === "confirm" ? "旅程を確定しました。" : "計画中へ戻しました。"))
+    void options.changeAdoption(trip, action).then(() => notifySaved(document, action === "confirm" ? "旅程を確定しました。" : "計画中へ戻しました。"))
       .catch(() => report("旅程の状態を変更できませんでした。最新の旅程を確認してください。")).finally(() => { adoptionBusy = false; adoption.disabled = false; });
   });
   const party = element("div", "trip-header-party"); let partyKey = "";
@@ -72,7 +73,7 @@ export function configureTripWorkspace(options: {
     const nextTitle = (await requestText(document, "旅程の名前", trip.title))?.trim();
     if (!nextTitle || nextTitle === trip.title || controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") return;
     titleBusy = true; editTitle.disabled = true;
-    void options.renameTitle(trip, nextTitle).then(() => { if (controller.current()?.id === trip.id) report("名称を変更しました。"); })
+    void options.renameTitle(trip, nextTitle).then(() => { if (controller.current()?.id === trip.id) notifySaved(document, "名称を変更しました。"); })
       .catch(() => { if (controller.current()?.id === trip.id) report("名称を変更できませんでした。最新の旅程を確認してください。"); })
       .finally(() => { titleBusy = false; editTitle.disabled = false; });
   });
@@ -353,10 +354,11 @@ export function configureTripWorkspace(options: {
     if (!editors.length) return true;
     return confirmAction(document, "編集中の費用を破棄して移動しますか？").then(confirmed => { if (confirmed) { editors.forEach(editor => editor.remove()); pendingCostEditors.clear(); } return confirmed; });
   };
+  const unsubscribeSaved = controller.subscribeSaved(proposal => notifySaved(document, proposal.patches.some(p => p.type === "remove") ? "予定を削除しました。" : proposal.patches.every(p => p.type === "request") ? "旅の条件を保存しました。" : "予定の変更を保存しました。"));
   const unsubscribe = controller.subscribe(render); render();
   return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,
     showPlan() { show("trip"); },
-    destroy() { unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
+    destroy() { unsubscribeSaved(); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
 }
 
 /** Display the authored calendar day without using the device timezone. */
