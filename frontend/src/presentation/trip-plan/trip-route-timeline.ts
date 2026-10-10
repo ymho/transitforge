@@ -4,13 +4,13 @@ import { element } from "./trip-workspace-elements";
 import { iconMarkup } from "../shared/primitives";
 
 export function renderTripRouteTimeline(item: TransportItineraryItem): HTMLElement {
-  const route = element("details", "trip-route"); route.open = true;
+  const route = element("details", "trip-route"); route.open = false;
   if (item.detail.status !== "selected") { route.append(element("summary", "", "交通手段未選択")); return route; }
   if (item.detail.mode !== "rail") {
     route.append(element("summary", "", `${transportModeLabel(item.detail.mode)}・${item.detail.origin.name} → ${item.detail.destination.name}`)); return route;
   }
   const { legs } = item.detail.journey;
-  route.append(element("summary", "", `経路・乗換${legs.length - 1}回`));
+  route.append(element("summary", "", `${legs[0]!.origin.name} → ${legs[legs.length - 1]!.destination.name}・${legs[legs.length - 1]!.scheduledArrival.at.slice(11, 16)}着・乗換${legs.length - 1}回`));
   const list = element("ol", "trip-route-legs");
   legs.forEach((leg, index) => {
     const row = element("li", "trip-route-leg"), icon = element("span"); icon.innerHTML = iconMarkup("train");

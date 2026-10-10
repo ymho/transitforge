@@ -1,5 +1,6 @@
 import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
 import type { OfficialGuide } from "@raiquora/trip/official-guide";
+import { tripCoverImage } from "../shared/trip-cover";
 import { loadingMarkup } from "../shared/primitives";
 import { element, control } from "../trip-plan/trip-workspace-elements";
 export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client: TripLibraryClient, options: {
@@ -9,7 +10,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
   const dialogs = new Set<HTMLDialogElement>();
   const closeDialogs = () => { for (const dialog of dialogs) { dialog.close(); dialog.remove(); } dialogs.clear(); };
   const tabs = element("div", "trip-library-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "旅程の種類");
-  const panel = element("section"), status = element("p"), entries = element("div"), more = element("div"); status.setAttribute("role", "status");
+  const panel = element("section"), status = element("p"), entries = element("div", "trip-library-entries"), more = element("div", "trip-library-more"); status.setAttribute("role", "status");
   panel.setAttribute("role", "tabpanel"); panel.id = "trip-library-catalog";
   own.setAttribute("role", "tabpanel"); own.id ||= "trip-library-own";
   panel.append(status, entries, more); root.insertBefore(tabs, own); root.append(panel);
@@ -37,7 +38,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
         const page = await client.officialList(s.officialAfter);
         if (disposed || session !== options.session() || !options.authenticated()) return;
         for (const guide of page.guides) if (!s.seen.has(guide.id)) {
-          s.seen.add(guide.id); const card = element("article", "home-card");
+          s.seen.add(guide.id); const card = catalogueCard(guide.id);
           card.append(element("strong", "", guide.trip.title), element("p", "", `公式しおり · ${guide.trip.timeline?.logicalDays.length ?? 0}日間`), control("しおりを見る", () => { void preview(guide); })); s.entries.push(card);
         }
         s.officialAfter = page.after;
@@ -46,7 +47,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
         const joined = s.joinedDone ? undefined : await client.accessible(s.joinedAfter);
         if (disposed || session !== options.session() || !options.authenticated()) return;
         for (const entry of [...owned?.trips ?? [], ...joined?.trips ?? []]) if (!s.seen.has(entry.trip.id)) {
-          s.seen.add(entry.trip.id); const card = element("article", "home-card");
+          s.seen.add(entry.trip.id); const card = catalogueCard(entry.trip.id);
           card.append(element("strong", "", entry.trip.title), element("p", "", entry.role === "owner" ? "共有中 · あなたの旅" : entry.role === "editor" ? "共有 · 共同編集" : "共有 · 閲覧のみ"),
             control("旅程を開く", () => { void Promise.resolve(options.openTrip(entry.trip.id)).catch(() => { status.textContent = "旅程を開けません。共有の解除・期限・接続を確認してください。"; }); })); s.entries.push(card);
         }
@@ -70,8 +71,10 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
     }
     const form = element("form"), start = element("input"), adults = element("input"), children = element("input");
     start.type = "date"; start.required = true; adults.type = children.type = "number"; adults.min = "1"; adults.max = "50"; children.min = "0"; children.max = "20"; adults.required = children.required = true; adults.value = "1"; children.value = "0";
-    for (const [name, input] of [["出発日（日本時間）", start], ["大人", adults], ["子ども", children]] as const) { const label = element("label", "", name); label.append(input); form.append(label); }
-    const submit = element("button", "ds-button", "このしおりで旅を作る"); submit.type = "submit"; form.append(submit); dialog.append(form, feedback);
+    const party = element("div", "trip-library-party");
+    for (const [name, input] of [["出発日（日本時間）", start], ["大人", adults], ["子ども", children]] as const) { const label = element("label", "", name); label.append(input); (input === start ? form : party).append(label); }
+    form.append(party);
+    const submit = element("button", "ds-button ds-button--primary", "このしおりで旅を作る"); submit.type = "submit"; form.append(submit); dialog.append(form, feedback);
     let busy = false; const id = crypto.randomUUID();
     form.addEventListener("submit", event => { event.preventDefault(); if (disposed || session !== options.session() || !options.authenticated() || busy || !form.reportValidity()) return; busy = true; submit.disabled = true; feedback.innerHTML = loadingMarkup("旅程を作っています。");
       void client.officialImport(guide, id, start.value, Number(adults.value), Number(children.value)).then(async trip => {
@@ -88,4 +91,10 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
   own.setAttribute("aria-labelledby", "trip-library-tab-own");
   paint();
   return { refresh() { if (epoch !== options.session() || !options.authenticated()) { epoch = options.session(); states.clear(); closeDialogs(); selected = "own"; paint(); } }, dispose() { disposed = true; closeDialogs(); tabs.remove(); panel.remove(); } };
+}
+
+function catalogueCard(id: string): HTMLElement {
+  const card = element("article", "home-card trip-library-card");
+  const cover = element("div", "trip-list-cover"), image = element("img"); image.src = tripCoverImage(id); image.alt = ""; image.loading = "lazy"; cover.setAttribute("aria-hidden", "true");
+  cover.append(image, element("small", "", "旅のイメージ")); card.append(cover); return card;
 }

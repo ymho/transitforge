@@ -30,7 +30,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   const oldActions = panel.querySelector(".guide-panel-actions");
   const layout = node("div", "consultation-layout"), conversation = node("section", "consultation-conversation");
   const head = node("div", "consultation-heading"), headingCopy = createPageHeading(doc, "AI CONCIERGE", "相談"); headingCopy.classList.add("consultation-heading-copy");
-  const fresh = createButton(doc, "", "icon"); fresh.innerHTML = iconMarkup("compose");
+  const fresh = createButton(doc, "新しい相談");
   fresh.setAttribute("aria-label", "新しい相談"); fresh.title = "新しい相談"; fresh.addEventListener("click", ports.newConversation);
   head.append(headingCopy, fresh);
   // Keep secondary feature triggers alive, but discard the old panel heading/border/layout.
@@ -39,16 +39,19 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   const name = node("strong", ""), meta = node("p", ""), note = node("small", "");
   identity.append(name, meta, note);
   const actions = node("div", "consultation-context-actions");
-  const conditions = node("button", "consultation-conditions-toggle", "この旅の条件"), tripButton = node("button", "", "旅程に戻る");
+  const conditions = node("button", "consultation-conditions-toggle", "この旅の条件"), tripButton = node("button", "consultation-trip-link");
   conditions.type = tripButton.type = "button"; tripButton.addEventListener("click", ports.showTrip);
-  actions.append(conditions, tripButton); context.append(identity, actions);
+  actions.append(conditions);
+  tripButton.innerHTML = iconMarkup("back"); tripButton.append(name); identity.prepend(tripButton);
+  context.append(identity, actions);
   messages.classList.remove("ai-guide-messages"); messages.classList.add("consultation-messages");
   form.classList.remove("ai-guide-form"); form.classList.add("consultation-composer");
   input.placeholder = "希望や気になることを話してください";
   const send = form.querySelector<HTMLButtonElement>("button[type=submit]"); if (send) {
     adoptComposer(form, input, send); send.innerHTML = iconMarkup("send"); send.setAttribute("aria-label", "送信"); send.title = "送信";
   }
-  conversation.append(context, messages, form);
+  const dock = node("div", "consultation-composer-dock");
+  context.append(head); dock.append(context, form); conversation.append(messages, dock);
   const aside = node("aside", "consultation-conditions"); aside.id = "consultation-conditions";
   aside.setAttribute("aria-label", "この旅の条件"); conditions.setAttribute("aria-controls", aside.id);
   const close = node("button", "consultation-conditions-close", "閉じる"); close.type = "button";
@@ -73,7 +76,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       else if (!event.shiftKey && doc.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
   });
-  layout.append(head, conversation, aside, backdrop);
+  layout.append(conversation, aside, backdrop);
   panel.classList.remove("ai-guide-panel"); panel.classList.add("consultation-page"); panel.replaceChildren(layout);
   let lastKey = "";
   const canLeave = () => {
@@ -90,12 +93,15 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     if (aside.dataset.open === "true") sheet(false);
     rows.replaceChildren(); status.textContent = ""; aside.dataset.open = "false"; backdrop.hidden = true;
     conditions.setAttribute("aria-expanded", "false");
-    name.textContent = trip ? `${trip.title}について相談中` : state.unavailable ? "対象の旅程を読み込めません" : "新しい旅を相談中";
+    name.textContent = trip ? trip.title : state.unavailable ? "対象の旅程を読み込めません" : "新しい旅を相談中";
     const dates = trip ? [...new Set(trip.items.map((i) => itineraryScheduleLabel(i.schedule).replace(/（[^）]*）$/, "")))].slice(0, 2) : [];
     const party = trip ? tripPartyView(trip)?.text : undefined;
-    meta.textContent = [...dates, ...(party ? [party] : [])].join(" ・ "); meta.hidden = !meta.textContent;
+    meta.textContent = [...dates, ...(party ? [party] : [])].join(" ・ "); meta.hidden = true;
+    note.hidden = true;
     note.textContent = trip ? "会話で受理した今回条件は旅程に保存されます。手動編集は変更案を確認して保存します。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
-    tripButton.hidden = !trip;
+    tripButton.disabled = !trip;
+    tripButton.setAttribute("aria-label", trip ? `${trip.title}の旅程に戻る` : name.textContent!);
+    tripButton.querySelector("svg")!.toggleAttribute("hidden", !trip);
     help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "条件を編集し、変更案を確認して保存できます。列車・宿・予約は自動で変更されません。"
       : "条件は会話で追加できます。普段の好みより、今回の希望を優先します。";
     const row = (label: string, value: string, edit?: () => void, source?: string) => {

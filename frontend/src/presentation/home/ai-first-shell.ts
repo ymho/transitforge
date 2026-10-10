@@ -1,8 +1,10 @@
+import { brandLogoMarkup } from "../shared/brand";
 import { configureTripLibrary } from "./trip-library-panel";
 import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
 import { homeReadModel, tripDisplayLabels, type HomeReadInput } from "../../usecases/trip-plan/home-read-model";
 import { adoptComposer, iconMarkup, pageHeadingMarkup, loadingMarkup, setLoadingStatus, type ProductIconName } from "../shared/primitives";
 import type { Trip } from "@raiquora/trip/trip";
+import { tripCoverImage } from "../shared/trip-cover";
 import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
 import { partyMarkup } from "../trip-plan/trip-party-control";
 import type { AuthState } from "../../usecases/auth/auth-session";
@@ -44,16 +46,16 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     ["/media/home-kinosaki-v2.webp", "1942", "809", "夕暮れの温泉街と柳の水路"],
     ["/media/home-izumo-v2.webp", "1774", "887", "木立に包まれた神社の参道"],
   ] as const;
-  const consultationExamples = ["温泉でゆっくりしたい", "歴史ある街を歩きたい", "おいしいものを楽しみたい", "週末の旅を考えたい"];
+  const consultationExamples = ["週末にしたいことは？", "来週、出雲大社にいきたい", "リラックスできる旅を提案して"];
   const selectedHeroImage = Math.floor(Math.random() * heroImages.length);
-  const selectedExample = consultationExamples[Math.floor(Math.random() * consultationExamples.length)]!;
-  root.innerHTML = `<nav class="product-nav" aria-label="メインナビゲーション">${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button><button type="button" data-account>${iconMarkup("account")}<span>設定</span></button></nav>
-    <section class="product-page" data-page="chat" aria-label="相談"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>Raiquora original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
-    <form class="home-prompt"><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="例：${selectedExample}"></textarea><button type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
-    <p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
+  const selectedExample = consultationExamples[0]!;
+  root.innerHTML = `<nav class="product-nav" aria-label="メインナビゲーション"><div class="product-brand">${brandLogoMarkup()}</div>${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button><button type="button" data-account>${iconMarkup("account")}<span>設定</span></button></nav>
+    <section class="product-page" data-page="chat" aria-label="相談"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>KAIHO original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
+    <div class="home-brand">${brandLogoMarkup()}</div><form class="home-prompt"><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="${selectedExample}"></textarea><button type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
+    <section class="home-brand-story" aria-label="KAIHOについて"><h1>あなただけの旅を、一緒に形にします。</h1><p>その昔、旅に役立つ情報をまとめ、懐に収めて持ち歩ける案内書や地図が「懐宝」と名付けられました。</p><p>旅に必要なものを、いつでも手元に。その思いを受け継ぎ、KAIHOは新しい旅のパートナーとして生まれました。</p><p>AIとともに、行きたい場所や体験したいことを一つの旅へ。旅先の発見から、移動や旅程づくりまで、あなたの旅づくりをサポートします。</p></section><p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
     <section class="trip-route-progress" data-trip-route-progress role="status" hidden></section>
-    <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("", "旅程")}</div><div data-trip-list></div></section>
-    <section class="product-page" data-page="my" aria-label="設定" hidden><div class="my-shell">${pageHeadingMarkup("SETTINGS", "設定")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="いつもの好み設定"></div></section>
+    <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("", "旅のしおり")}<p>楽しみな予定も、思い出の旅も、ここに。</p></div><div data-trip-list></div></section>
+    <section class="product-page" data-page="my" aria-label="設定" hidden><div class="my-shell">${pageHeadingMarkup("", "設定")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="いつもの好み設定"></div></section>
     <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>`;
   app.prepend(root);
   const services = root.querySelector<HTMLUListElement>(".account-services ul")!;
@@ -77,6 +79,12 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   let pendingTripId: string | undefined;
   const scrolls = new Map<string, number>();
   const textarea = root.querySelector<HTMLTextAreaElement>("#home-prompt")!;
+  let exampleIndex = 0;
+  const exampleTimer = window.setInterval(() => {
+    if (textarea.value || document.activeElement === textarea || document.hidden || root.querySelector<HTMLElement>("[data-home-hero]")!.hidden) return;
+    exampleIndex = (exampleIndex + 1) % consultationExamples.length;
+    textarea.placeholder = consultationExamples[exampleIndex]!;
+  }, 4000);
   const homeForm = root.querySelector<HTMLFormElement>(".home-prompt")!;
   const homeSubmit = homeForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   adoptComposer(homeForm, textarea, homeSubmit);
@@ -320,7 +328,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   });
   const unsubscribe = ports.subscribe(() => { render(); resumePending(); }); render(); apply(); resumePending();
   return { navigate, showMap, showConversation, showTrip, refresh: render, dispose() {
-    ++entryGeneration; unsubscribe(); libraryUi?.dispose();
+    ++entryGeneration; window.clearInterval(exampleTimer); unsubscribe(); libraryUi?.dispose();
     window.removeEventListener("popstate", historyChanged); window.removeEventListener("hashchange", historyChanged);
     document.removeEventListener("transitforge:travel-profile-changed", render); root.remove();
   } };
@@ -328,5 +336,5 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
 }
 function esc(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 function card(trip: Trip, group?: string, withTravelMode = false): string {
-  return `<article class="home-card home-trip-card"><button class="trip-list-choice" type="button" data-trip="${esc(trip.id)}"><span class="trip-list-emblem">${iconMarkup("trips")}</span><span class="trip-list-copy"><strong>${esc(trip.title)}</strong><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span>${group ? `<small>${esc(group)}</small>` : ""}</span><span aria-hidden="true">›</span></button><details class="home-trip-manage"><summary aria-label="旅程の操作">⋯</summary><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">削除</button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}</details></article>`;
+  return `<article class="home-card home-trip-card"><button class="trip-list-choice" type="button" data-trip="${esc(trip.id)}"><span class="trip-list-cover" aria-hidden="true"><img src="${tripCoverImage(trip.id)}" alt="" loading="lazy"><small>旅のイメージ</small></span><span class="trip-list-copy"><strong>${esc(trip.title)}</strong><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span>${group ? `<small>${esc(group)}</small>` : ""}</span><span class="trip-list-open" aria-hidden="true">しおりを開く →</span></button><details class="home-trip-manage"><summary aria-label="旅程の操作">⋯</summary><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">削除</button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}</details></article>`;
 }
