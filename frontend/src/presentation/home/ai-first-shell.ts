@@ -1,3 +1,4 @@
+import { confirmAction, requestText } from "../shared/app-dialog";
 import { brandLogoMarkup } from "../shared/brand";
 import { configureTripLibrary } from "./trip-library-panel";
 import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
@@ -33,7 +34,7 @@ export interface AiFirstShellPorts {
   journeySettings(): { transferPace: string; rankingPreference: string };
   setJourneySettings(settings: { transferPace: string; rankingPreference: string }): void;
   openNotifications(): void;
-  canLeave?(): boolean;
+  canLeave?(): boolean | Promise<boolean>;
   now(): Date;
 }
 
@@ -123,7 +124,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       try { window.sessionStorage.setItem(pendingKey, pendingPrompt); } catch { /* Same-document authentication can still resume. */ }
       ports.login(); return;
     }
-    if (!canNavigate()) return;
+    const allowed = canNavigate(); if (!(typeof allowed === "boolean" ? allowed : await allowed)) return;
     pendingPrompt = undefined;
     try { window.sessionStorage.removeItem(pendingKey); } catch { /* Do not block sending. */ }
     const prompt = textarea.value.trim(), generation = ++entryGeneration;
@@ -182,8 +183,8 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
     root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, tripDisplayLabels[row.group], row.group === "current")).join("") : `<p role="status" aria-busy="${view.state === "loading"}">${view.state === "loading" ? loadingMarkup(stateText) : stateText}</p>`;
     root.querySelectorAll<HTMLButtonElement>("[data-trip], [data-trip-open]").forEach((button) => button.addEventListener("click", () => {
-      if (!canNavigate()) return;
-      window.history.pushState({ tripId: (button.dataset.trip ?? button.dataset.tripOpen)! }, "", "#trip"); apply();
+      const move = (allowed: boolean) => { if (!allowed || !button.isConnected) return; window.history.pushState({ tripId: (button.dataset.trip ?? button.dataset.tripOpen)! }, "", "#trip"); apply(); };
+      const result = canNavigate(); if (typeof result === "boolean") move(result); else void result.then(move);
     }));
     root.querySelectorAll<HTMLButtonElement>("[data-trip-travel]").forEach((button) => button.addEventListener("click", () => {
       if (!view.trips.some((row) => row.trip.id === button.dataset.tripTravel)) return;
@@ -205,16 +206,16 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
           .finally(() => { titleBusy.delete(id); render(); });
       });
     });
-    root.querySelectorAll<HTMLButtonElement>("[data-trip-rename]").forEach((button) => button.addEventListener("click", () => {
+    root.querySelectorAll<HTMLButtonElement>("[data-trip-rename]").forEach((button) => button.addEventListener("click", async () => {
       const current = view.trips.find((row) => row.trip.id === button.dataset.tripRename)?.trip;
       if (!current || !ports.renameTrip) return;
-      const title = window.prompt("旅程の名前", current.title)?.trim();
+      const title = (await requestText(document, "旅程の名前", current.title))?.trim();
       if (!title || title === current.title) return;
       void ports.renameTrip(current.id, title).then(render, () => { void ports.retry().then(render, render); });
     }));
-    root.querySelectorAll<HTMLButtonElement>("[data-trip-archive]").forEach((button) => button.addEventListener("click", () => {
+    root.querySelectorAll<HTMLButtonElement>("[data-trip-archive]").forEach((button) => button.addEventListener("click", async () => {
       const current = view.trips.find((row) => row.trip.id === button.dataset.tripArchive)?.trip;
-      if (!current || !ports.archiveTrip || !window.confirm(`「${current.title}」を削除しますか？\n画面から元に戻すことはできません。宿泊や列車の予約は取り消されません。`)) return;
+      if (!current || !ports.archiveTrip || !await confirmAction(document, `「${current.title}」を削除しますか？\n画面から元に戻すことはできません。宿泊や列車の予約は取り消されません。`)) return;
       void ports.archiveTrip(current.id).then(render, () => { void ports.retry().then(render, render); });
     }));
     if (!signedIn && (window.location.hash !== "#chat" || consultationMode !== "landing")) {
@@ -228,7 +229,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const entryRetry = root.querySelector<HTMLButtonElement>("[data-consultation-retry]")!;
   const routeKey = () => JSON.stringify([window.location.hash, window.history.state]);
   function canNavigate() {
-    return ports.canLeave?.() !== false && document.dispatchEvent(new Event("transitforge:profile-leave", { cancelable: true }));
+    const result = ports.canLeave?.() ?? true;
+    const leave = (allowed: boolean) => allowed && document.dispatchEvent(new Event("transitforge:profile-leave", { cancelable: true }));
+    return typeof result === "boolean" ? leave(result) : result.then(leave);
   }
   function paintRoute() {
     if (!root.isConnected) return;
@@ -332,16 +335,17 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     if (page) page.scrollTop = scrolls.get(current) ?? 0;
   }
   function navigate(view: PrimaryView) {
-    if (view !== "chat" && !requireAuthentication() || !canNavigate()) return;
-    window.history.pushState(view === "chat" ? { consultation: "new", entryId: window.crypto.randomUUID() } : null, "", `#${view}`);
-    apply();
+    if (view !== "chat" && !requireAuthentication()) return;
+    const move = (allowed: boolean) => { if (!allowed || !root.isConnected) return; window.history.pushState(view === "chat" ? { consultation: "new", entryId: window.crypto.randomUUID() } : null, "", `#${view}`); apply(); };
+    const result = canNavigate(); if (typeof result === "boolean") move(result); else void result.then(move);
   }
   root.querySelectorAll<HTMLAnchorElement>("[data-primary]").forEach((link) => link.addEventListener("click", (event) => {
     event.preventDefault(); navigate(link.hash.slice(1) as PrimaryView);
   }));
   function showMap() {
-    if (!requireAuthentication() || !canNavigate()) return;
-    window.history.pushState({ returnView: current }, "", "#map"); apply();
+    if (!requireAuthentication()) return;
+    const move = (allowed: boolean) => { if (!allowed || !root.isConnected) return; window.history.pushState({ returnView: current }, "", "#map"); apply(); };
+    const result = canNavigate(); if (typeof result === "boolean") move(result); else void result.then(move);
   }
   entryRetry.addEventListener("click", () => apply(true));
   root.querySelectorAll<HTMLButtonElement>("[data-map]").forEach((button) => button.addEventListener("click", showMap));

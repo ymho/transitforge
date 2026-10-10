@@ -1,3 +1,4 @@
+import { confirmAction } from "../shared/app-dialog";
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
 import { proposeTripRequestUpdate } from "../../usecases/trip-plan/update-trip-request";
 import { itineraryScheduleLabel } from "../../usecases/trip-plan/itinerary-schedule-label";
@@ -79,10 +80,10 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   layout.append(conversation, aside, backdrop);
   panel.classList.remove("ai-guide-panel"); panel.classList.add("consultation-page"); panel.replaceChildren(layout);
   let lastKey = "", saving = false;
-  const canLeave = () => {
+  const canLeave = (): boolean | Promise<boolean> => {
     const editor = rows.querySelector(".consultation-condition-editor");
-    if (!editor || doc.defaultView?.confirm("編集中の条件を破棄して移動しますか？")) { editor?.remove(); return true; }
-    return false;
+    if (!editor) return true;
+    return confirmAction(doc, "編集中の条件を破棄して移動しますか？").then(confirmed => { if (confirmed) editor.remove(); return confirmed; });
   };
   let renderedSession = "";
   const render = () => {
@@ -133,9 +134,9 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         buttons.forEach(button => { button.disabled = false; });
       }
     };
-    const editFields = (fields: ConditionField[], update: (values: Record<string, string>) => TripUpdateProposal) => {
+    const editFields = async (fields: ConditionField[], update: (values: Record<string, string>) => TripUpdateProposal) => {
       const existing = rows.querySelector(".consultation-condition-editor");
-      if (existing && !doc.defaultView?.confirm("編集中の入力を破棄しますか？")) return;
+      if (existing && !await confirmAction(doc, "編集中の入力を破棄しますか？")) return;
       existing?.remove();
       const base = ports.read(), editor = node("form", "consultation-condition-editor");
       for (const spec of fields) {
@@ -247,8 +248,5 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   };
   ports.subscribe(render); render();
   doc.addEventListener("transitforge:travel-profile-changed", render);
-    doc.defaultView?.addEventListener("beforeunload", (event) => {
-    if (rows.querySelector(".consultation-condition-editor")) { event.preventDefault(); event.returnValue = ""; }
-  });
   return { refresh: render, canLeave };
 }
