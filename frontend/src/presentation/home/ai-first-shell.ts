@@ -76,6 +76,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const homeSubmit = homeForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   adoptComposer(homeForm, textarea, homeSubmit);
   const draftKey = "raiquora:home-prompt-draft";
+  const pendingKey = "raiquora:home-prompt-submit";
+  let pendingPrompt: string | undefined;
+  try { pendingPrompt = window.sessionStorage.getItem(pendingKey) ?? undefined; } catch { /* Optional redirect recovery. */ }
   const isSignedIn = () => ports.authState().status === "signed-in";
   const requireAuthentication = () => {
     if (isSignedIn()) return true;
@@ -91,8 +94,14 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   homeForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (composing || consultationMode === "starting" || !textarea.value.trim()) return;
-    if (!isSignedIn()) { saveDraft(); ports.login(); return; }
+    if (!isSignedIn()) {
+      saveDraft(); pendingPrompt = textarea.value.trim();
+      try { window.sessionStorage.setItem(pendingKey, pendingPrompt); } catch { /* Same-document authentication can still resume. */ }
+      ports.login(); return;
+    }
     if (!canNavigate()) return;
+    pendingPrompt = undefined;
+    try { window.sessionStorage.removeItem(pendingKey); } catch { /* Do not block sending. */ }
     const prompt = textarea.value.trim(), generation = ++entryGeneration;
     entryError.textContent = "";
     consultationMode = "starting";
@@ -289,7 +298,15 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const historyChanged = () => apply();
   window.addEventListener("popstate", historyChanged); window.addEventListener("hashchange", historyChanged);
   document.addEventListener("transitforge:travel-profile-changed", render);
-  const unsubscribe = ports.subscribe(render); render(); apply();
+  const resumePending = () => {
+    if (!isSignedIn() || !pendingPrompt || !root.isConnected) return;
+    const prompt = pendingPrompt;
+    pendingPrompt = undefined;
+    try { window.sessionStorage.removeItem(pendingKey); } catch { /* In-memory consumption prevents duplicate notifications. */ }
+    if (textarea.value.trim() !== prompt) return;
+    homeForm.requestSubmit();
+  };
+  const unsubscribe = ports.subscribe(() => { render(); resumePending(); }); render(); apply(); resumePending();
   return { navigate, showMap, showConversation, showTrip, refresh: render, dispose() {
     ++entryGeneration; unsubscribe();
     window.removeEventListener("popstate", historyChanged); window.removeEventListener("hashchange", historyChanged);

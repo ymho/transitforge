@@ -310,3 +310,33 @@ it("keeps a Trip behind the loading status until activation finishes, fences can
   await vi.waitFor(() => expect(document.querySelector('[data-trip-route-progress]')!.textContent).toContain("読み込めませんでした"));
   expect(document.querySelector('[data-trip-route-progress] .ds-spinner')).toBeNull();
 });
+
+it("resumes a submitted prompt once after the login redirect, but never auto-sends an ordinary draft", async () => {
+  const before = setup();
+  document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value = "出雲へ行きたい";
+  document.querySelector<HTMLFormElement>(".home-prompt")!.requestSubmit();
+  before.shell.dispose();
+  const after = setup({ authState: () => ({ status: "signed-in", displayName: "テスト" }) });
+  await vi.waitFor(() => expect(after.ports.openChat).toHaveBeenCalledOnce());
+  expect(after.ports.newConsultation).toHaveBeenCalledExactlyOnceWith("出雲へ行きたい");
+  after.shell.refresh();
+  expect(after.ports.newConsultation).toHaveBeenCalledOnce();
+  expect(sessionStorage.getItem("raiquora:home-prompt-submit")).toBeNull();
+  after.shell.dispose();
+  sessionStorage.setItem("raiquora:home-prompt-draft", "まだ送っていない相談");
+  const draft = setup({ authState: () => ({ status: "signed-in", displayName: "テスト" }) });
+  expect(draft.ports.newConsultation).not.toHaveBeenCalled();
+});
+
+it("consumes the pending send on authentication notification without retrying a failed start", async () => {
+  let signedIn = false, notify = () => {};
+  const start = vi.fn(async () => { throw new Error("unavailable"); });
+  const f = setup({ authState: () => signedIn ? { status: "signed-in", displayName: "テスト" } : { status: "signed-out" }, subscribe: listener => { notify = listener; return () => {}; }, newConsultation: start });
+  document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value = "京都へ";
+  document.querySelector<HTMLFormElement>(".home-prompt")!.requestSubmit();
+  signedIn = true; notify(); notify();
+  await vi.waitFor(() => expect(document.body.textContent).toContain("相談を開始できませんでした"));
+  notify(); expect(start).toHaveBeenCalledExactlyOnceWith("京都へ");
+  expect(document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value).toBe("京都へ");
+  f.shell.dispose();
+});
