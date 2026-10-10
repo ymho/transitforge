@@ -183,7 +183,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const changeItemDecision = vi.fn(async () => undefined); vi.stubGlobal("confirm", vi.fn(() => true));
     const f = setup({ getCurrentTrip: () => trip, getRole: () => "owner" }, undefined, { changeItemDecision });
     f.ui.showPlan();
-    expect(f.ui.panel.textContent).toContain("仮の予定");
+    expect(f.ui.panel.textContent).toContain("未確定");
     button(f.ui.panel, "この予定を確定").click();
     await vi.waitFor(() => expect(changeItemDecision).toHaveBeenCalledWith(trip, trip.items[0], "confirm"));
     f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
@@ -199,6 +199,14 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(header.querySelector(".trip-workspace-item-focus")?.textContent).toBe("向日町駅→出雲市駅");
     expect(header.textContent).not.toContain("経路1");
     expect(header.querySelector(".trip-item-consult")?.textContent).toBe("相談");
+    const body = card.querySelector<HTMLElement>(".trip-workspace-item-body")!;
+    expect(body.hidden).toBe(true);
+    expect(header.querySelector(".trip-workspace-item-decision")?.textContent).toBe("未確定");
+    expect(header.querySelector(".trip-item-consult")?.previousElementSibling?.classList.contains("trip-workspace-item-decision")).toBe(true);
+    expect(card.querySelector(".trip-warning-box")?.closest(".trip-workspace-item-body")).toBe(body);
+    expect(card.querySelector(".trip-item-cost")?.closest(".trip-workspace-item-body")).toBe(body);
+    expect(card.querySelector(".trip-route")?.closest(".trip-workspace-item-body")).toBe(body);
+    expect(card.querySelector(".trip-workspace-move-target,.trip-workspace-day-target")).toBeNull();
     header.querySelector<HTMLButtonElement>(".trip-item-toggle")!.click();
     expect(header.querySelector(".trip-item-toggle")?.getAttribute("aria-expanded")).toBe("true");
     expect(trip.items.find(item => item.id === route.id)?.title).toBe(title);
@@ -249,10 +257,8 @@ describe("Trip workspace DOM and mobile navigation", () => {
     button(activity, "削除案").click(); expect(f.controller.proposal()?.patches).toEqual([{ type: "remove", itemId: "activity" }]);
     expect(activity.querySelector(".trip-workspace-move-target")).toBeNull();
     expect(button(f.ui.panel, "並べ替え")).toBeDefined();
-    const day = activity.querySelector<HTMLSelectElement>(".trip-workspace-day-target")!;
-    day.value = [...day.options].find(option => option.textContent === "2026-09-22")!.value;
-    button(activity, "日付変更案").click();
-    expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "replace", itemId: "activity", item: { schedule: { type: "day", date: "2026-09-22" } } });
+    expect(activity.querySelector(".trip-workspace-day-target")).toBeNull();
+    expect(button(activity, "日付変更案")).toBeUndefined();
     button(activity, "相談").click(); expect(f.ask).toHaveBeenCalledWith("この予定を相談したい"); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
     expect(f.app.dataset.tripWorkspaceView).toBe("chat"); expect(trip.items).toHaveLength(3);
   });
