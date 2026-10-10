@@ -203,10 +203,11 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     const toLabel = element("label", "", "到着地"), to = element("input"); to.required = true; to.maxLength = 200; toLabel.append(to);
     const submit = element("button", "", "手入力の移動案を確認"); submit.type = "submit";
     const fields = element("div", "trip-manual-transport-fields"); fields.append(modeLabel, fromLabel, toLabel);
-    form.append(element("h3", "trip-manual-transport-title", "手入力"), fields, element("p", "trip-workspace-copy", "便・時刻・所要時間と予約は未確認です。"), submit);
+    form.append(fields, element("p", "trip-workspace-copy", "便・時刻・所要時間と予約は未確認です。"), submit);
     form.addEventListener("submit", event => { event.preventDefault(); safe(() => controller.preview(proposeTripItemChange(controller.current()!,
       { action: "select-manual-transport", itemId: item.id, title: item.title, mode: mode.value as typeof nonRailTransportModes[number], origin: from.value, destination: to.value }))); });
-    body.append(form);
+    const manual = element("details", "trip-manual-transport-disclosure");
+    manual.append(element("summary", "", "手入力"), form); body.append(manual);
   }
   if (item.type === "stay" && item.selection.status === "unselected") {
     const form = element("form", "trip-workspace-manual-stay"), label = element("label", "", "宿泊地の名前（手入力） ");
