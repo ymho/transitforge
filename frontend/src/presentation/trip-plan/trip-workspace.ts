@@ -47,12 +47,9 @@ export function configureTripWorkspace(options: {
   const status = element("p", "trip-workspace-status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   const report = (text: string) => { setLoadingStatus(status, text, controller.loadState() === "loading"); };
   const heading = element("header", "trip-workspace-heading"); const title = element("h1"); const summary = element("p", "trip-workspace-copy");
-  const openTravelMode = control("旅行モードを開く", () => { void showTravelMode(); });
   const emblem = element("span", "trip-workspace-emblem"); emblem.innerHTML = travelIcon("trip"); emblem.setAttribute("aria-hidden", "true");
   const notice = element("p", "trip-workspace-notice");
-  const openConsultation = control("この旅について相談", () => show("chat"));
-  openConsultation.dataset.tripConsultation = "";
-  let adoptionBusy = false, branchBusy = false;
+  let adoptionBusy = false;
   const adoption = control("この旅程で行く", () => {
     const trip = controller.current(); if (!trip || !options.changeAdoption) return;
     const action = trip.adoption && !trip.adoption.needsReconfirmation ? "withdraw" : "confirm";
@@ -62,24 +59,15 @@ export function configureTripWorkspace(options: {
     void options.changeAdoption(trip, action).then(() => report(action === "confirm" ? "旅程を確定しました。" : "計画中へ戻しました。"))
       .catch(() => report("旅程の状態を変更できませんでした。最新の旅程を確認してください。")).finally(() => { adoptionBusy = false; adoption.disabled = false; });
   });
-  const branch = control("この旅程を分岐", () => {
-    const trip = controller.current(); if (!trip || !options.branchTrip) return;
-    const value = document.defaultView?.prompt("分岐した旅程の名前", `${trip.title}（分岐）`)?.trim();
-    if (!value) return;
-    branchBusy = true; branch.disabled = true;
-    void options.branchTrip(trip, value).catch(() => report("旅程を分岐できませんでした。最新の旅程を確認してください。"))
-      .finally(() => { branchBusy = false; branch.disabled = false; });
-  });
   const party = element("div", "trip-header-party"); let partyKey = "";
   const back = control("‹ 旅程一覧", () => options.showTripList?.()); back.hidden = !options.showTripList;
-  const management = element("details", "trip-header-management"); management.append(element("summary", "", "その他の操作"), branch, openTravelMode);
   const share = control("共有", () => options.openSharing?.()); share.hidden = !options.openSharing;
   const adoptionHelp = element("p", "trip-workspace-notice");
   adoption.classList.add("trip-confirm-button");
   const identity = element("div", "trip-header-identity");
   const folioBadge = element("p", "trip-header-eyebrow"); folioBadge.hidden = true;
   identity.append(folioBadge, title, party);
-  const headerActions = element("div", "trip-header-actions"); headerActions.append(adoption, openConsultation, share, management);
+  const headerActions = element("div", "trip-header-actions"); headerActions.append(adoption, share);
   const cover = element("div", "trip-header-cover"); const coverImage = element("img");
   coverImage.alt = ""; coverImage.setAttribute("aria-hidden", "true");
   cover.append(coverImage, element("small", "trip-cover-caption", "旅のイメージ"));
@@ -238,7 +226,7 @@ export function configureTripWorkspace(options: {
     retry.disabled = controller.loadState() === "loading";
     addFirst.hidden = !trip || controller.source()?.getRole?.() === "viewer";
     reorder.hidden = !trip || trip.items.length < 2 || controller.source()?.getRole?.() === "viewer";
-    openTravelMode.hidden = openConsultation.hidden = adoption.hidden = branch.hidden = !trip;
+    adoption.hidden = !trip;
     if (!trip) {
       share.hidden = true; adoptionHelp.textContent = "";
       title.textContent = "旅程"; summary.textContent = "";
@@ -277,8 +265,6 @@ export function configureTripWorkspace(options: {
     adoptionHelp.hidden = !adoptionHelp.textContent;
     const labels = [notice.textContent ?? "", role === "viewer" ? "" : role === "editor" ? "共有された旅程です（共同編集）。" : "", trip.officialOrigin ? `公式しおりから作成（第${trip.officialOrigin.version}版）` : ""].filter(Boolean);
     notice.textContent = labels.join(" "); notice.hidden = role !== "viewer" && role !== "editor" && !trip.officialOrigin;
-    branch.hidden = !options.branchTrip || !personalOwner;
-    branch.disabled = branchBusy;
     summary.textContent = tripDateLabel(trip);
     const folioKind = options.folioKind?.(trip) ?? (["editor", "viewer"].includes(controller.source()?.getRole?.() ?? "") ? "shared" : undefined);
     folioBadge.textContent = folioKind === "official" ? "公式しおり" : folioKind === "shared" ? "共有しおり" : ""; folioBadge.hidden = !folioKind;
