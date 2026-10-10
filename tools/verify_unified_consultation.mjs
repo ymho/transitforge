@@ -54,8 +54,7 @@ try {
     assert.equal(await page.locator(".consultation-page").isVisible(), false);
     await capture("trip");
     const consultationItem = page.locator(".trip-workspace-card").first();
-    if (await consultationItem.getByRole("button", { name: "詳細", exact: true }).isVisible()) await consultationItem.getByRole("button", { name: "詳細", exact: true }).click();
-    await consultationItem.getByRole("button", { name: "相談する", exact: true }).click();
+    await consultationItem.getByRole("button", { name: "相談", exact: true }).click();
     assert.equal(await page.locator(".home-hero").isVisible(), false);
     assert.equal(await page.locator(".consultation-page").isVisible(), true);
     assert.match(await page.locator(".consultation-identity").innerText(), /出雲旅行/);

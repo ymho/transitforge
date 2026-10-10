@@ -182,8 +182,8 @@ try {
     const addition = page.locator('.trip-workspace-day:not([hidden]) .trip-timeline-add[data-after-id="visit"]');
     await addition.click();
     assert.equal(await page.locator('.trip-workspace-add select').count(), 0);
-    await page.locator('.trip-workspace-add').getByLabel("どんな予定を追加したい？").fill("地元のものを食べたい");
-    await page.locator('.trip-workspace-add').getByLabel("場所名（任意）").fill("駅前");
+    await page.locator('.trip-workspace-add').getByLabel("どんな予定を追加したい？").fill("駅前で地元のものを食べたい");
+    assert.equal(await page.locator('.trip-workspace-add input').count(), 0);
     assert.equal(await page.locator(".trip-workspace-add").isVisible(), true);
     await checkLayout("spot-add");
     await page.locator('.trip-workspace-add button').filter({ hasText: "取消" }).click();
@@ -205,8 +205,7 @@ try {
     assert.equal(await page.locator(".trip-header-management").count(), 0);
     assert.deepEqual(await page.locator(".trip-header-actions button").allTextContents(), ["旅程を確定", "共有"]);
     const consultationItem = page.locator('[data-item-id="visit"]');
-    if (await consultationItem.getByRole("button", { name: "詳細", exact: true }).isVisible()) await consultationItem.getByRole("button", { name: "詳細", exact: true }).click();
-    await consultationItem.getByRole("button", { name: "相談する", exact: true }).click();
+    await consultationItem.getByRole("button", { name: "相談", exact: true }).click();
     await page.locator(".consultation-messages .journey-presentation").waitFor();
     assert.equal(await page.locator(".consultation-page .public-plan-presentation").count(), 0);
     assert.equal(await page.locator(".consultation-page .journey-presentation").count(), 1);
