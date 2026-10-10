@@ -181,9 +181,11 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const trip = createTrip(placesTripId, "出雲の旅", placesAt, [{ id: "visit", title: "出雲大社", type: "activity", category: "sightseeing",
       schedule: { type: "day", date: "2026-10-01", timeZone: "Asia/Tokyo" } }]);
     const changeAdoption = vi.fn(async () => undefined), branchTrip = vi.fn(async () => undefined);
-    vi.stubGlobal("confirm", vi.fn(() => true)); vi.stubGlobal("prompt", vi.fn(() => "雨の日案"));
+
     const f = setup({ getCurrentTrip: () => trip }, undefined, { changeAdoption, branchTrip });
     button(f.ui.panel, "旅程を確定").click();
+    expect(changeAdoption).not.toHaveBeenCalled();
+    document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
     await vi.waitFor(() => expect(changeAdoption).toHaveBeenCalledWith(trip, "confirm"));
     expect(button(f.ui.panel, "この旅程を分岐")).toBeUndefined();
     expect(branchTrip).not.toHaveBeenCalled();
@@ -191,11 +193,12 @@ describe("Trip workspace DOM and mobile navigation", () => {
   it("shows item confirmation separate from Trip adoption and never shows it to a viewer", async () => {
     const trip = createTrip(placesTripId, "出雲", placesAt, [{ id: "visit", title: "出雲大社", type: "activity", category: "sightseeing",
       schedule: { type: "day", date: "2026-10-01" }, place: { name: "出雲大社", sources: [] } }]);
-    const changeItemDecision = vi.fn(async () => undefined); vi.stubGlobal("confirm", vi.fn(() => true));
+    const changeItemDecision = vi.fn(async () => undefined);
     const f = setup({ getCurrentTrip: () => trip, getRole: () => "owner" }, undefined, { changeItemDecision });
     f.ui.showPlan();
     expect(f.ui.panel.textContent).toContain("未確定");
     button(f.ui.panel, "この予定を確定").click();
+    document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
     await vi.waitFor(() => expect(changeItemDecision).toHaveBeenCalledWith(trip, trip.items[0], "confirm"));
     f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
     expect(button(f.ui.panel, "この予定を確定")).toBeUndefined();
@@ -315,12 +318,14 @@ it("puts Trip confirmation and sharing in the header and explains missing schedu
 
 it("edits the header title manually and hides editing for shared viewers", async () => {
   const trip = multiCityTrip(); const renameTitle = vi.fn(async () => {});
-  const prompt = vi.fn(() => "  新しい旅の名称  "); vi.stubGlobal("prompt", prompt);
+
   const f = setup({ getCurrentTrip: () => trip }, undefined, { renameTitle }); f.ui.showPlan();
   const edit = f.ui.panel.querySelector<HTMLButtonElement>('[aria-label="旅程の名称を編集"]')!;
   expect(edit.querySelector("svg")).not.toBeNull(); edit.click();
+  document.querySelector<HTMLInputElement>("dialog.app-dialog input")!.value = "  新しい旅の名称  ";
+  document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
   await vi.waitFor(() => expect(renameTitle).toHaveBeenCalledExactlyOnceWith(trip, "新しい旅の名称"));
-  expect(prompt).toHaveBeenCalledWith("旅程の名前", trip.title);
+
   f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
   expect(edit.hidden).toBe(true); edit.click(); expect(renameTitle).toHaveBeenCalledTimes(1);
 });
@@ -328,26 +333,31 @@ it("edits the header title manually and hides editing for shared viewers", async
 it("hides consultation for confirmed items and permits returning to draft", async () => {
   const base = multiCityTrip(), item = base.items[2]!;
   const trip = { ...base, items: base.items.map(i => i.id === item.id ? { ...i, decision: { confirmedAt: placesAt } } : i) };
-  const changeItemDecision = vi.fn(async () => {}); vi.stubGlobal("confirm", vi.fn(() => true));
+  const changeItemDecision = vi.fn(async () => {});
   const f = setup({ getCurrentTrip: () => trip }, undefined, { changeItemDecision });
   const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
   expect(button(card, "相談")).toBeUndefined();
   expect(card.querySelector("details.trip-workspace-editing")).toBeNull();
   button(card, "下書きに戻す").click();
+  document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
   await vi.waitFor(() => expect(changeItemDecision).toHaveBeenCalledWith(trip, trip.items[2], "withdraw"));
 });
 it("deletes only after confirmation without showing a proposal panel, and preserves an item on failure", async () => {
-  let trip = multiCityTrip(); const confirm = vi.fn(() => false); vi.stubGlobal("confirm", confirm);
+  let trip = multiCityTrip();
   const save = vi.fn(async (proposal: Parameters<typeof applyTripProposal>[1]) => { trip = applyTripProposal(trip, proposal); });
   const f = setup({ getCurrentTrip: () => trip, confirmProposal: save });
   const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
   button(card, "削除").click(); expect(save).not.toHaveBeenCalled(); expect(trip.items).toHaveLength(3);
-  confirm.mockReturnValue(true); button(card, "削除").click();
-  expect(f.controller.proposal()).toBeDefined();
+  document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=button]")!.click();
+  await Promise.resolve();
+  button(card, "削除").click();
+  document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
   expect(f.ui.panel.textContent).not.toContain("変更内容を確認");
   await vi.waitFor(() => expect(trip.items).toHaveLength(2)); expect(f.controller.proposal()).toBeUndefined();
   const remaining = f.ui.panel.querySelector<HTMLElement>('[data-item-id="movement"]')!;
   save.mockRejectedValueOnce(new Error("保存失敗")); button(remaining, "削除").click();
+  document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
+  await Promise.resolve();
   await vi.waitFor(() => expect(f.controller.proposal()).toBeUndefined());
   expect(trip.items).toHaveLength(2);
 });

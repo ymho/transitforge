@@ -1,3 +1,4 @@
+import { confirmAction } from "../shared/app-dialog";
 import type { Trip } from "@raiquora/trip/trip";
 import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
 import { setLoadingStatus } from "../shared/primitives";
@@ -82,8 +83,8 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
   const linkRow = element("div", "trip-sharing-link-row"); linkRow.append(create, link, copy);
   management.append(element("h3", "", "共有リンクを発行"), fields, linkRow, memberSection, grantSection);
   const officialActions = element("section"); officialActions.hidden = true;
-  const publish = control("公式しおりとして公開・更新", () => { const current = options.current(); if (!current?.trip || !options.official) return;
-    if (!document.defaultView?.confirm("この旅程を全ユーザー向けに公式公開しますか？日付・人数・列車・宿の選択・予約・価格を除いたモデル旅程を公開します。")) return;
+  const publish = control("公式しおりとして公開・更新", async () => { const current = options.current(); if (!current?.trip || !options.official) return;
+    if (!await confirmAction(document, "この旅程を全ユーザー向けに公式公開しますか？日付・人数・列車・宿の選択・予約・価格を除いたモデル旅程を公開します。")) return;
     void action(async () => { await options.official!.officialPublish(current.trip!); });
   });
   const withdraw = control("公式公開を取り下げる", () => { const current = options.current(); if (!current || !options.official) return;
