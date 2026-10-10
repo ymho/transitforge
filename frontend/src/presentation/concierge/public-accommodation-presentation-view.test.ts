@@ -88,7 +88,7 @@ it("merges hotel facts and adoption once, keeping source-ID binding when names a
   expect(cards[0]!.querySelector(".accommodation-actions")?.firstElementChild?.classList.contains("public-plan-adopt")).toBe(true);
   item.querySelector<HTMLButtonElement>('[aria-label="前の宿泊候補"]')!.click();
   expect(cards[0]!.hidden).toBe(false);
-  expect(item.textContent).toContain("JPY 10000"); expect(item.textContent).toContain("空室は未確認");
+  expect(item.textContent).toContain("JPY 10000"); expect(item.textContent).toContain("空室未確認");
 });
 
 it("keeps unmatched, composite and display-only plans separate without guessing from hotel names", () => {
@@ -115,8 +115,8 @@ it("shows provider photos, fractional review stars, aligned facts and compact so
   expect(photo.src).toBe("https://example.org/photo.jpg");
   expect(section.querySelector(".accommodation-rating")?.getAttribute("aria-label")).toBe("5点満点中4.35");
   expect(section.querySelector<HTMLElement>(".accommodation-stars > span")?.style.width).toBe("87%");
-  expect(section.querySelector(".accommodation-facts dt")?.textContent).toBe("宿泊日");
-  expect(section.querySelector(".accommodation-notice")?.textContent).toContain("空室は未確認");
+  expect(section.querySelector(".accommodation-facts dt")?.textContent).toBe("評価");
+  expect(section.querySelector(".accommodation-facts")?.textContent).toContain("空室未確認");
   expect(section.querySelector(".accommodation-footer img")?.getAttribute("alt")).toBe("楽天トラベル");
   expect(section.querySelector(".accommodation-source-link")).not.toBeNull();
   section.querySelector<HTMLButtonElement>('[aria-label="次の宿泊候補"]')!.click();
@@ -155,4 +155,36 @@ it("retains the consultation screen when a new accommodation plan arrives", asyn
   controller.ask("宿を探して");
   await vi.waitFor(() => expect(onPlanPresentation).toHaveBeenCalledWith(plan, false));
   expect(messages.querySelector(".accommodation-navigation")).not.toBeNull();
+});
+
+it("shows provider-confirmed vacancy in the aligned facts", () => {
+  const section = renderPublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [{ evidenceId: "available-hotel", name: "宿", summary: "空室あり（取得時の検索条件）", retrievedAt: "2026-10-04T00:00:00Z" }] });
+  expect(section.querySelector(".accommodation-facts")?.textContent).toBe("空室あり（検索時の条件）");
+  expect(section.querySelector(".accommodation-notice")).toBeNull();
+});
+
+
+it("shows shared conditions once and orders hotel facts above the provider introduction", () => {
+  const { hotels } = hotelFixture();
+  for (const hotel of hotels.cards) {
+    hotel.reviewAverage = 4.35;
+    hotel.summary += "\n検索人数: 大人2名\n特徴: 駅から徒歩5分。温泉付きの宿です。\n口コミ（投稿例）: 接客が丁寧でした。";
+  }
+  const section = renderPublicAccommodationPresentation(hotels);
+  expect(section.querySelector(".accommodation-conditions")?.textContent).toBe("2026-10-05〜2026-10-06 ・ 大人2名");
+  for (const card of section.querySelectorAll(".public-place-card")) {
+    expect([...card.querySelectorAll(".accommodation-facts dt")].map(node => node.textContent)).toEqual(["評価", "参考最安値", "空室"]);
+    expect(card.querySelector(".accommodation-introduction")?.textContent).toBe("駅から徒歩5分。温泉付きの宿です。口コミの一例：接客が丁寧でした。");
+    expect(card.textContent).not.toContain("大人2名");
+  }
+  expect(section.querySelectorAll(".accommodation-introduction")).toHaveLength(2);
+});
+
+it("keeps differing dates on each hotel and does not invent absent introductions", () => {
+  const { hotels } = hotelFixture();
+  hotels.cards[1]!.summary = hotels.cards[1]!.summary.replace("2026-10-05〜2026-10-06", "2026-10-06〜2026-10-07");
+  const section = renderPublicAccommodationPresentation(hotels);
+  expect(section.querySelector(".accommodation-conditions")).toBeNull();
+  expect(section.querySelector(".accommodation-facts")?.textContent).toContain("宿泊日2026-10-05〜2026-10-06");
+  expect(section.querySelector(".accommodation-introduction")).toBeNull();
 });

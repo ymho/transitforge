@@ -5,7 +5,7 @@ import { fixedEgressHttpClient } from "./fixed-egress-http-client.js";
 
 const request = { destination: "京都", checkInDate: "2026-10-01", checkOutDate: "2026-10-02", adults: 1, limit: 3 };
 const event = { operation: "search_accommodation", request, requestId: "execution-1" };
-const hotel = { hotels: [[{ hotelBasicInfo: { hotelNo: 42, hotelName: "宿", hotelMinCharge: 8000 } }]] };
+const hotel = { hotels: [[{ hotelBasicInfo: { hotelNo: 42, hotelName: "宿", hotelMinCharge: 8000, hotelSpecial: "温泉付きの宿です。", userReview: "接客が丁寧でした。" } }]] };
 const credentials = { applicationId: "fixture-app-id", accessKey: "fixture-access-secret", hotelSearchUrl: "https://provider.example/search" };
 function handler(fetcher: typeof fetch, availability = false) {
   return createFixedEgressProviderHandler(new HttpAccommodationProvider(fixedEgressHttpClient(fetcher), {
@@ -17,7 +17,7 @@ describe("fixed egress handler / HTTP boundary", () => {
   it("maps provider raw JSON to a minimal validated offering", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json(hotel));
     const result = await handler(fetcher)(event);
-    expect(result).toMatchObject({ ok: true, accommodations: [{ providerItemId: "42", availability: "unknown", price: { price: { amountMinor: 8000 } } }] });
+    expect(result).toMatchObject({ ok: true, accommodations: [{ providerItemId: "42", availability: "unknown", description: "温泉付きの宿です。", reviewExcerpt: "接客が丁寧でした。", price: { price: { amountMinor: 8000 } } }] });
     expect(JSON.stringify(result)).not.toContain("hotelBasicInfo");
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher.mock.calls[0]![1]).toMatchObject({ redirect: "error" });

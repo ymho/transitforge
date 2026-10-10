@@ -79,3 +79,58 @@ it("keeps unconfirmed alternatives when only one of three hotels has confirmed v
   expect(result.map(hotel => [hotel.providerItemId, hotel.availability])).toEqual([["2", "available"], ["1", "unknown"], ["3", "unknown"]]);
   expect(result.every(hotel => hotel.price?.basis === "reference-minimum")).toBe(true);
 });
+
+
+it.each(["https://hotel.travel.rakuten.co.jp/hotelinfo/plan/42?f_teikei=fixture&f_nen1=2025", "https://travel.rakuten.co.jp/HOTEL/42/42.html"])("passes dates and adults to Rakuten booking URL %s", async (bookingUrl) => {
+  const provider = new HttpAccommodationProvider({ async fetch() { return { ok: true, async json() { return { hotels: [[{ hotelBasicInfo: { hotelNo: 42, hotelName: "宿", planListUrl: bookingUrl, hotelInformationUrl: "https://travel.rakuten.co.jp/HOTEL/42/42.html" } }]] }; } }; } },
+    { async load() { return { applicationId: "fixture", accessKey: "fixture", hotelSearchUrl: "https://example.com/search" }; } });
+  const [hotel] = await provider.search({ destination: "京都", checkInDate: "2026-12-31", checkOutDate: "2027-01-02", adults: 2, limit: 1 });
+  const url = new URL(hotel!.bookingUrl!);
+  expect(url.pathname).toBe("/hotelinfo/plan/42");
+  expect(Object.fromEntries(url.searchParams)).toMatchObject({ f_nen1: "2026", f_tuki1: "12", f_hi1: "31", f_nen2: "2027", f_tuki2: "1", f_hi2: "2", f_otona_su: "2", f_heya_su: "1", f_static: "0" });
+  if (bookingUrl.includes("fixture")) expect(url.searchParams.get("f_teikei")).toBe("fixture");
+});
+
+it("preserves affiliate routing and dates both destinations", async () => {
+  const destination = "https://hotel.travel.rakuten.co.jp/hotelinfo/plan/42";
+  const bookingUrl = `https://hb.afl.rakuten.co.jp/hgc/fixture/?pc=${encodeURIComponent(destination)}&m=${encodeURIComponent(destination)}&link_type=text`;
+  const provider = new HttpAccommodationProvider({ async fetch() { return { ok: true, async json() { return { hotels: [[{ hotelBasicInfo: { hotelNo: 42, hotelName: "宿", planListUrl: bookingUrl } }]] }; } }; } },
+    { async load() { return { applicationId: "fixture", accessKey: "fixture", hotelSearchUrl: "https://example.com/search" }; } });
+  const [hotel] = await provider.search({ destination: "京都", checkInDate: "2026-11-01", checkOutDate: "2026-11-02", adults: 2, limit: 1 });
+  const url = new URL(hotel!.bookingUrl!);
+  expect(url.hostname).toBe("hb.afl.rakuten.co.jp");
+  expect(url.pathname).toBe("/hgc/fixture/");
+  expect(url.searchParams.get("link_type")).toBe("text");
+  for (const key of ["pc", "m"]) expect(new URL(url.searchParams.get(key)!).searchParams.get("f_nen1")).toBe("2026");
+});
+
+it.each(["http-error", "network-error", "invalid-json", "empty"])("retains unknown availability after vacancy response %s", async (failure) => {
+  const provider = new HttpAccommodationProvider({ async fetch(url) {
+    if (url.includes("/vacant")) {
+      if (failure === "network-error") throw new Error("upstream");
+      return { ok: failure !== "http-error", async json() { if (failure === "invalid-json") throw new Error("invalid JSON"); return { hotels: [] }; } };
+    }
+    return { ok: true, async json() { return { hotels: [[{ hotelBasicInfo: { hotelNo: 42, hotelName: "宿" } }]] }; } };
+  } }, { async load() { return { applicationId: "fixture", accessKey: "fixture", hotelSearchUrl: "https://example.com/search", vacantHotelSearchUrl: "https://example.com/vacant" }; } });
+  const result = await provider.search({ destination: "京都", checkInDate: "2026-11-01", checkOutDate: "2026-11-02", adults: 2, limit: 1 });
+  expect(result).toHaveLength(1);
+  expect(result[0]!.availability).toBe("unknown");
+});
+
+
+it("keeps short provider features and a review example without per-hotel requests", async () => {
+  let calls = 0;
+  const provider = new HttpAccommodationProvider({ async fetch(url) {
+    calls++;
+    return { ok: true, async json() { return { hotels: [[{ hotelBasicInfo: {
+      hotelNo: 42, hotelName: "宿",
+      ...(url.includes("/vacant") ? {} : { hotelSpecial: "駅から徒歩5分。<br>温泉付きの宿です。", userReview: "接客が丁寧でした。" + "また利用したいです。".repeat(40) }),
+    } }]] }; } };
+  } }, { async load() { return { applicationId: "fixture", accessKey: "fixture", hotelSearchUrl: "https://example.com/search", vacantHotelSearchUrl: "https://example.com/vacant" }; } });
+  const result = await provider.search({ destination: "京都", checkInDate: "2026-11-01", checkOutDate: "2026-11-02", adults: 2, limit: 10 });
+  expect(calls).toBe(2);
+  expect(result[0]).toMatchObject({ description: "駅から徒歩5分。 温泉付きの宿です。", availability: "available" });
+  expect(result[0]!.reviewExcerpt!.length).toBeLessThanOrEqual(160);
+  expect(result[0]!.reviewExcerpt).toMatch(/^接客が丁寧でした。/u);
+  expect(result[0]!.reviewExcerpt).toMatch(/。$/u);
+});
