@@ -211,6 +211,19 @@
 #app .trip-workspace-add { grid-template-columns: minmax(0,1fr); gap: 12px; padding: 16px; }
 #app .trip-workspace-add textarea { width: 100%; min-width: 0; resize: vertical; border: 1px solid var(--tf-line); border-radius: 10px; background: var(--tf-bg); color: var(--tf-ink); padding: 10px; font: inherit; font-size: 16px; }
 
+/* The card's main action is consultation; details use a quiet disclosure control. */
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .trip-timeline-content > header { align-items: center; flex-wrap: wrap; gap: 8px; }
+  & .trip-workspace-item-focus { flex: 1; min-width: 0; }
+  & .trip-timeline-content > header > .trip-item-toggle { background: transparent; border: 0; box-shadow: none; color: var(--tf-muted); padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+  & .trip-timeline-content > header > .trip-item-consult { background: var(--tf-blue); color: #fff; border: 0; box-shadow: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  & .trip-timeline-content > header > .trip-item-consult:hover { background: var(--tf-blue); color: #fff; filter: brightness(.92); }
+}
+
+#app[data-primary-view] .trip-item-toggle { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+.trip-item-toggle svg { width: 18px; height: 18px; }
+.trip-item-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+
 /* Also styles dialogs outside #app, while inheriting the application palette when hosted there. */
 dialog.trip-order-editor { box-sizing: border-box; width: min(520px, calc(100vw - 32px)); max-height: 82dvh; overflow: auto; padding: 20px; border: 1px solid #e9eded; border-radius: 16px; background: #fff; color: #242b2c; box-shadow: 0 14px 50px #24304326; font: 400 13px/1.55 sans-serif; }
 dialog.trip-order-editor::backdrop { background: #182f3b55; }

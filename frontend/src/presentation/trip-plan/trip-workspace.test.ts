@@ -79,18 +79,18 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(true);
     expect(f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')?.closest<HTMLElement>(".trip-workspace-day")?.hidden).toBe(false);
   });
-  it("consults at the clicked day's first gap with free text and optional place, closing the modal without mutating Trip", () => {
+  it("consults at the clicked day's first gap with a single free-text input, closing the modal without mutating Trip", () => {
     const trip = multiCityTrip(), before = structuredClone(trip), f = setup({ getCurrentTrip: () => trip }); f.ui.showPlan();
     const gap = f.ui.panel.querySelector<HTMLButtonElement>(".trip-timeline-add")!; gap.click();
     const form = f.ui.panel.querySelector<HTMLFormElement>(".trip-workspace-add")!, dialog = form.closest("dialog")!;
     expect(dialog.open).toBe(true); expect(form.querySelector("select")).toBeNull();
     expect(form.textContent).not.toContain("追加案を確認"); expect(f.ui.panel.textContent).not.toContain("この後に追加");
-    form.querySelector("textarea")!.value = "景色のいいところで休憩したい";
-    form.querySelector("input")!.value = "湖畔";
+    form.querySelector("textarea")!.value = "湖畔の景色のいいところで休憩したい";
+    expect(form.querySelector("input")).toBeNull();
     form.dispatchEvent(new Event("submit", { cancelable: true }));
     expect(dialog.open).toBe(false); expect(f.app.dataset.tripWorkspaceView).toBe("chat");
     expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("最初の予定"));
-    expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("希望：景色のいいところで休憩したい\n場所名：湖畔"));
+    expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("希望：湖畔の景色のいいところで休憩したい"));
     expect(f.controller.current()).toEqual(before); expect(f.controller.proposal()).toBeUndefined();
     expect(f.controller.uiFocus()).toBeUndefined();
   });
@@ -193,11 +193,11 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.focus("activity"); f.controller.propose("順序変更", [{ type: "move", itemId: "activity" }]);
     button(f.ui.nav, "旅程").click(); f.ui.panel.scrollTop = 330;
     const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
-    button(card, "詳細").click(); button(card, "閉じる").click(); expect(button(card, "詳細").getAttribute("aria-expanded")).toBe("false");
+    card.querySelector<HTMLButtonElement>(".trip-item-toggle")!.click(); card.querySelector<HTMLButtonElement>(".trip-item-toggle")!.click(); expect(card.querySelector<HTMLButtonElement>(".trip-item-toggle")!.getAttribute("aria-expanded")).toBe("false");
     button(f.ui.nav, "会話").click();
     expect(f.input.value).toBe("編集中の文章"); expect(document.activeElement).toBe(f.input); expect(f.messages.scrollTop).toBe(240);
     expect(f.controller.sessionId()).toBe("one"); expect(f.controller.uiFocus()?.itemId).toBe("activity"); expect(f.controller.proposal()?.summary).toBe("順序変更");
-    button(f.ui.nav, "旅程").click(); expect(f.ui.panel.scrollTop).toBe(330); expect(button(card, "詳細")).toBeDefined();
+    button(f.ui.nav, "旅程").click(); expect(f.ui.panel.scrollTop).toBe(330); expect(card.querySelector<HTMLButtonElement>(".trip-item-toggle")!).toBeDefined();
     expect(button(f.ui.nav, "旅程").getAttribute("aria-pressed")).toBe("true");
     expect(f.app.contains(f.chat)).toBe(true); expect(f.ui.panel.querySelectorAll(".trip-order-preview")).toHaveLength(1);
   });
@@ -223,7 +223,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     day.value = [...day.options].find(option => option.textContent === "2026-09-22")!.value;
     button(activity, "日付変更案").click();
     expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "replace", itemId: "activity", item: { schedule: { type: "day", date: "2026-09-22" } } });
-    button(activity, "相談する").click(); expect(f.ask).toHaveBeenCalledWith("この予定を相談したい"); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
+    button(activity, "相談").click(); expect(f.ask).toHaveBeenCalledWith("この予定を相談したい"); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
     expect(f.app.dataset.tripWorkspaceView).toBe("chat"); expect(trip.items).toHaveLength(3);
   });
   it("keeps candidate assessment outside adopted cards; unknown is not fine weather or zero price", () => {

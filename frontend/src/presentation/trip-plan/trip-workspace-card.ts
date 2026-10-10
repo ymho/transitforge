@@ -24,17 +24,22 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const icon = element("span", "trip-workspace-item-icon");
   icon.innerHTML = travelIcon(item.type === "transport" ? "transport" : item.type === "stay" ? "stay" : "activity");
   icon.setAttribute("aria-hidden", "true");
-  const focus = control(item.title, () => { controller.focus(item.id); body.hidden = false; expand.textContent = "閉じる"; expand.setAttribute("aria-expanded", "true"); options.collapse(false); });
+  const focus = control(item.title, () => { controller.focus(item.id); body.hidden = false; updateDisclosure(); options.collapse(false); });
   focus.className = "trip-workspace-item-focus";
   focus.setAttribute("aria-label", `${item.title}を相談対象にする`);
   const body = element("div", "trip-workspace-item-body");
   body.id = `trip-item-${encodeURIComponent(options.entry?.entryKey ?? item.id)}`;
   body.hidden = options.collapsed;
-  const expand = control(options.collapsed ? "詳細" : "閉じる", () => {
-    body.hidden = !body.hidden; expand.textContent = body.hidden ? "詳細" : "閉じる";
-    expand.setAttribute("aria-expanded", String(!body.hidden)); options.collapse(body.hidden);
+  const expand = control("", () => {
+    body.hidden = !body.hidden; updateDisclosure(); options.collapse(body.hidden);
   });
-  expand.setAttribute("aria-expanded", String(!body.hidden)); expand.setAttribute("aria-controls", body.id);
+  expand.className = "trip-item-toggle";
+  const updateDisclosure = () => {
+    expand.setAttribute("aria-expanded", String(!body.hidden));
+    expand.setAttribute("aria-label", `${item.title}の詳細を${body.hidden ? "開く" : "たたむ"}`);
+  };
+  expand.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>';
+  updateDisclosure(); expand.setAttribute("aria-controls", body.id);
   header.append(focus, expand);
   const content = element("div", "trip-timeline-content"), rail = element("span", "trip-timeline-rail"); rail.setAttribute("aria-hidden", "true");
   rail.append(icon);
@@ -74,7 +79,8 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       item.type === "activity" && !item.place && item.category !== "free-time";
     actions.append(decision);
   }
-  const consult = control("相談する", () => { controller.focus(item.id); options.chat("この予定を相談したい"); });
+  const consult = control("相談", () => { controller.focus(item.id); options.chat("この予定を相談したい"); });
+  consult.className = "trip-item-consult";
   actions.append(control("名称を変更", () => { editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); }),
     control("削除案", () => safe(() => controller.preview(proposeTripItemChange(controller.current()!, { action: "remove", itemId: item.id })))));
   if (item.type === "activity") actions.append(control("天気を踏まえて相談", () => {

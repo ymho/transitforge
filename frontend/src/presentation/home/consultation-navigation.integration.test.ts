@@ -33,7 +33,7 @@ it("uses the same consultation surface from Trip, returns to Trip, and makes the
   expect(document.querySelector("[data-trip-chat]")).toBeNull();
   expect(document.querySelector("[data-trip-consultation]")).toBeNull();
   const item = document.querySelector<HTMLElement>('[data-item-id="shrine"]')!;
-  [...item.querySelectorAll("button")].find(button => button.textContent === "相談する")!.click();
+  [...item.querySelectorAll("button")].find(button => button.textContent === "相談")!.click();
   expect(app.dataset.primaryView).toBe("chat"); expect(app.dataset.consultationMode).toBe("conversation");
   expect(window.history.state.tripId).toBe(trip.id); expect(ask).toHaveBeenCalledWith("この予定を相談したい");
   expect(controller.uiFocus()).toEqual({ itemId: "shrine" });
