@@ -8,7 +8,7 @@ export interface PublicAccommodationPresentation {
 export function parsePublicAccommodationPresentation(input: unknown): PublicAccommodationPresentation {
   const value = input as PublicAccommodationPresentation;
   if (!record(input) || Object.keys(input).some(key => !["version", "cards"].includes(key)) ||
-      value.version !== "public-accommodation-presentation-v1" || !Array.isArray(value.cards) || value.cards.length < 1 || value.cards.length > 5) throw Error("Invalid accommodation presentation");
+      value.version !== "public-accommodation-presentation-v1" || !Array.isArray(value.cards) || value.cards.length < 1 || value.cards.length > 10) throw Error("Invalid accommodation presentation");
   const ids = new Set<string>();
   for (const card of value.cards) {
     if (!record(card) || Object.keys(card).some(key => !["evidenceId", "name", "summary", "retrievedAt", "sourceUrl", "imageUrl", "provider", "reviewAverage"].includes(key)) ||

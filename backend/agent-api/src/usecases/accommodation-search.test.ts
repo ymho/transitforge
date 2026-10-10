@@ -8,11 +8,17 @@ describe("providerSearchFrom", () => {
     expect(providerSearchFrom({ destination: " 出雲市 ", checkInDate: "2026-08-16", checkOutDate: "2026-08-18", adults: 2, limit: 3 })).toEqual({ destination: "出雲市", checkInDate: "2026-08-16", checkOutDate: "2026-08-18", adults: 2, limit: 3 });
   });
 
+  it("defaults to ten candidates and accepts the upper bound", () => {
+    const request = { destination: "出雲市", checkInDate: "2026-08-16", checkOutDate: "2026-08-17" };
+    expect(providerSearchFrom(request).limit).toBe(10);
+    expect(providerSearchFrom({ ...request, limit: 10 }).limit).toBe(10);
+  });
+
   it.each([
     { destination: "出雲市", checkInDate: "2026-08-18", checkOutDate: "2026-08-16" },
     { destination: "出雲市", checkInDate: "2026-08-16", checkOutDate: "2026-09-18" },
     { destination: "出雲市", checkInDate: "2026-08-16", checkOutDate: "2026-08-17", adults: 0 },
-    { destination: "出雲市", checkInDate: "2026-08-16", checkOutDate: "2026-08-17", limit: 6 },
+    { destination: "出雲市", checkInDate: "2026-08-16", checkOutDate: "2026-08-17", limit: 11 },
   ])("不正な検索条件を拒否する", (value) => expect(() => providerSearchFrom(value)).toThrow(RequestError));
 
   it("Provider結果だけを返す", async () => {

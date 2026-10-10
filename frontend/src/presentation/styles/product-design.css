@@ -17,8 +17,8 @@
   & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) h2 { font-size: 16px; }
   & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) h3 { font-size: 14px; }
   & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) p { color: var(--tf-muted); font-size: 12px; line-height: 1.55; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) :is(button, summary) { min-height: 44px; font: inherit; cursor: pointer; }
-  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) button { background: var(--tf-bg); color: var(--tf-blue); border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px 10px; box-shadow: none; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) :is(button, summary) { min-height: 32px; font: inherit; cursor: pointer; }
+  & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) button { background: var(--tf-bg); color: var(--tf-blue); border: 1px solid var(--tf-line); border-radius: 7px; padding: 5px 8px; box-shadow: none; }
   & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) :is(input:not([type="checkbox"]), select, textarea) { min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px; background: var(--tf-bg); color: var(--tf-ink); font: 400 16px/1.4 var(--product-font); }
   & :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--tf-blue); outline-offset: 3px; }
   & .ds-icon { width: 17px; height: 17px; flex-shrink: 0; }
