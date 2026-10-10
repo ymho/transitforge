@@ -4,7 +4,7 @@ import type { Train } from "@raiquora/train/train";
 import { trainFormationLinks } from "./train-formation-link";
 
 describe("train formation links", () => {
-  it("links a returning Kansai-airport rapid to its Kishuji rapid formation", () => {
+  it.each(["関空快速", "関空紀州路快速"])("links a returning %s to its Kishuji rapid formation", (serviceType) => {
     const airport = train(
       "airport",
       "4206M",
@@ -12,7 +12,7 @@ describe("train formation links", () => {
       "京橋",
       1_128,
       1_207,
-      "関空快速",
+      serviceType,
     );
     const kishuji = train(
       "kishuji",

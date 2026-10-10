@@ -62,36 +62,47 @@ export function activeTrainPositions(
   return positions;
 }
 
-export function freezeLongTimeStoppingPositions(
-  currentPositions: TrainPosition[],
-  previousPositions: TrainPosition[],
-  longTimeStoppingServiceUids: ReadonlySet<string>,
-  removedServiceUids: ReadonlySet<string> = new Set(),
-): TrainPosition[] {
-  if (longTimeStoppingServiceUids.size === 0) {
-    return currentPositions;
-  }
-  const previousByServiceUid = new Map(
-    previousPositions.map((position) => [position.serviceUid, position]),
-  );
-  const frozen = currentPositions.map((position) =>
-    longTimeStoppingServiceUids.has(position.serviceUid)
-      ? previousByServiceUid.get(position.serviceUid) ?? position
-      : position,
-  );
-  const currentServiceUids = new Set(
-    currentPositions.map((position) => position.serviceUid),
-  );
-  for (const previous of previousPositions) {
-    if (
-      longTimeStoppingServiceUids.has(previous.serviceUid) &&
-      !removedServiceUids.has(previous.serviceUid) &&
-      !currentServiceUids.has(previous.serviceUid)
-    ) {
-      frozen.push(previous);
+export interface StoppingTrainState {
+  delayMinutes: number;
+  destination: string;
+}
+
+interface StoppingPositionAnchor {
+  state: StoppingTrainState;
+  position: TrainPosition;
+}
+
+export class LongTimeStoppingPositionTracker {
+  private anchors = new Map<string, StoppingPositionAnchor>();
+
+  update(
+    currentPositions: TrainPosition[],
+    stoppingTrains: ReadonlyMap<string, StoppingTrainState>,
+  ): TrainPosition[] {
+    const currentByServiceUid = new Map(
+      currentPositions.map((position) => [position.serviceUid, position]),
+    );
+    const nextAnchors = new Map<string, StoppingPositionAnchor>();
+    for (const [serviceUid, state] of stoppingTrains) {
+      const previous = this.anchors.get(serviceUid);
+      const position = previous &&
+        previous.state.delayMinutes === state.delayMinutes &&
+        previous.state.destination === state.destination
+        ? previous.position
+        : currentByServiceUid.get(serviceUid);
+      if (position) {
+        nextAnchors.set(serviceUid, { state: { ...state }, position });
+      }
     }
+    this.anchors = nextAnchors;
+    const positions = currentPositions.map((position) =>
+      nextAnchors.get(position.serviceUid)?.position ?? position,
+    );
+    for (const [serviceUid, { position }] of nextAnchors) {
+      if (!currentByServiceUid.has(serviceUid)) positions.push(position);
+    }
+    return positions;
   }
-  return frozen;
 }
 
 export function hasArrivedAtDestination(

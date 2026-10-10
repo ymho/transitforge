@@ -3,6 +3,7 @@ import * as THREE from "three";
 
 import { congestionBarColor, congestionBarHeightMeters } from "./congestion-bar";
 import type { Coordinate } from "@raiquora/train/path";
+import { congestionBarsForLayouts } from "../../../domain/train-congestion-layout";
 import { coupledTrainLayouts } from "../../../domain/coupled-train-layout";
 import {
   destinationArcHeightMeters,
@@ -303,6 +304,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       visiblePositions,
       this.formationLinks,
     ).slice(0, maximumTrainInstances);
+    const congestionBars = congestionBarsForLayouts(visibleLayouts, this.congestionByTrainNumber);
     const visibleBearingTrackingKeys = new Set(
       visibleLayouts.map(({ bearingTrackingKey }) => bearingTrackingKey),
     );
@@ -411,8 +413,14 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
         delayHaloCount += 1;
       }
 
-      const congestion = this.congestionByTrainNumber.get(position.trainNo);
-      if (congestion !== undefined) {
+      const bar = congestionBars.get(position.serviceUid);
+      if (bar) {
+        const { congestion } = bar;
+        if (bar.centered) {
+          // Shared congestion belongs at the joint, not above either half.
+          this.instanceTransform.position.x -= Math.sin(bearingRadians) * longitudinalOffset;
+          this.instanceTransform.position.y -= Math.cos(bearingRadians) * longitudinalOffset;
+        }
         const barHeightMeters = congestionBarHeightMeters(congestion);
         this.instanceTransform.position.z =
           mercator.z +

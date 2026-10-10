@@ -58,10 +58,10 @@ import {
 import {
   activeTrainPositions,
   destinationCoordinateForTrain,
-  freezeLongTimeStoppingPositions,
+  LongTimeStoppingPositionTracker,
   PathGeometryIndex,
+  type StoppingTrainState,
 } from "../domain/train-position";
-import type { TrainPosition } from "../domain/train-position";
 import { loadViewerElements } from "../usecases/viewer/viewer-elements";
 import { configureAiFirstShell } from "../presentation/home/ai-first-shell";
 import { configureConsultationScreen } from "../presentation/home/consultation-screen";
@@ -899,7 +899,6 @@ if (!token) {
             },
           },
         );
-        let displayedPositions: TrainPosition[] = [];
         let latestDelaySnapshot: TrainDelaySnapshot | undefined;
         const localWeatherLayer = createLocalWeatherLayer(map, applyAutomaticWeather);
         const localizedWeatherSearch = weatherPreviewEnabled
@@ -920,7 +919,8 @@ if (!token) {
         let displayTrains = trainIndex.trains;
         let displayDelays: ReadonlyMap<string, number> = new Map();
         let displayDestinationChanges: ReadonlySet<string> = new Set();
-        let displayLongTimeStoppingServiceUids: ReadonlySet<string> = new Set();
+        let displayStoppingTrains: ReadonlyMap<string, StoppingTrainState> = new Map();
+        const stoppingPositionTracker = new LongTimeStoppingPositionTracker();
 
         const applyOperationMode = (displayedAt: Date) => {
           const now = new Date();
@@ -962,12 +962,16 @@ if (!token) {
             destinationChanges,
           );
           displayDelays = delayByTrainNumber(operations);
-          displayLongTimeStoppingServiceUids = new Set(
-            displayTrains.flatMap((train) =>
-              operations?.get(train.train_no)?.longTimeStopping === true
-                ? [train.service_uid]
-                : [],
-            ),
+          displayStoppingTrains = new Map(
+            displayTrains.flatMap((train) => {
+              const operation = operations?.get(train.train_no);
+              return operation?.longTimeStopping === true
+                ? [[train.service_uid, {
+                    delayMinutes: operation.delayMinutes,
+                    destination: train.destination_station,
+                  }] as const]
+                : [];
+            }),
           );
           const operationDestinationCoordinates = new Map(
             displayTrains.flatMap((train) => {
@@ -992,7 +996,7 @@ if (!token) {
               (delay) => delay > 0,
             ).length,
             destinationChangedTrains: destinationChanges.size,
-            longTimeStoppingTrains: displayLongTimeStoppingServiceUids.size,
+            longTimeStoppingTrains: displayStoppingTrains.size,
             collectedAt: latestDelaySnapshot?.collectedAt,
           });
         };
@@ -1016,13 +1020,10 @@ if (!token) {
             displayDelays,
             displayDestinationChanges,
           );
-          const positions = freezeLongTimeStoppingPositions(
+          const positions = stoppingPositionTracker.update(
             calculatedPositions,
-            displayedPositions,
-            displayLongTimeStoppingServiceUids,
-            displayDestinationChanges,
+            displayStoppingTrains,
           );
-          displayedPositions = positions;
           threeTrainLayer.setPositions(positions);
           selection.updateTracking(positions);
           const hitSource = map.getSource("train-hit-targets") as import("mapbox-gl").GeoJSONSource;
