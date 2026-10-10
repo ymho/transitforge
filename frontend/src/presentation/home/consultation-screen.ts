@@ -107,7 +107,9 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     const row = (label: string, value: string, edit?: () => void, source?: string) => {
       const item = node("div", "consultation-condition-row"); item.append(node("span", "", label), node("strong", "", value));
       if (source) item.append(node("small", "consultation-condition-source", source));
-      if (edit) { const button = node("button", "", "編集"); button.type = "button"; button.setAttribute("aria-label", `${label}を編集`); button.addEventListener("click", edit); item.append(button); }
+      const actions = node("div", "consultation-condition-actions");
+      if (edit) { const button = node("button", "", "編集"); button.type = "button"; button.setAttribute("aria-label", `${label}を編集`); button.addEventListener("click", edit); actions.append(button); }
+      item.append(actions);
       rows.append(item); return item;
     };
     const previewProposal = (proposal: TripUpdateProposal) => ports.preview(proposal);
@@ -176,7 +178,11 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         const source = constraint.source === "user" ? "あなたが指定" : constraint.source === "profile" ? "プロフィール由来" : "仮置き";
         const editable = conditionKinds.some(([type]) => type === r.type);
         const item = row(display[0]!, display[1]!, !state.viewer && editable ? () => editConstraint(r.type as EditableCondition, constraint) : undefined, source);
-        if (!state.viewer) item.append(offer(`${display[0]}を解除`, () => editTripConstraint(trip, constraint.id, undefined)));
+        if (!state.viewer) {
+          const remove = offer("削除", () => editTripConstraint(trip, constraint.id, undefined));
+          remove.setAttribute("aria-label", `${display[0]}を削除`);
+          item.querySelector(".consultation-condition-actions")!.append(remove);
+        }
 
       }
       for (const fact of trip.request.partialConditions ?? []) {
@@ -206,7 +212,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         add.append(kind, button); rows.append(add);
         for (const assumption of trip.request.assumptions.filter((a) => a.status === "unconfirmed")) {
           const item = row("仮置き", assumption.text);
-          item.append(offer("仮定を承認", () => proposeAssumptionDecision(trip, assumption.id, "confirmed")),
+          item.querySelector(".consultation-condition-actions")!.append(offer("仮定を承認", () => proposeAssumptionDecision(trip, assumption.id, "confirmed")),
             offer("仮定を拒否", () => proposeAssumptionDecision(trip, assumption.id, "rejected", [],
               trip.request.party?.assumptionId === assumption.id ? { type: "remove" } : undefined)));
         }
