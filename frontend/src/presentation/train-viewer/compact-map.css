@@ -46,6 +46,6 @@
 #app .train-detail-tabs button { min-height: 1.75rem; border-radius: .3rem; font-size: .64rem; }
 @media (max-width: 62rem) {
   #app[data-primary-view] { --map-bottom-clearance: calc(4rem + env(safe-area-inset-bottom)); }
-  #app .mapboxgl-ctrl-bottom-left, #app .mapboxgl-ctrl-bottom-right { bottom: var(--map-bottom-clearance); }
+  #app .mapboxgl-ctrl-bottom-left, #app .mapboxgl-ctrl-bottom-right { bottom: .5rem; }
   #app .train-details { right: .5rem; bottom: calc(var(--map-bottom-clearance) + 1rem); }
 }

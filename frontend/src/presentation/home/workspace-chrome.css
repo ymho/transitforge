@@ -72,7 +72,7 @@
 }
 @media (prefers-reduced-motion: reduce) { #app .home-trip-card { transition: none; transform: none; } }
 
-/* Keep the operation canvas below the same service navigation. */
+/* Keep the map behind the translucent navigation; controls reserve the header. */
 #app[data-primary-view="map"] { --product-header-height: 84px; }
 #app[data-primary-view="map"] .loading-screen { background: var(--workspace-canvas); color: var(--tf-ink); }
 @media (max-width: 62rem) {
@@ -189,12 +189,14 @@
     & .product-nav .kaiho-logo-ai { background: #fff; color: #68716e; }
   }
   #app[data-primary-view="map"]:is([data-primary-view]) {
-    --product-header-height: 0px;
-    & .product-nav { background: transparent; border: 0; box-shadow: none; }
-    & .product-nav :is(a,button) { border-radius: 12px; background: #fffffff2; color: #37675f; border: 1px solid #ffffff80; box-shadow: 0 2px 8px #152a3326; backdrop-filter: blur(8px); }
+    --product-header-height: 84px;
+    & #map { top: 0; }
+    & .product-nav { background: #ffffffd9; border-bottom: 1px solid #dfe4e8; box-shadow: 0 2px 8px #152a3314; }
+    & .product-nav :is(a,button) { border-radius: 12px; background: transparent; color: #37675f; border: 1px solid transparent; box-shadow: none; backdrop-filter: none; }
     & .product-nav [aria-current="page"] { background: var(--tf-blue); color: #fff; border-color: var(--tf-blue); }
-    & .product-nav .kaiho-logo { color: #fff; filter: drop-shadow(0 1px 3px #152a3380); }
-    & .product-nav .kaiho-logo-ai { background: #fff; color: #68716e; }
+    & .product-nav .kaiho-logo { color: #68716e; filter: none; }
+    & .product-nav .kaiho-logo-ai { background: #68716e; color: #fff; }
+    & .mapboxgl-ctrl-top-right { top: calc(var(--product-header-height) + .5rem); }
   }
 }
 
