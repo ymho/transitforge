@@ -53,14 +53,14 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
     facts?.forEach(validateReservationFact);
     return facts === undefined ? undefined : structuredClone(facts);
   };
-  const preview = (proposal: TripUpdateProposal) => {
+  const preview = (proposal: TripUpdateProposal, notify = true) => {
     const trip = current(), s = state();
     if (!trip || !s) throw new Error("Current Trip unavailable");
     applyTripProposal(trip, proposal);
     assertItineraryEditingAllowed(trip, proposal);
     if (trip.lifecycleState === "in_trip") replan(proposal);
     s.proposal = structuredClone(proposal); s.base = JSON.stringify(trip);
-    publish();
+    if (notify) publish();
   };
   const feasibilityInput = (trip: Trip): TripFeasibilityFacts => ({ tripId: trip.id, tripRevision: trip.revision,
     reservations: reservations(), external: state()?.source.getFeasibilityExternalFacts?.() });
@@ -139,6 +139,14 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
     },
     proposal() { return state()?.proposal ? structuredClone(state()!.proposal!) : undefined; },
     preview,
+    async applyConfirmed(proposal: TripUpdateProposal, confirmation?: TripProposalConfirmation) {
+      const s = state();
+      if (!s || s.proposal || s.confirming) throw new Error("別の変更を処理中です。先に完了してください。");
+      preview(proposal, false);
+      const shown = s.proposal;
+      try { await this.confirm(confirmation); }
+      finally { if (s.proposal === shown) { delete s.proposal; delete s.base; } publish(); }
+    },
     propose(summary: string, patches: readonly TripPatch[]) {
       const trip = current();
       if (!trip) throw new Error("Current Trip unavailable");

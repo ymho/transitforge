@@ -1,3 +1,4 @@
+import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/reservation";
 import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
 import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itinerary";
@@ -73,8 +74,8 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const actions = element("div", "trip-workspace-actions");
   if (options.changeItemDecision) {
     const action = item.decision && !item.decision.needsReconfirmation ? "withdraw" : "confirm";
-    const decision = control(action === "withdraw" ? "この予定を仮に戻す" : "この予定を確定", () => {
-      if (!document.defaultView?.confirm(action === "confirm" ? "この予定を確定しますか？予約・購入は行いません。" : "この予定を仮に戻しますか？")) return;
+    const decision = control(action === "withdraw" ? "下書きに戻す" : "この予定を確定", () => {
+      if (!document.defaultView?.confirm(action === "confirm" ? "この予定を確定しますか？予約・購入は行いません。" : "この予定を下書きに戻しますか？")) return;
       decision.disabled = true;
       void options.changeItemDecision!(trip, item, action).catch(() => options.report("予定の状態を変更できませんでした。最新の旅程を確認してください。"))
         .finally(() => { decision.disabled = false; });
@@ -91,12 +92,26 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   };
   const consult = control("相談", () => askAboutItem("この予定を相談したい"));
   consult.className = "trip-item-consult";
-  actions.append(control("名称を変更", () => { editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); }),
-    control("削除案", () => safe(() => controller.preview(proposeTripItemChange(controller.current()!, { action: "remove", itemId: item.id })))));
+  const rename = control("✎", () => { body.hidden = false; updateDisclosure(); options.collapse(false); editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); });
+  rename.className = "trip-item-rename"; rename.setAttribute("aria-label", `${displayTitle}の名称を変更`);
+  rename.hidden = controller.source()?.getRole?.() === "viewer";
+  const remove = control("削除", () => {
+    const current = controller.current();
+    if (!current || current.id !== trip.id || current.revision !== trip.revision || !controller.canConfirm()) { options.report("旅程が更新されたか、編集できません。開き直してください。"); return; }
+    if (!document.defaultView?.confirm(`「${item.title}」を削除しますがよろしいですか？\n予約自体は取り消されません。`)) return;
+    try {
+      const proposal = proposeTripItemChange(current, { action: "remove", itemId: item.id });
+      const facts = controller.reservations();
+      const confirmation = facts && bookedReservationChanges(proposal, facts).length ? { reservationChangeKey: reservationChangeKey(proposal, facts) } : undefined;
+      remove.disabled = true;
+      void controller.applyConfirmed(proposal, confirmation).catch(error => options.report(error instanceof Error ? error.message : "削除できませんでした"))
+        .finally(() => { remove.disabled = false; });
+    } catch { options.report("この予定は削除できません。関連する条件を確認してください。"); }
+  });
+  actions.append(remove);
   if (item.type === "activity") actions.append(control("天気を踏まえて相談", () => {
     askAboutItem("この予定の日付と地域の天気を確認し、必要なら近くの候補や予定の変更案を相談したい。確定済みの予定は確認するまで変更しないでください");
   }));
-  if (item.type === "stay") actions.append(control("宿候補を相談", () => askAboutItem("この宿泊予定の候補を比較したい")));
   if (item.type === "transport") actions.append(control(item.detail.status === "selected" ? "経路全体を選び直す" : "交通手段を選ぶ", () => {
     askAboutItem(item.detail.status === "selected"
       ? "この移動予定の経路全体を再検索して選び直したい。新しい経路を採用するまで元の経路を残し、変更をやめたら元の経路のままにしてください。ほかの予定は変更しないでください"
@@ -143,10 +158,12 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       { action: "set-manual-stay-place", itemId: item.id, placeName: name.value }))); });
     body.append(form);
   }
-  const editing = element("details", "trip-workspace-editing");
-  editing.append(element("summary", "", "予定を編集"), actions, editor);
+  const editing = element("div", "trip-workspace-editing");
+  editing.append(actions, editor);
   if (manualActivityForm) editing.append(manualActivityForm);
-  header.append(decisionStatus, consult); body.append(editing); content.append(body);
+  const titleGroup = element("div", "trip-item-title-group"); focus.replaceWith(titleGroup);
+  titleGroup.append(focus, rename); header.append(decisionStatus);
+  if (!item.decision || item.decision.needsReconfirmation) header.append(consult); body.append(editing); content.append(body);
   return card;
 }
 
