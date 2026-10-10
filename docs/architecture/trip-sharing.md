@@ -92,6 +92,7 @@ API Gateway Cognito authorizer + scope、LambdaのAccess Token検証、Trip本�
 現時点で認可された参加Tripを合流してTrip IDで重複除去する。本人所有Tripは個人一覧にも表示する。
 owner/editor/viewerを「あなたの旅/共同編集/閲覧のみ」で示し、Cognito subjectを表示名として公開しない。
 個人・共有・公式それぞれ独立したloading/error/empty/cursorを持ち、共有・公式には再読み込みを設ける。
+旅程ヘッダーの操作は「旅程を確定」と「共有」の2つに絞る。相談は各予定の「相談する」から開始し、旅程全体の相談・分岐・旅行モードの入口は表示しない。
 旅程ヘッダーの「共有」からGrant管理へ進む。「旅程を確定」はヘッダーに表示し、日程不足時は理由を添える。
 確定は既存TripAdoptionで、予約確定や公式公開とは別の操作。
 
