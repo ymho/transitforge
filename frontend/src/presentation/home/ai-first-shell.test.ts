@@ -161,7 +161,7 @@ it("all secondary actions use existing feature ports", () => {
 it("opens the actual Trip as a trips subview, not a selected chat tab", async () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
   const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip] }) });
-  expect(document.querySelector('.trip-list-cover[aria-hidden="true"] img')).not.toBeNull();
+  expect(document.querySelector('.trip-list-cover img')).not.toBeNull();
   click('[data-primary="trips"]'); click("[data-trip]");
   expect(document.querySelector("main")!.dataset.primaryView).toBe("trip-loading");
   await vi.waitFor(() => expect(document.querySelector("main")!.dataset.primaryView).toBe("trip"));
@@ -362,4 +362,25 @@ it("dismisses trip menus outside their own bounds and unregisters on dispose", (
   document.querySelector("main")!.append(header); header.open = true;
   document.body.click(); expect(header.open).toBe(false);
   shell.dispose(); header.open = true; document.body.click(); expect(header.open).toBe(true);
+});
+
+it("regenerates a long title without opening the trip and suppresses duplicate clicks", async () => {
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "長い旅のタイトル".repeat(10), "2026-09-18T00:00:00Z", [{ id: "visit", type: "activity", title: "出雲大社", category: "sightseeing", schedule: { type: "unscheduled" } }]);
+  let finish!: () => void;
+  const regenerate = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+  const f = setup({ authState: () => ({ status: "signed-in", displayName: "ゆうき" }), read: () => ({ state: "available", trips: [trip] }), regenerateTripTitle: regenerate });
+  const button = document.querySelector<HTMLButtonElement>("[data-trip-regenerate-title]")!;
+  expect(button.parentElement?.className).toBe("trip-list-title-row");
+  expect(button.closest("button")?.parentElement?.closest("button")).toBeNull();
+  button.click(); document.querySelector<HTMLButtonElement>("[data-trip-regenerate-title]")!.click();
+  expect(regenerate).toHaveBeenCalledExactlyOnceWith(trip.id); expect(f.ports.openTrip).not.toHaveBeenCalled();
+  expect(document.querySelector('[data-trip-regenerate-title]')?.getAttribute("aria-busy")).toBe("true");
+  finish(); await vi.waitFor(() => expect(document.querySelector<HTMLButtonElement>("[data-trip-regenerate-title]")!.disabled).toBe(false));
+});
+it("keeps the title on generation failure and reports a retryable error", async () => {
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "元のタイトル", "2026-09-18T00:00:00Z", [{ id: "visit", type: "activity", title: "出雲大社", category: "sightseeing", schedule: { type: "unscheduled" } }]);
+  setup({ read: () => ({ state: "available", trips: [trip] }), regenerateTripTitle: vi.fn(async () => { throw new Error("offline"); }) });
+  document.querySelector<HTMLButtonElement>("[data-trip-regenerate-title]")!.click();
+  await vi.waitFor(() => expect(document.querySelector(".trip-title-status")?.textContent).toContain("再生成できませんでした"));
+  expect(document.querySelector(".trip-list-title-open")?.textContent).toBe(trip.title);
 });

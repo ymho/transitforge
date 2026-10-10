@@ -32,7 +32,7 @@ export function createTripApiHandler(application?: Pick<TripApplication, "execut
       try { value = JSON.parse(body); } catch { throw new TripResourceError("invalid-input"); }
       requirePersonalOperation("trip", event, value);
       const requested = (value as { operation?: unknown } | null)?.operation;
-      if (typeof requested === "string" && ["start-consultation", "branch-consultation", "create", "mutate", "get", "list", "archive", "attach", "detach", "reference", "preview-plan-adoption", "confirm-plan-adoption", "preview-trip-adoption", "confirm-trip-adoption", "preview-item-decision", "confirm-item-decision"].includes(requested)) operation = requested;
+      if (typeof requested === "string" && ["generate-title", "start-consultation", "branch-consultation", "create", "mutate", "get", "list", "archive", "attach", "detach", "reference", "preview-plan-adoption", "confirm-plan-adoption", "preview-trip-adoption", "confirm-trip-adoption", "preview-item-decision", "confirm-item-decision"].includes(requested)) operation = requested;
       if (requested === "preview-plan-adoption" || requested === "confirm-plan-adoption") {
         if (!application.executeAdoption) throw new TripResourceError("unavailable");
         const command = parsePlanAdoptionCommand(value), { version: _version, confirmationKey, ...request } = command;
