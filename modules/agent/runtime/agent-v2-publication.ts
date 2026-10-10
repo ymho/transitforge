@@ -235,7 +235,10 @@ function accommodationCard(evidence: Evidence, effective?: EffectiveIntent): Pub
   const reference = evidence.references.find(ref => ref.sourceType === "external-source");
   const sourceUrl = reference ? publicPlaceSourceUrl(reference.sourceRef) : undefined;
   const card = { evidenceId: evidence.id, name: boundedText(evidence.facts.name).slice(0, 160), summary: boundedText(evidence.facts.accommodationSummary),
-    retrievedAt: evidence.observation.retrievedAt, ...(sourceUrl ? { sourceUrl } : {}) };
+    retrievedAt: evidence.observation.retrievedAt, ...(sourceUrl ? { sourceUrl } : {}),
+    ...(typeof evidence.facts.provider === "string" ? { provider: evidence.facts.provider } : {}),
+    ...(typeof evidence.facts.imageUrl === "string" && publicPlaceSourceUrl(evidence.facts.imageUrl)?.startsWith("https://") ? { imageUrl: evidence.facts.imageUrl } : {}),
+    ...(typeof evidence.facts.reviewAverage === "number" ? { reviewAverage: evidence.facts.reviewAverage } : {}) };
   try { return parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [card] }).cards[0]!; }
   catch { throw new AgentV2ReplyError("invalid_field"); }
 }

@@ -1,3 +1,4 @@
+import "./public-accommodation-presentation.css";
 import { parsePublicAccommodationPresentation, type PublicAccommodationPresentation } from "@raiquora/agent/public-accommodation-presentation";
 import type { PublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { renderPublicPlanPresentation } from "./public-plan-presentation-view";
@@ -12,16 +13,56 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
   for (const [index, hotel] of value.cards.entries()) {
     const card = document.createElement("article"); card.className = "public-place-card";
     const name = document.createElement("h3"); name.textContent = hotel.name;
-    const summary = document.createElement("p"); summary.style.whiteSpace = "pre-line"; summary.textContent = hotel.summary;
-    const observed = document.createElement("p"); observed.textContent = `取得日時: ${new Date(hotel.retrievedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}（日本時間）`;
-    card.append(name, summary, observed);
-    if (hotel.sourceUrl) { const source = document.createElement("a"); source.href = hotel.sourceUrl; source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = "宿の詳細・最新料金を確認 ↗"; card.append(source); }
+    if (hotel.imageUrl) {
+      const photo = document.createElement("img"); photo.className = "accommodation-photo"; photo.src = hotel.imageUrl;
+      photo.alt = hotel.name; photo.loading = "lazy"; photo.referrerPolicy = "no-referrer";
+      photo.addEventListener("error", () => photo.remove()); card.append(photo);
+    }
+    card.append(name);
+    const facts = document.createElement("dl"); facts.className = "accommodation-facts";
+    const notices: string[] = [];
+    const addFact = (label: string, value: string) => {
+      const term = document.createElement("dt"), detail = document.createElement("dd"); term.textContent = label; detail.textContent = value; facts.append(term, detail);
+    };
+    for (const line of hotel.summary.split("\n").filter(Boolean)) {
+      if (/^評価[:：]/u.test(line)) continue;
+      if (/空室|未確認/u.test(line)) { notices.push(line); continue; }
+      const price = line.match(/^(.*?料金|参考最安値|参考最低料金)[:：]\s*(.*?)(?:（(.*?)）)?$/u);
+      if (price) { addFact(price[1]!, price[2]!); if (price[3]) notices.push(price[3]); continue; }
+      const labeled = line.match(/^([^:：]+)[:：]\s*(.*)$/u);
+      if (labeled) addFact(labeled[1]!, labeled[2]!);
+      else if (/^\d{4}-\d{2}-\d{2}〜/u.test(line)) addFact("宿泊日", line);
+      else addFact("情報", line);
+    }
+    const legacyRating = hotel.summary.match(/^評価[:：]\s*([0-5](?:\.\d+)?)\/5$/mu);
+    const rating = hotel.reviewAverage ?? (legacyRating ? Number(legacyRating[1]) : undefined);
+    if (rating !== undefined && rating >= 0 && rating <= 5) {
+      const term = document.createElement("dt"), detail = document.createElement("dd"), stars = document.createElement("span"), fill = document.createElement("span");
+      term.textContent = "評価"; detail.className = "accommodation-rating"; stars.className = "accommodation-stars";
+      stars.setAttribute("aria-hidden", "true"); stars.textContent = "★★★★★"; fill.textContent = "★★★★★"; fill.style.width = `${Number((rating * 20).toFixed(2))}%`; stars.append(fill);
+      detail.setAttribute("aria-label", `5点満点中${rating}`); detail.append(stars, document.createTextNode(` ${rating.toFixed(2)}`)); facts.append(term, detail);
+    }
+    card.append(facts);
+    if (notices.length) {
+      const notice = document.createElement("aside"), title = document.createElement("strong"), content = document.createElement("p");
+      notice.className = "accommodation-notice"; title.textContent = "お知らせ"; content.textContent = notices.join("。\n"); notice.append(title, content); card.append(notice);
+    }
+    const controls = document.createElement("div"); controls.className = "accommodation-actions"; card.append(controls);
+    if (hotel.sourceUrl) { const source = document.createElement("a"); source.className = "accommodation-source-link"; source.href = hotel.sourceUrl; source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = "宿の詳細・最新料金を確認 ↗"; controls.append(source); }
+    const footer = document.createElement("footer"); footer.className = "accommodation-footer";
+    const observed = document.createElement("small"); observed.textContent = `取得: ${new Date(hotel.retrievedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}（日本時間）`; footer.append(observed);
+    if (hotel.provider === "rakuten-travel") {
+      const credit = document.createElement("a"), logo = document.createElement("img"); credit.href = "https://travel.rakuten.co.jp/"; credit.target = "_blank"; credit.rel = "noopener noreferrer";
+      credit.className = "accommodation-credit"; logo.src = import.meta.env.VITE_ACCOMMODATION_PROVIDER_CREDIT_IMAGE_URL || "https://webservice.rakuten.co.jp/img/credit/200709/credit_22121.gif";
+      logo.alt = "楽天トラベル"; logo.loading = "lazy"; logo.addEventListener("error", () => { credit.textContent = "楽天トラベル"; }); credit.append(logo); footer.append(credit);
+    }
+    card.append(footer);
     if (combined && actions) {
       const candidateIndex = combined.candidates.findIndex(candidate => candidate.items[0]!.sourceRef === hotel.evidenceId);
       const candidate = combined.candidates[candidateIndex]!;
       const source = actions.querySelectorAll<HTMLElement>(".public-plan-candidate")[candidateIndex]!;
       const adopt = source.querySelector(".public-plan-adopt");
-      if (adopt) card.append(adopt);
+      if (adopt) controls.append(adopt);
       if (candidate.unknowns.length) {
         const details = document.createElement("details"), label = document.createElement("summary"), unknowns = document.createElement("p");
         label.textContent = "旅程への反映条件"; unknowns.textContent = `未確認: ${candidate.unknowns.join("・")}`; details.append(label, unknowns); card.append(details);
