@@ -7,8 +7,8 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
   const value = parsePublicAccommodationPresentation(input);
   const section = document.createElement("section"); section.className = "public-accommodation-presentation"; section.setAttribute("aria-label", "宿泊候補の比較");
   const combined = plan && canCombineAccommodationPlan(value, plan) ? plan : undefined;
-  const actions = combined ? renderPublicPlanPresentation(combined) : undefined;
-  const tabs = document.createElement("div"); tabs.className = "public-plan-candidate-tabs"; tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "宿泊候補");
+  const actions = combined ? renderPublicPlanPresentation(combined, { detailedResearch: false }) : undefined;
+
   const panels: HTMLElement[] = [];
   for (const [index, hotel] of value.cards.entries()) {
     const card = document.createElement("article"); card.className = "public-place-card";
@@ -62,35 +62,37 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
       const candidate = combined.candidates[candidateIndex]!;
       const source = actions.querySelectorAll<HTMLElement>(".public-plan-candidate")[candidateIndex]!;
       const adopt = source.querySelector(".public-plan-adopt");
-      if (adopt) controls.append(adopt);
+      if (adopt) controls.prepend(adopt);
       if (candidate.unknowns.length) {
         const details = document.createElement("details"), label = document.createElement("summary"), unknowns = document.createElement("p");
         label.textContent = "旅程への反映条件"; unknowns.textContent = `未確認: ${candidate.unknowns.join("・")}`; details.append(label, unknowns); card.append(details);
       }
-      card.classList.add("public-plan-candidate"); card.hidden = index !== 0;
-      if (value.cards.length > 1) {
-        card.id = `hotel-${combined.presentationId.replace(/[^A-Za-z0-9_-]/gu, "-")}-${index}`; card.setAttribute("role", "tabpanel");
-        const tab = document.createElement("button"); tab.type = "button"; tab.textContent = `候補 ${index + 1}`; tab.setAttribute("role", "tab");
-        tab.id = `${card.id}-tab`; tab.setAttribute("aria-controls", card.id); card.setAttribute("aria-labelledby", tab.id);
-        tab.setAttribute("aria-selected", String(index === 0)); tab.tabIndex = index === 0 ? 0 : -1;
-        tab.addEventListener("click", () => {
-          panels.forEach((panel, i) => panel.hidden = i !== index);
-          for (const button of tabs.querySelectorAll<HTMLButtonElement>("button")) { button.setAttribute("aria-selected", String(button === tab)); button.tabIndex = button === tab ? 0 : -1; }
-        });
-        tab.addEventListener("keydown", event => {
-          const buttons = [...tabs.querySelectorAll<HTMLButtonElement>("button")];
-          const next = event.key === "ArrowRight" ? (index + 1) % buttons.length : event.key === "ArrowLeft" ? (index - 1 + buttons.length) % buttons.length : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : undefined;
-          if (next === undefined) return; event.preventDefault(); buttons[next]?.click(); buttons[next]?.focus();
-        });
-        tabs.append(tab);
-      }
+      card.classList.add("public-plan-candidate");
     }
+    card.hidden = index !== 0;
     panels.push(card);
     section.append(card);
   }
-  if (tabs.childElementCount) section.prepend(tabs);
-  const detailed = actions?.querySelector<HTMLButtonElement>(".public-plan-presentation > button");
-  if (detailed) { detailed.classList.add("public-plan-detail"); section.append(detailed); }
+  if (panels.length > 1) {
+    const navigation = document.createElement("nav"); navigation.className = "accommodation-navigation"; navigation.setAttribute("aria-label", "宿泊候補の切り替え");
+    const previous = document.createElement("button"), next = document.createElement("button"), position = document.createElement("span");
+    previous.type = next.type = "button"; previous.textContent = "←"; next.textContent = "→";
+    previous.setAttribute("aria-label", "前の宿泊候補"); next.setAttribute("aria-label", "次の宿泊候補");
+    position.setAttribute("aria-live", "polite");
+    let current = 0;
+    const show = (index: number) => {
+      current = Math.max(0, Math.min(panels.length - 1, index));
+      panels.forEach((panel, i) => { panel.hidden = i !== current; });
+      position.textContent = `${current + 1} / ${panels.length}`;
+      previous.disabled = current === 0; next.disabled = current === panels.length - 1;
+    };
+    previous.addEventListener("click", () => show(current - 1)); next.addEventListener("click", () => show(current + 1));
+    navigation.addEventListener("keydown", event => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault(); show(current + (event.key === "ArrowRight" ? 1 : -1));
+    });
+    navigation.append(previous, position, next); section.prepend(navigation); show(0);
+  }
   return section;
 }
 

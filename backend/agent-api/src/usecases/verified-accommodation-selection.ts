@@ -10,7 +10,7 @@ import { publicPlaceSourceUrl } from "@raiquora/agent/public-place-presentation"
  * An Offering alone or a model-declared permission never authorizes persistence. */
 export function verifiedAccommodationSelectionItems(offerings: readonly AccommodationOffering[],
   proofs: readonly AccommodationSelectionEvidence[], retrievedAt: string): ItineraryItem[] {
-  return offerings.slice(0, 5).flatMap(offering => {
+  return offerings.slice(0, 10).flatMap(offering => {
     const matches = proofs.filter(proof => proof.provider === offering.provider && proof.providerItemId === offering.providerItemId);
     if (matches.length !== 1 || !matches[0]!.storageAllowed) return [];
     const accommodation = selectAccommodation(offering, matches[0]!, retrievedAt);

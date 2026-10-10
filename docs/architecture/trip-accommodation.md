@@ -125,3 +125,7 @@ npm run eval:agent:decision:live -- --suite trip-progress --profile full --case 
 ```
 
 後続はMoney #412、Reservation #398、全面UI #390、server #388、CAS #389。Provider cache全面構築は対象外。
+
+## 宿泊候補の比較画面
+
+相談からの宿泊検索は通常最大10件を要求する。Providerが返した実候補だけを表示し、Evidence・公開カード・採用検証も10件まで保持する。実際の件数は検索条件とProviderの結果に依存する。検索結果の受信では旅程画面へ移動せず、相談画面で前後の矢印と件数表示から1件ずつ比較する。採用ボタンと宿の詳細・最新料金へのリンクを隣に配置する。宿泊カードに追加の詳細検索ボタンは表示しない。

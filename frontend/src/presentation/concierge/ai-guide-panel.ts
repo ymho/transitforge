@@ -326,7 +326,7 @@ export function configureAiGuidePanel(
         if (response.consultationRequestProposal) elements.onConsultationRequestProposal?.(response.consultationRequestProposal);
         if (response.tripCostProposal && !response.tripUpdateProposal) elements.onTripCostProposal?.(response.tripCostProposal);
         if (response.tripUpdateProposal) elements.onTripUpdateProposal?.(response.tripUpdateProposal);
-        if (response.publicPlanPresentation) elements.onPlanPresentation?.(response.publicPlanPresentation, true);
+        if (response.publicPlanPresentation) elements.onPlanPresentation?.(response.publicPlanPresentation, !response.publicAccommodationPresentation);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
         if (response.tripMutationReceipt) elements.onTripConditionsSaved?.();

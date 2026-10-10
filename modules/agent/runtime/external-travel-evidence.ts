@@ -8,7 +8,7 @@ export function externalTravelEvidence(output: unknown, context: Pick<ToolEviden
   const identity = contextIdentity(context);
   if (!isRecord(output)) return [];
   // Accommodation operation returns validated offerings rather than an ExternalTravelInformation envelope.
-  if (Array.isArray(output.accommodations)) return output.accommodations.slice(0, 5).flatMap(raw => {
+  if (Array.isArray(output.accommodations)) return output.accommodations.slice(0, 10).flatMap(raw => {
     if (!isRecord(raw) || raw.kind !== "accommodation" || typeof raw.provider !== "string" ||
         typeof raw.providerItemId !== "string" || typeof raw.name !== "string") return [];
     const subjectKey = `accommodation:${encodeURIComponent(raw.provider)}:${encodeURIComponent(raw.providerItemId)}`;

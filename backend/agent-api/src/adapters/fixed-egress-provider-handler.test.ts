@@ -27,7 +27,7 @@ describe("fixed egress handler / HTTP boundary", () => {
     { ...event, request: { ...request, url: "https://evil.example" } },
     { ...event, request: { ...request, headers: {} } },
     { ...event, request: { ...request, applicationId: "caller" } },
-    { ...event, request: { ...request, limit: 6 } },
+    { ...event, request: { ...request, limit: 11 } },
     { ...event, request: { ...request, checkInDate: "2026-02-30" } },
     { ...event, requestId: "Bearer secret" }, { ...event, token: "secret" },
     { ...event, request: { ...request, destination: "x".repeat(3000) } },

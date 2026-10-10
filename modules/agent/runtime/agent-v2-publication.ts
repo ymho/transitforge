@@ -91,7 +91,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       if (selected.every(item => item.observation?.predicate === "accommodation_search_result")) {
         // The candidate and answer replies share one trusted hotel projection.
         // Place eligibility is unchanged; model prose never becomes a card.
-        if (selected.length > 5) throw new AgentV2ReplyError("invalid_proposal");
+        if (selected.length > 10) throw new AgentV2ReplyError("invalid_proposal");
         selected.forEach(item => accommodationCard(item, context.effectiveIntent));
         const admitted = new Map(selected.map(item => [item.id, structuredClone(item)]));
         const claims: EvidenceClaim[] = [];
@@ -260,7 +260,7 @@ function accommodationComparison(selected: Map<string, Evidence>, claims: Eviden
         evidenceId: evidence.id, fieldPath: `facts.${field}`, subjectRef: evidence.observation!.subjectKey,
         applicabilityScope: evidence.observation!.scopeKey, transform: "identity" }] });
     }
-    if (cards.length === 5) break;
+    if (cards.length === 10) break;
   }
   return cards.length ? parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards }) : undefined;
 }

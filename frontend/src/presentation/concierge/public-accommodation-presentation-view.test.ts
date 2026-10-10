@@ -5,7 +5,7 @@ import { parsePublicAccommodationPresentation } from "@raiquora/agent/public-acc
 import { consumeAgentStream } from "../../adapters/http/agent-stream/consumer";
 import { HttpServerConversationClient } from "../../adapters/http/server-conversation-client";
 import { projectAssistantTurn } from "../../usecases/concierge/assistant-turn-projection";
-import { resolveAssistantMessage } from "./ai-guide-panel";
+import { configureAiGuidePanel, resolveAssistantMessage } from "./ai-guide-panel";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { renderPublicAccommodationPresentation, canCombineAccommodationPlan } from "./public-accommodation-presentation-view";
 
@@ -36,7 +36,8 @@ it("keeps all hotel comparisons through SSE, the viewer projection and restored 
   expect(item.innerHTML).toBe(initial);
   expect(item.querySelectorAll(".public-place-card")).toHaveLength(3);
   expect(item.querySelectorAll("script, img")).toHaveLength(0);
-  expect(item.querySelectorAll(".public-accommodation-presentation button, .public-accommodation-presentation form")).toHaveLength(0);
+  expect(item.querySelectorAll(".accommodation-navigation button")).toHaveLength(2);
+  expect(item.querySelectorAll(".public-accommodation-presentation form")).toHaveLength(0);
   expect(item.querySelector("h3")?.textContent).toBe(cards.cards[0]!.name);
   expect(item.textContent).toContain("指定日の空室・料金は未確認です。");
   expect(item.textContent).toContain("日本時間");
@@ -79,13 +80,14 @@ it("merges hotel facts and adoption once, keeping source-ID binding when names a
   expect(cards[0]!.hidden).toBe(false); expect(cards[1]!.hidden).toBe(true);
   cards[0]!.querySelector<HTMLButtonElement>(".public-plan-adopt")!.click();
   expect(adoption.mock.calls[0]![0].detail).toMatchObject({ variantId: "variant-1", candidateSetId: "hotel-set", baseTripRevision: 5 });
-  const tabs = [...item.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-  tabs[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-  expect(cards[1]!.hidden).toBe(false); expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
+  const next = item.querySelector<HTMLButtonElement>('[aria-label="次の宿泊候補"]')!;
+  next.click(); expect(cards[1]!.hidden).toBe(false); expect(next.disabled).toBe(true);
   cards[1]!.querySelector<HTMLButtonElement>(".public-plan-adopt")!.click();
   expect(adoption.mock.calls[1]![0].detail.variantId).toBe("variant-2");
-  [...item.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "さらに詳しく比較する")!.click();
-  expect(detail.mock.calls[0]![0].detail.candidateSetId).toBe("hotel-set");
+  expect(item.querySelector(".public-plan-detail")).toBeNull(); expect(detail).not.toHaveBeenCalled();
+  expect(cards[0]!.querySelector(".accommodation-actions")?.firstElementChild?.classList.contains("public-plan-adopt")).toBe(true);
+  item.querySelector<HTMLButtonElement>('[aria-label="前の宿泊候補"]')!.click();
+  expect(cards[0]!.hidden).toBe(false);
   expect(item.textContent).toContain("JPY 10000"); expect(item.textContent).toContain("空室は未確認");
 });
 
@@ -117,8 +119,40 @@ it("shows provider photos, fractional review stars, aligned facts and compact so
   expect(section.querySelector(".accommodation-notice")?.textContent).toContain("空室は未確認");
   expect(section.querySelector(".accommodation-footer img")?.getAttribute("alt")).toBe("楽天トラベル");
   expect(section.querySelector(".accommodation-source-link")).not.toBeNull();
-  const tabs = section.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-  tabs[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
-  expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
+  section.querySelector<HTMLButtonElement>('[aria-label="次の宿泊候補"]')!.click();
+  expect(section.querySelectorAll<HTMLElement>(".public-place-card")[1]!.hidden).toBe(false);
   photo.dispatchEvent(new Event("error")); expect(section.querySelector(".accommodation-photo")).toBeNull();
+});
+
+it("browses all ten display-only hotels with arrows and keeps endpoints bounded", () => {
+  const { hotels } = hotelFixture();
+  const ten = { ...hotels, cards: Array.from({ length: 10 }, (_, i) => ({ ...hotels.cards[0]!, evidenceId: `hotel-${i}`, name: `宿${i}` })) };
+  const section = renderPublicAccommodationPresentation(ten);
+  const next = section.querySelector<HTMLButtonElement>('[aria-label="次の宿泊候補"]')!;
+  const previous = section.querySelector<HTMLButtonElement>('[aria-label="前の宿泊候補"]')!;
+  expect(previous.disabled).toBe(true);
+  for (let i = 0; i < 9; i++) next.click();
+  expect(section.querySelector('[aria-live="polite"]')?.textContent).toBe("10 / 10");
+  expect(section.querySelectorAll<HTMLElement>(".public-place-card")[9]!.hidden).toBe(false);
+  expect(next.disabled).toBe(true);
+  previous.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  expect(section.querySelector('[aria-live="polite"]')?.textContent).toBe("9 / 10");
+  expect(section.querySelector('[role="tab"]')).toBeNull();
+});
+
+it("retains the consultation screen when a new accommodation plan arrives", async () => {
+  const { hotels, plan } = hotelFixture();
+  const panel = document.createElement("section"), messages = document.createElement("ol"), form = document.createElement("form");
+  const input = document.createElement("input"), submit = document.createElement("button"); form.append(input, submit); panel.append(messages, form);
+  const button = () => document.createElement("button"), select = () => document.createElement("select");
+  const onPlanPresentation = vi.fn();
+  const controller = configureAiGuidePanel({
+    conversationSessionId: "hotels-navigation", panel, messages, form, input, submit,
+    toggle: button(), close: button(), suggestions: [], settingsToggle: button(), settingsPanel: document.createElement("div"),
+    transferPace: select(), rankingPreference: select(), storage: localStorage, onPlanPresentation,
+    historyRepository: { list: () => [], append: (_session, entry) => ({ ...entry, messageId: "hotels-message" }), delete: vi.fn() },
+  }, async () => ({ text: "宿泊候補です。", publicAccommodationPresentation: hotels, publicPlanPresentation: plan }));
+  controller.ask("宿を探して");
+  await vi.waitFor(() => expect(onPlanPresentation).toHaveBeenCalledWith(plan, false));
+  expect(messages.querySelector(".accommodation-navigation")).not.toBeNull();
 });
