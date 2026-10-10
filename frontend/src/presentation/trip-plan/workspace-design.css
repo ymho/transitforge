@@ -291,3 +291,9 @@ dialog.trip-order-editor :focus-visible { outline: 2px solid #37675f; outline-of
   & .trip-time-control > button { min-height: 30px; }
   & .trip-workspace-actions { padding-bottom: 0; }
 }
+
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .trip-manual-transport-disclosure { margin-top: 8px; }
+  & .trip-manual-transport-disclosure > summary { min-height: 28px; padding: 3px 0; font-size: 12px; color: var(--tf-muted); cursor: pointer; }
+  & .trip-manual-transport-disclosure > .trip-workspace-manual-transport { margin-top: 4px; }
+}
