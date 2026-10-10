@@ -131,12 +131,12 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const first = inTripFixture(); let resolve!: (value: InTripContextSnapshot | undefined) => void;
     const load = vi.fn(() => new Promise<InTripContextSnapshot | undefined>((done) => { resolve = done; }));
     const f = setup({ getCurrentTrip: () => first.trip }, load);
-    button(f.ui.panel, "旅行モードを開く").click(); expect(f.ui.panel.textContent).toContain("確認しています");
+    void f.ui.openTravelMode(); expect(f.ui.panel.textContent).toContain("確認しています");
     const other = createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt);
     f.controller.attach("two", { getCurrentTrip: () => other }); f.controller.activateSession("two"); resolve(first.snapshot);
     await Promise.resolve(); expect(f.ui.panel.textContent).not.toContain(first.snapshot.impacts.items[0]?.observedAt ?? "never");
     expect(f.ui.panel.textContent).toContain("別の旅");
-    button(f.ui.panel, "旅行モードを開く").click();
+    void f.ui.openTravelMode();
     expect(load).toHaveBeenCalledTimes(1); expect(f.ui.panel.textContent).toContain("プレビュー");
     button(f.ui.panel, "旅程詳細へ戻る").click(); expect(f.ui.panel.querySelector(".trip-detail-panel")).not.toBeNull();
   });
@@ -165,7 +165,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.ui.panel.hidden).toBe(false); expect(f.ui.panel.textContent).toContain("空の旅程");
     expect(f.ui.panel.querySelectorAll(".trip-workspace-card")).toHaveLength(0);
   });
-  it("requires explicit UI confirmation for adoption and branches from the displayed revision", async () => {
+  it("requires explicit UI confirmation for adoption", async () => {
     const trip = createTrip(placesTripId, "出雲の旅", placesAt, [{ id: "visit", title: "出雲大社", type: "activity", category: "sightseeing",
       schedule: { type: "day", date: "2026-10-01", timeZone: "Asia/Tokyo" } }]);
     const changeAdoption = vi.fn(async () => undefined), branchTrip = vi.fn(async () => undefined);
@@ -173,8 +173,8 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const f = setup({ getCurrentTrip: () => trip }, undefined, { changeAdoption, branchTrip });
     button(f.ui.panel, "旅程を確定").click();
     await vi.waitFor(() => expect(changeAdoption).toHaveBeenCalledWith(trip, "confirm"));
-    button(f.ui.panel, "この旅程を分岐").click();
-    await vi.waitFor(() => expect(branchTrip).toHaveBeenCalledWith(trip, "雨の日案"));
+    expect(button(f.ui.panel, "この旅程を分岐")).toBeUndefined();
+    expect(branchTrip).not.toHaveBeenCalled();
   });
   it("shows item confirmation separate from Trip adoption and never shows it to a viewer", async () => {
     const trip = createTrip(placesTripId, "出雲", placesAt, [{ id: "visit", title: "出雲大社", type: "activity", category: "sightseeing",
@@ -254,5 +254,8 @@ it("puts Trip confirmation and sharing in the header and explains missing schedu
   const f = setup({ getCurrentTrip: () => trip }, undefined, { changeAdoption: vi.fn(async () => {}) });
   const heading = f.ui.panel.querySelector("header")!;
   expect(button(heading, "旅程を確定").disabled).toBe(true); expect(heading.textContent).toContain("日程を設定すると確定");
-  expect(heading.querySelector("details")?.textContent).not.toContain("旅程を確定");
+  expect([...heading.querySelectorAll(".trip-header-actions button")].map(button => button.textContent)).toEqual(["旅程を確定", "共有"]);
+  expect(heading.querySelector(".trip-header-management")).toBeNull();
+  expect(heading.textContent).not.toContain("この旅について相談");
+  expect(heading.textContent).not.toContain("旅行モード");
 });

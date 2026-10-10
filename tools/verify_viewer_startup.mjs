@@ -202,8 +202,11 @@ try {
     await page.getByRole("button", { name: "‹ 旅程一覧", exact: true }).click();
     await page.locator(`[data-trip="${trips[0].id}"]`).click();
     await page.waitForLoadState("networkidle");
-    await page.locator(".trip-header-management summary").click();
-    await page.locator("[data-trip-consultation]").click();
+    assert.equal(await page.locator(".trip-header-management").count(), 0);
+    assert.deepEqual(await page.locator(".trip-header-actions button").allTextContents(), ["旅程を確定", "共有"]);
+    const consultationItem = page.locator('[data-item-id="visit"]');
+    if (await consultationItem.getByRole("button", { name: "詳細", exact: true }).isVisible()) await consultationItem.getByRole("button", { name: "詳細", exact: true }).click();
+    await consultationItem.getByRole("button", { name: "相談する", exact: true }).click();
     await page.locator(".consultation-messages .journey-presentation").waitFor();
     assert.equal(await page.locator(".consultation-page .public-plan-presentation").count(), 0);
     assert.equal(await page.locator(".consultation-page .journey-presentation").count(), 1);
