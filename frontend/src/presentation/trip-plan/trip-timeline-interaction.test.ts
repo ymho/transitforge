@@ -10,22 +10,22 @@ import { railSelectionFixture } from "../../../../modules/trip/domain/selected-r
 import { selectRailJourney, projectRailSchedule } from "@raiquora/trip/selected-rail-journey";
 const button = (root: ParentNode, text: string) => [...root.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === text)!;
 afterEach(() => document.body.replaceChildren());
-it("adds directly after the chosen spot with its day and fences a stale editor after switching trips", () => {
+it("consults from a gap with its day, closes the editor and fences stale submission after switching trips", () => {
   const trip = multiCityTrip(), controller = createTripWorkspaceController("one"); controller.attach("one", { getCurrentTrip: () => trip });
   const app = document.createElement("main"), chat = document.createElement("section"); document.body.append(app);
   const ask = vi.fn();
   const ui = configureTripWorkspace({ app, chat, messages: document.createElement("div"), input: document.createElement("input"), controller, ask, showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => "after", showTripList: vi.fn() });
   const card = app.querySelector<HTMLElement>('[data-item-id="hotel"]')!;
-  button(card, "＋ この後に追加").click(); const form = app.querySelector<HTMLFormElement>(".trip-workspace-add")!;
-  expect(form.hidden).toBe(false); expect(form.closest("dialog")?.open).toBe(true);
-  button(form, "相談して追加").click();
+  const gap = card.nextElementSibling as HTMLButtonElement; expect(gap.classList.contains("trip-timeline-add")).toBe(true); gap.click();
+  const form = app.querySelector<HTMLFormElement>(".trip-workspace-add")!;
+  form.querySelector("textarea")!.value = "夕食を食べたい";
+  expect(form.closest("dialog")?.open).toBe(true); form.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(ask).toHaveBeenLastCalledWith(expect.stringContaining(`2026-09-22の「${trip.items.find(i => i.id === "hotel")!.title}」のチェックインの後`));
-  expect(controller.uiFocus()).toEqual({ itemId: "hotel" });
-  form.querySelector("input")!.value = "夕食"; form.dispatchEvent(new Event("submit", { cancelable: true }));
-  expect(controller.proposal()?.patches[0]).toMatchObject({ type: "add", afterId: "hotel", item: { schedule: { type: "day", date: "2026-09-22" } } });
+  expect(controller.uiFocus()).toEqual({ itemId: "hotel" }); expect(form.closest("dialog")?.open).toBe(false);
+  expect(controller.proposal()).toBeUndefined(); gap.click();
   controller.attach("two", { getCurrentTrip: () => createTrip("22222222-2222-4222-8222-222222222222", "別の旅", trip.createdAt) }); controller.activateSession("two");
   form.dispatchEvent(new Event("submit", { cancelable: true })); expect(controller.proposal()).toBeUndefined(); expect(ui.panel.textContent).toContain("最新の旅程");
-  button(form, "相談して追加").click(); expect(ask).toHaveBeenCalledTimes(1);
+  expect(ask).toHaveBeenCalledTimes(1);
 });
 it("previews and confirms a manually entered time; a detached editor cannot write into another trip", async () => {
   let trip = multiCityTrip(); const controller = createTripWorkspaceController("one"), report = vi.fn();
@@ -75,9 +75,9 @@ it("shares one date tab for rail and an unknown-zone stay, retaining the correct
   const source = { getCurrentTrip: () => trip, confirmProposal: async (p: Parameters<typeof applyTripProposal>[1]) => { trip = applyTripProposal(trip, p); } };
   controller.attach("one", source);
   const app = document.createElement("main"); document.body.append(app);
-  let nextItem = 0;
+  let nextItem = 0; const ask = vi.fn();
   const ui = configureTripWorkspace({ app, chat: document.createElement("section"), messages: document.createElement("div"), input: document.createElement("input"), controller,
-    ask: vi.fn(), showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => `after-${++nextItem}` });
+    ask, showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => `after-${++nextItem}` });
   const tabs = () => [...app.querySelectorAll<HTMLButtonElement>('.trip-day-tabs [role="tab"]')];
   expect(tabs().map(t => t.textContent)).toEqual(["9月13日(日)", "9月14日(月)"]);
   const first = app.querySelector<HTMLElement>('.trip-workspace-day:not([hidden])')!;
@@ -91,20 +91,19 @@ it("shares one date tab for rail and an unknown-zone stay, retaining the correct
   expect(timeForm.querySelector<HTMLInputElement>('input[type="date"]')?.value).toBe("2026-09-13");
   expect(timeForm.querySelector<HTMLInputElement>('input[type="text"]')?.value).toBe("Asia/Tokyo");
   button(timeForm, "取消").click();
-  button(checkIn, "＋ この後に追加").click();
+  (checkIn.nextElementSibling as HTMLButtonElement).click();
   const add = app.querySelector<HTMLFormElement>(".trip-workspace-add")!;
-  add.querySelector<HTMLInputElement>("input")!.value = "夕食"; add.dispatchEvent(new Event("submit", { cancelable: true }));
-  expect(controller.proposal()?.patches[0]).toMatchObject({ type: "add", afterId: "hotel", item: { schedule: { type: "day", date: "2026-09-13" } } });
-  await controller.confirm();
-  expect(trip.items[0]).toEqual(originalRail);
-  const meal = trip.items.find(i => i.id === "after-1")!; expect(meal.schedule).not.toHaveProperty("timeZone");
+  add.querySelector("textarea")!.value = "夕食"; add.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(ask).toHaveBeenLastCalledWith(expect.stringContaining("2026-09-13の「宿泊」のチェックインの後"));
+  expect(controller.proposal()).toBeUndefined(); expect(trip.items[0]).toEqual(originalRail);
   trip = JSON.parse(JSON.stringify(trip)); controller.attach("one", source); ui.render();
   expect(tabs().map(t => t.textContent)).toEqual(["9月13日(日)", "9月14日(月)"]);
-  expect(app.querySelectorAll('.trip-workspace-day:not([hidden]) [data-item-id]')).toHaveLength(3);
+  expect(app.querySelectorAll('.trip-workspace-day:not([hidden]) [data-item-id]')).toHaveLength(2);
   tabs()[1]!.click();
   const checkout = app.querySelector<HTMLElement>('.trip-workspace-day:not([hidden]) [data-item-id="hotel"]')!;
   expect(checkout.textContent).toContain("チェックアウト");
-  button(checkout, "＋ この後に追加").click();
-  add.querySelector<HTMLInputElement>("input")!.value = "朝食"; add.dispatchEvent(new Event("submit", { cancelable: true }));
-  expect(controller.proposal()?.patches[0]).toMatchObject({ type: "add", afterId: "hotel", item: { schedule: { type: "day", date: "2026-09-14" } } });
+  (checkout.nextElementSibling as HTMLButtonElement).click();
+  add.querySelector("textarea")!.value = "朝食"; add.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(ask).toHaveBeenLastCalledWith(expect.stringContaining("2026-09-14の「宿泊」のチェックアウトの後"));
+  expect(controller.proposal()).toBeUndefined();
 });

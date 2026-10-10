@@ -175,7 +175,6 @@
   & .trip-form-actions { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   & .trip-form-actions button { min-height: 44px; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--tf-line); background: transparent; color: var(--tf-muted); }
   & .trip-form-actions button[type="submit"] { background: #b34337; color: #fff; border-color: #b34337; font-weight: 600; }
-  & .trip-workspace-add > .trip-add-consult { grid-column: 1 / -1; border: 0; text-align: center; color: var(--tf-blue); }
 }
 
 #app[data-primary-view]:not([data-primary-view="map"]) {
@@ -204,3 +203,8 @@
   & .trip-workspace-notice:empty { display: none; }
 }
 @media (max-width:44rem) { #app[data-primary-view]:not([data-primary-view="map"]) .trip-header-actions { justify-content: start; } }
+
+#app[data-primary-view] .trip-workspace-day > button.trip-timeline-add { display: block; width: auto; margin: 6px auto; padding: 4px 12px; min-height: 32px; border: 0; background: transparent; color: var(--tf-muted); font-size: 12px; }
+#app[data-primary-view] .trip-workspace-day > button.trip-timeline-add:hover { color: var(--tf-blue); background: var(--tf-bg); }
+#app .trip-workspace-add { grid-template-columns: minmax(0,1fr); gap: 12px; padding: 16px; }
+#app .trip-workspace-add textarea { width: 100%; min-width: 0; resize: vertical; border: 1px solid var(--tf-line); border-radius: 10px; background: var(--tf-bg); color: var(--tf-ink); padding: 10px; font: inherit; font-size: 16px; }

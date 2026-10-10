@@ -3,14 +3,12 @@ import { openTripOrderEditor } from "./trip-order-editor";
 import { setLoadingStatus } from "../shared/primitives";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
-import { proposeDayActivity } from "../../usecases/trip-plan/propose-day-activity";
-import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
 import { tripWorkspaceProjection, itemAssumptions } from "./trip-workspace-projection";
 import { renderWorkspaceCard, refreshMoveTargets } from "./trip-workspace-card";
 import { tripAddConsultation } from "./trip-add-consultation";
 import { renderWorkspaceCandidates } from "./trip-workspace-candidates";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
-import { element, control, option } from "./trip-workspace-elements";
+import { element, control } from "./trip-workspace-elements";
 import { tripCoverImage } from "../shared/trip-cover";
 import { travelIcon } from "../shared/travel-icon";
 import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
@@ -82,52 +80,38 @@ export function configureTripWorkspace(options: {
   const itinerary = element("section", "trip-detail-panel");
   itinerary.id = "trip-detail-itinerary";
   const add = element("form", "trip-workspace-add"); add.hidden = true;
-  let addContext: { tripId: string; revision: number; session: string; afterId?: string } | undefined; const addLabel = element("label", "", "追加する予定 "); const addTitle = element("input");
-  addTitle.required = true; addTitle.maxLength = 200; addLabel.append(addTitle);
-  const categoryLabel = element("label", "", "種類 "); const addCategory = element("select");
-  for (const [value, label] of [["sightseeing", "観光"], ["food", "食事"], ["experience", "体験"], ["event", "イベント"], ["free-time", "自由時間"]] as const) {
-    addCategory.append(option(label, value));
-  }
-  categoryLabel.append(addCategory);
-  const placeLabel = element("label", "", "場所名（任意・手入力） "); const addPlace = element("input"); addPlace.maxLength = 200; placeLabel.append(addPlace);
-  const dayLabel = element("label", "", "追加する日 "); const addDay = element("select"); addDay.append(option("日時未定", "unscheduled")); dayLabel.append(addDay);
-  const kindLabel = element("label", "", "予定の種類 "), addKind = element("select");
-  for (const [value, label] of [["activity", "立ち寄り・食事"], ["transport", "未選択の移動"], ["stay", "未選択の宿泊"]] as const) addKind.append(option(label, value));
-  kindLabel.append(addKind);
-  const submit = element("button", "", "追加案を確認"); submit.type = "submit";
-  add.append(addLabel, kindLabel, categoryLabel, placeLabel, dayLabel, element("p", "trip-workspace-copy", "場所名は立ち寄り・食事の手入力にだけ使います。移動・宿泊は未選択の枠を作り、時刻・営業・予約は確認しません。"));
-  addKind.addEventListener("change", () => { categoryLabel.hidden = placeLabel.hidden = addKind.value !== "activity"; });
-  add.addEventListener("submit", (event) => {
-    event.preventDefault(); const trip = controller.current(); if (!trip) return;
-    if (!addContext || trip.id !== addContext.tripId || trip.revision !== addContext.revision || controller.sessionId() !== addContext.session) { report("最新の旅程から追加し直してください。"); return; }
-    try {
-      const focusedId = addContext?.afterId ?? controller.uiFocus()?.itemId;
-      const target = { itemId: options.nextItemId(), title: addTitle.value, dayKey: addDay.value,
-        ...(focusedId && tripWorkspaceProjection(trip).dayEntries
-          .find(([key]) => key === addDay.value)?.[1].some(({ sourceItemId }) => sourceItemId === focusedId) ? { afterId: focusedId } : {}) };
-      controller.preview(addKind.value === "activity" ? proposeDayActivity(trip, { ...target,
-        category: addCategory.value as "sightseeing" | "food" | "experience" | "event" | "free-time",
-        ...(addPlace.value.trim() ? { placeName: addPlace.value } : {}) })
-        : proposeTripItemChange(trip, { ...target, action: addKind.value === "transport" ? "add-transport" : "add-stay" }));
-      report("追加案を表示しました。現在の旅程はまだ変更していません。");
-    } catch { report("追加する予定の名称と対象を確認してください。"); }
-  });
-  const consult = control("相談して追加", () => {
-    const trip = controller.current();
-    if (!trip || !addContext || trip.id !== addContext.tripId || trip.revision !== addContext.revision || controller.sessionId() !== addContext.session) {
+  let addContext: { tripId: string; revision: number; session: string; dayKey: string; afterId?: string; beforeId?: string } | undefined;
+  let addAnchor: HTMLElement | undefined;
+  const addLabel = element("label", "", "どんな予定を追加したい？"), addTitle = element("textarea");
+  addTitle.required = true; addTitle.maxLength = 2000; addTitle.rows = 3;
+  addTitle.placeholder = "夕食に地元のものを食べたい、景色のいい場所で休憩したい など";
+  addLabel.append(addTitle);
+  const placeLabel = element("label", "", "場所名（任意）"), addPlace = element("input");
+  addPlace.maxLength = 200; placeLabel.append(addPlace);
+  const closeAdd = () => {
+    add.hidden = true;
+    const dialog = add.closest("dialog"); if (dialog?.open) dialog.close();
+    addContext = undefined;
+  };
+  add.addEventListener("submit", event => {
+    event.preventDefault(); const trip = controller.current();
+    if (!trip || controller.source()?.getRole?.() === "viewer" || !addContext || trip.id !== addContext.tripId || trip.revision !== addContext.revision || controller.sessionId() !== addContext.session) {
       report("最新の旅程から追加し直してください。"); return;
     }
-    const context = tripAddConsultation(trip, addDay.value, addContext.afterId, addTitle.value);
-    controller.focus(context.itemId); chat(context.prompt);
+    if (!addTitle.value.trim()) { addTitle.focus(); return; }
+    const context = tripAddConsultation(trip, addContext.dayKey, addContext.afterId, addTitle.value,
+      { beforeId: addContext.beforeId, placeName: addPlace.value });
+    closeAdd(); controller.focus(context.itemId); chat(context.prompt);
   });
+  const submit = element("button", "trip-primary-action", "相談して追加"); submit.type = "submit";
   const addActions = element("div", "trip-form-actions");
-  addActions.append(control("取消", () => { add.hidden = true; addContext = undefined; addFirst.focus(); }), submit);
-  consult.classList.add("trip-add-consult"); add.append(addActions, consult);
-  const startAdd = (trip: Trip, dayKey: string, afterId?: string, _anchor?: HTMLElement) => {
-    addContext = { tripId: trip.id, revision: trip.revision, session: controller.sessionId(), ...(afterId ? { afterId } : {}) };
-    addDay.value = dayKey; openTripEditor(add, "予定を追加"); addTitle.focus();
+  addActions.append(control("取消", () => { closeAdd(); (addAnchor?.isConnected ? addAnchor : panel).focus(); }), submit);
+  add.append(addLabel, placeLabel, addActions);
+  const startAdd = (trip: Trip, dayKey: string, afterId?: string, beforeId?: string, anchor?: HTMLElement) => {
+    addContext = { tripId: trip.id, revision: trip.revision, session: controller.sessionId(), dayKey, afterId, beforeId };
+    addAnchor = anchor; add.reset(); openTripEditor(add, "予定を追加"); addTitle.focus();
   };
-  const addFirst = control("＋ 予定を追加", () => { const trip = controller.current(); if (trip) startAdd(trip, addDay.value); });
+  const addFirst = control("＋ 予定を追加", () => { const trip = controller.current(); if (trip) startAdd(trip, "unscheduled", undefined, undefined, addFirst); });
   const planDraft = element("section", "trip-workspace-plan-draft"); planDraft.hidden = true; let planKey = "";
   planDraft.addEventListener("raiquora:preview-plan-adoption", event => {
     if (!options.onPlanAdoption || !options.conversationId) return;
@@ -224,7 +208,7 @@ export function configureTripWorkspace(options: {
     notice.hidden = controller.source()?.getRole?.() !== "viewer";
     retry.hidden = controller.loadState() !== "unavailable" || !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
-    addFirst.hidden = !trip || controller.source()?.getRole?.() === "viewer";
+    addFirst.hidden = !trip || trip.items.length > 0 || controller.source()?.getRole?.() === "viewer";
     reorder.hidden = !trip || trip.items.length < 2 || controller.source()?.getRole?.() === "viewer";
     adoption.hidden = !trip;
     if (!trip) {
@@ -248,10 +232,6 @@ export function configureTripWorkspace(options: {
       previousTripId = trip.id; panel.scrollTop = viewState().scroll;
     }
     const view = tripWorkspaceProjection(trip), scroll = panel.scrollTop;
-    const chosenDay = addDay.value;
-    addDay.replaceChildren(option("日時未定", "unscheduled"), ...view.dayEntries.filter(([key]) => key !== "unscheduled")
-      .map(([key, , label]) => option(label, key)));
-    addDay.value = [...addDay.options].some((entry) => entry.value === chosenDay) ? chosenDay : "unscheduled";
     const evaluation = controller.feasibility()!;
     title.textContent = view.title;
     const coverPath = tripCoverImage(trip.id); if (coverImage.getAttribute("src") !== coverPath) coverImage.src = coverPath;
@@ -277,6 +257,19 @@ export function configureTripWorkspace(options: {
       let group = groups.get(date);
       if (!group) { group = element("section", "trip-workspace-day"); group.append(element("h2", "", calendarDayLabel(label))); groups.set(date, group); }
       if (days.children[[...dates].length - 1] !== group) days.insertBefore(group, days.children[[...dates].length - 1] ?? null);
+      group.querySelectorAll(".trip-timeline-add").forEach(node => node.remove());
+      let childIndex = 1;
+      const addGap = (dayKey: string, afterId?: string, beforeId?: string) => {
+        if (controller.source()?.getRole?.() === "viewer") return;
+        const button = control("＋ 予定を追加", () => startAdd(trip, dayKey, afterId, beforeId, button));
+        button.classList.add("trip-timeline-add");
+        button.dataset.dayKey = dayKey;
+        if (afterId) button.dataset.afterId = afterId;
+        if (beforeId) button.dataset.beforeId = beforeId;
+        group!.insertBefore(button, group!.children[childIndex++] ?? null);
+      };
+      const firstEntry = entries[0];
+      if (firstEntry) addGap(firstEntry.sourceDayKey, undefined, firstEntry.sourceItemId);
       entries.forEach((entry, index) => {
         const { item, entryKey } = entry;
         ids.add(entryKey);
@@ -285,7 +278,7 @@ export function configureTripWorkspace(options: {
         const collapseKey = `${activeSession}:${trip.id}:${entryKey}`;
         let card = cards.get(entryKey);
         if (card?.key !== key) {
-          const node = renderWorkspaceCard(trip, item, controller, { entry, addAfter: () => startAdd(trip, entry.sourceDayKey, item.id, cards.get(entryKey)?.node), collapsed: collapsed.get(collapseKey) ?? true,
+          const node = renderWorkspaceCard(trip, item, controller, { entry, collapsed: collapsed.get(collapseKey) ?? true,
             collapse: (value) => collapsed.set(collapseKey, value), chat, report,
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           const pending = pendingCostEditors.get(entryKey);
@@ -301,12 +294,10 @@ export function configureTripWorkspace(options: {
         card.node.classList.toggle("is-focused", controller.uiFocus()?.itemId === item.id);
         refreshMoveTargets(card.node, trip, item.id);
         card.node.querySelector(".trip-workspace-item-focus")?.setAttribute("aria-pressed", String(controller.uiFocus()?.itemId === item.id));
-        if (group!.children[index + 1] !== card.node) group!.insertBefore(card.node, group!.children[index + 1] ?? null);
+        if (group!.children[childIndex] !== card.node) group!.insertBefore(card.node, group!.children[childIndex] ?? null);
+        childIndex++;
+        addGap(entry.sourceDayKey, entry.sourceItemId, entries[index + 1]?.sourceItemId);
       });
-    }
-    if (!add.hidden && addContext?.afterId) {
-      const target = view.dayEntries.find(([key, entries]) => entries.some(e => e.sourceItemId === addContext!.afterId) && key === addDay.value)?.[1].find(e => e.sourceItemId === addContext!.afterId);
-      if (target) cards.get(target.entryKey)?.node.after(add);
     }
     for (const [id, card] of cards) if (!ids.has(id)) { card.node.remove(); cards.delete(id); }
     for (const [date, group] of groups) if (!dates.has(date)) { group.remove(); groups.delete(date); }

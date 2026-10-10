@@ -11,7 +11,7 @@ it("distinguishes check-in and checkout of the same stay and keeps the following
   const days = projectDailyItinerary(trip).days;
   expect(tripAddConsultation(trip, days[0]!.dayKey, "hotel").prompt).toBe("2026-10-05の「出雲の宿」のチェックインの後に追加する予定を相談したい。");
   expect(tripAddConsultation(trip, days[1]!.dayKey, "hotel", "朝食")).toEqual({ itemId: "hotel",
-    prompt: "2026-10-06の「出雲の宿」のチェックアウトの後、次の「出雲大社」の前に「朝食」を追加したい。" });
+    prompt: "2026-10-06の「出雲の宿」のチェックアウトの後、次の「出雲大社」の前に予定を追加したい。\n希望：朝食" });
   expect(tripAddConsultation(trip, days[0]!.dayKey, "shrine")).toEqual({ prompt: "2026-10-05の旅程に追加する予定を相談したい。" });
   expect(trip.items).toHaveLength(2); expect(trip.revision).toBe(0);
 });

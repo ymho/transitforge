@@ -17,7 +17,7 @@ import { travelIcon } from "../shared/travel-icon";
 import { researchDateLabel } from "../../usecases/trip-plan/research-date";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
-  options: { entry?: DayEntry; addAfter?(): void; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
+  options: { entry?: DayEntry; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
     changeItemDecision?: (trip: Trip, item: ItineraryItem, action: "confirm" | "withdraw") => Promise<void> }, issues: TripFeasibilityIssue[] = []): HTMLElement {
   const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id; card.dataset.itemType = item.type;
   const header = element("header");
@@ -138,7 +138,6 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   editing.append(element("summary", "", "予定を編集"), actions, editor);
   if (manualActivityForm) editing.append(manualActivityForm);
   header.append(consult); body.append(editing); content.append(body);
-  if (options.addAfter && controller.source()?.getRole?.() !== "viewer") content.append(control("＋ この後に追加", options.addAfter));
   return card;
 }
 

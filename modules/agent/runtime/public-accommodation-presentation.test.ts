@@ -7,11 +7,15 @@ import { validateEvidenceAndClaims } from "./evidence-model";
 it("publishes three hotel comparisons even when the answer selected one name, without inventing a stay total", () => {
   const evidence = externalTravelEvidence({ searchAdults: 1, accommodations: [1, 2, 3].map(id => ({ kind: "accommodation", provider: "fixture", providerItemId: String(id), name: `宿${id}`,
     checkInDate: "2026-10-04", checkOutDate: "2026-10-05", availability: id === 1 ? "available" : "unknown",
-    bookingUrl: `https://example.org/hotel/${id}`, reviewAverage: 4.24,
+    bookingUrl: `https://example.org/hotel/${id}`, reviewAverage: 4.24, imageUrl: `https://example.org/hotel/${id}.jpg`,
     price: { price: { currency: "JPY", amountMinor: 5100 }, observedAt: "2026-10-03T00:00:00Z", basis: "reference-minimum" } })) },
   { retrievedAt: "2026-10-03T00:00:00Z", executionId: "execution", toolCallId: "hotels", toolName: "search_accommodations", queryFingerprint: "query" });
   const final = admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: evidence[0]!.id, field: "name" }], commentary: "宿泊候補を比較できます。" }, { executionId: "execution", evidence });
   expect(final.publicAccommodationPresentation?.cards).toHaveLength(3);
+  expect(final.publicAccommodationPresentation?.cards[0]).toMatchObject({ imageUrl: "https://example.org/hotel/1.jpg", reviewAverage: 4.24, provider: "fixture" });
+  for (const invalid of ["javascript:alert(1)", "http://example.org/photo.jpg", "https://example.org/photo?token=secret"]) {
+    expect(() => parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [{ ...final.publicAccommodationPresentation!.cards[0], imageUrl: invalid }] })).toThrow();
+  }
   expect(final.evidence).toHaveLength(3);
   const panelOnly = admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: evidence[0]!.id, field: "accommodationSummary" }] }, { executionId: "execution", evidence });
   expect(panelOnly.text).toBe("宿泊候補をパネルで比較できます。");

@@ -7,7 +7,7 @@ import { HttpServerConversationClient } from "../../adapters/http/server-convers
 import { projectAssistantTurn } from "../../usecases/concierge/assistant-turn-projection";
 import { resolveAssistantMessage } from "./ai-guide-panel";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
-import { canCombineAccommodationPlan } from "./public-accommodation-presentation-view";
+import { renderPublicAccommodationPresentation, canCombineAccommodationPlan } from "./public-accommodation-presentation-view";
 
 it("keeps all hotel comparisons through SSE, the viewer projection and restored history", async () => {
   const cards = parsePublicAccommodationPresentation({ version: "public-accommodation-presentation-v1", cards: [1, 2, 3].map(id => ({
@@ -102,4 +102,23 @@ it("keeps unmatched, composite and display-only plans separate without guessing 
   resolveAssistantMessage(item, { text: "候補です。", publicAccommodationPresentation: hotels, publicPlanPresentation: wrong }, { animate: false });
   expect(item.querySelectorAll(".public-plan-presentation")).toHaveLength(1);
   expect(item.querySelectorAll(".public-accommodation-presentation .public-plan-adopt")).toHaveLength(0);
+});
+
+it("shows provider photos, fractional review stars, aligned facts and compact source credit", () => {
+  const { hotels, plan } = hotelFixture();
+  Object.assign(hotels.cards[0]!, { imageUrl: "https://example.org/photo.jpg", reviewAverage: 4.35, provider: "rakuten-travel" });
+  const restored = parsePublicAccommodationPresentation(JSON.parse(JSON.stringify(hotels)));
+  const section = renderPublicAccommodationPresentation(restored, plan);
+  const photo = section.querySelector<HTMLImageElement>(".accommodation-photo")!;
+  expect(photo.src).toBe("https://example.org/photo.jpg");
+  expect(section.querySelector(".accommodation-rating")?.getAttribute("aria-label")).toBe("5点満点中4.35");
+  expect(section.querySelector<HTMLElement>(".accommodation-stars > span")?.style.width).toBe("87%");
+  expect(section.querySelector(".accommodation-facts dt")?.textContent).toBe("宿泊日");
+  expect(section.querySelector(".accommodation-notice")?.textContent).toContain("空室は未確認");
+  expect(section.querySelector(".accommodation-footer img")?.getAttribute("alt")).toBe("楽天トラベル");
+  expect(section.querySelector(".accommodation-source-link")).not.toBeNull();
+  const tabs = section.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+  tabs[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+  expect(tabs[1]!.getAttribute("aria-selected")).toBe("true");
+  photo.dispatchEvent(new Event("error")); expect(section.querySelector(".accommodation-photo")).toBeNull();
 });
