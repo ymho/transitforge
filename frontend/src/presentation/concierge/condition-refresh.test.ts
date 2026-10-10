@@ -33,7 +33,7 @@ async function setup(history = false, candidateSaved = false) {
   }, handle);
   configureConsultationScreen(panel, messages, form, input, {
     read: () => ({ sessionId: session, trip: source.getCurrentTrip() }), profile: () => undefined,
-    subscribe: source.subscribe!, preview: vi.fn(), showTrip: vi.fn(), newConversation: vi.fn(),
+    subscribe: source.subscribe!, save: vi.fn(async () => {}), showTrip: vi.fn(), newConversation: vi.fn(),
   });
   return { panel, messages, get, source, controller, reload, response,
     save() { stored = { ...trip, revision: 1, ...(candidateSaved ? { items: [{ id: "selected", type: "activity" as const, title: "採用した予定", category: "sightseeing" as const, schedule: { type: "unscheduled" as const } }] } : {}), request: { ...trip.request, constraints: [{ id: "destination", source: "user", strength: "hard",
