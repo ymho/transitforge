@@ -6,7 +6,7 @@ import { configureTripWorkspace } from "../trip-plan/trip-workspace";
 import { configureAiFirstShell } from "./ai-first-shell";
 
 afterEach(() => document.body.replaceChildren());
-it("uses the same consultation surface from Trip, returns to Trip, and makes the menu a fresh entry", () => {
+it("uses the same consultation surface from Trip, returns to Trip, and makes the menu a fresh entry", async () => {
   document.body.innerHTML = '<main id="app"><section id="chat"><ol></ol><input></section></main>';
   window.history.replaceState(null, "", "#chat");
   const app = document.querySelector<HTMLElement>("main")!, chat = document.querySelector<HTMLElement>("#chat")!;
@@ -26,7 +26,9 @@ it("uses the same consultation surface from Trip, returns to Trip, and makes the
     onViewChange: view => view === "trip" ? shell.showTrip(trip.id) : shell.showConversation(trip.id),
   });
   shell.navigate("trips"); document.querySelector<HTMLButtonElement>("[data-trip]")!.click();
-  expect(app.dataset.primaryView).toBe("trip"); expect(document.querySelector("[data-trip-chat]")).toBeNull();
+  expect(app.dataset.primaryView).toBe("trip-loading");
+  await vi.waitFor(() => expect(app.dataset.primaryView).toBe("trip"));
+  expect(document.querySelector("[data-trip-chat]")).toBeNull();
   document.querySelector<HTMLButtonElement>("[data-trip-consultation]")!.click();
   expect(app.dataset.primaryView).toBe("chat"); expect(app.dataset.consultationMode).toBe("conversation");
   expect(window.history.state.tripId).toBe(trip.id); expect(ask).not.toHaveBeenCalled();
