@@ -26,7 +26,7 @@
 .trip-sharing-panel--compact .trip-sharing-close { flex: 0 0 36px; height: 36px; margin: 0; padding: 0; border: 0; background: transparent; font-size: 24px; }
 .trip-sharing-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); gap: 10px; }
 .trip-sharing-panel--compact label { gap: 4px; margin: 0; }
-.trip-sharing-panel--compact input[readonly] { margin-top: 8px; }
+.trip-sharing-panel--compact input[readonly] { margin: 0; }
 .trip-sharing-panel--compact ul { padding: 0; margin: 0; list-style: none; }
 .trip-sharing-panel--compact li { margin: 0; padding: 8px 0; border-bottom: 1px solid #e9eded; }
 .trip-sharing-join { margin-top: 16px; border-top: 1px solid #e9eded; padding-top: 10px; }
@@ -40,3 +40,11 @@
   .trip-sharing-panel--compact { padding: 14px; }
   .trip-sharing-panel--compact input, .trip-sharing-panel--compact select { font-size: 16px; }
 }
+
+.trip-sharing-link-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 8px; margin-top: 10px; }
+.trip-sharing-panel--compact .trip-sharing-link-row button { margin: 0; white-space: nowrap; }
+.trip-sharing-expiry { position: relative; min-width: 0; }
+.trip-sharing-expiry > span { display: none; pointer-events: none; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: #68716e; font-size: 12px; }
+.trip-sharing-expiry--empty:not(:focus-within) > span { display: block; }
+.trip-sharing-expiry--empty:not(:focus-within) input::-webkit-datetime-edit { opacity: 0; }
+.trip-sharing-expiry--empty:not(:focus-within) input { color: transparent; }

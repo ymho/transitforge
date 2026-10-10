@@ -74,7 +74,7 @@ Grant redeemもactive Trip + current Grant + member CASのtransaction。response
 Checklist/Impact/Notification/Delivery/Push subscription/Trace/Conversationの既存APIを
 participantのownerへ自動付け替えしない。未取得はunknownのままで、空の予約として扱わない。
 
-共有管理panelはrole/期限指定、作成、取消、参加者一覧/権限変更、redeem、参加中Trip一覧を提供する。
+共有管理panelは当該Tripのrole/必須期限指定、作成、コピー、取消、参加者一覧/権限変更を提供する。参加は共有リンクからの専用起動に限定し、参加中Trip一覧は旅程一覧へ集約する。
 shared openは新しい本人用Conversationで既存Trip Workspaceを表示する。
 viewerは閲覧専用表示でwriter/confirmを無効化。相談用Proposal previewは保存しない。
 editorの確認は既存ServerTripWorkspaceSource/ServerTripWriterを再利用し、保存前に最新Tripとroleを再取得。
@@ -115,4 +115,4 @@ frontendはsecret fragmentの消去、DTO allowlist、UI role/期限/取消/rede
 
 ### 共有ダイアログの表示
 
-閉じる操作はタイトル右端に配置する。権限と期限は横並びとし、参加者・発行したリンク・参加している旅程は取得結果が空なら見出しごと非表示にする。共有リンクでの参加は折りたたみ、参加リンクからの起動時とowner以外では開く。読込成功の通知は表示せず、変更操作の完了とエラーは下部のstatus領域で通知する。
+閉じる操作はタイトル右端に配置する。権限は「編集」「閲覧」、発行済み期限は端末の現地日時に整形する。権限と期限は横並びとし、画面での発行は未来90日以内の期限指定を必須とする（APIの既存省略時7日契約は維持）。空の日時入力は「期限を指定」と表示し、入力開始時に日時編集欄を表示する。リンク作成・読取専用URL欄・コピーは同じ行へ置き、リンク未作成時はコピーを無効化する。参加者・発行したリンクは空なら見出しごと非表示。通常の当該Trip共有メニューには参加操作・他Trip一覧を表示しない。共有リンクからの起動・ログイン引継ぎ時だけ参加画面を表示する。リンクとsecretは閉じると破棄する。読込成功の通知は表示せず、変更・コピー操作の完了とエラーは下部statusで通知する。

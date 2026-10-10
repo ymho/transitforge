@@ -173,7 +173,14 @@ try {
     assert.match(await page.locator(".trip-itinerary-dates").textContent(), /9月13日ー9月14日・1泊2日/);
     await checkLayout("timeline");
     await page.getByRole("button", { name: "共有", exact: true }).click();
-    await page.locator(".trip-sharing-panel[open]").waitFor(); await checkLayout("trip-sharing");
+    await page.locator(".trip-sharing-panel[open]").waitFor();
+    const sharing = page.locator(".trip-sharing-panel[open]");
+    assert.equal(await sharing.getByText("共有リンクで参加", { exact: true }).isVisible(), false);
+    assert.equal(await sharing.getByLabel("有効期限", { exact: true }).getAttribute("required"), "");
+    assert.equal(await sharing.getByText("期限を指定", { exact: true }).isVisible(), true);
+    assert.equal(await sharing.getByLabel("作成した共有リンク", { exact: true }).isVisible(), true);
+    assert.equal(await sharing.getByRole("button", { name: "コピー", exact: true }).isDisabled(), true);
+    await checkLayout("trip-sharing");
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
     await page.emulateMedia({ colorScheme: "dark" });
     await page.screenshot({ path: `.artifacts/product-design/timeline-dark-${viewport.width}.png` });
