@@ -1,4 +1,3 @@
-import { regenerateTripTitle } from "../usecases/trip-plan/regenerate-trip-title";
 import { prioritizeStartupPaths } from "../domain/route-startup-priority";
 import { TrainHitUpdateSchedule } from "../domain/train-hit-update";
 import { startTripConsultation } from "../usecases/trip-plan/start-trip-consultation";
@@ -419,9 +418,10 @@ const tripWorkspace = configureTripWorkspace({
     await serverTripClient.refreshWeather(trip.id, itemId, trip.revision, crypto.randomUUID());
     if (source === tripWorkspaceController.source()) await source?.retry?.();
   },
-  regenerateTitle: async (trip) => {
+  renameTitle: async (trip, title) => {
     const source = tripWorkspaceController.source();
-    await regenerateTripTitle(serverTripClient, trip.id);
+    await serverTripClient.mutate({ tripId: trip.id, baseRevision: trip.revision, mutationId: crypto.randomUUID(),
+      proposal: { tripId: trip.id, baseRevision: trip.revision, summary: "旅程名を変更", patches: [{ type: "title", title }] } });
     await source?.retry?.(); await serverTripList.refresh();
   },
   changeAdoption: async (trip, action) => {
@@ -635,17 +635,6 @@ primaryShell = configureAiFirstShell(document, app, {
   openTrip: (id) => tripNavigation.open(id, "trip"),
   openTravelMode: (id) => { void tripNavigation.open(id, "trip").then(() => tripWorkspace.openTravelMode()).catch(() => aiGuideController.notify("旅行モードを開けませんでした。")); },
   consultTrip: (id) => tripNavigation.open(id, "chat"),
-  regenerateTripTitle: async (id) => {
-    await regenerateTripTitle(serverTripClient, id);
-    await serverTripList.refresh();
-    if (tripWorkspaceController.current()?.id === id) await tripWorkspaceController.source()?.retry?.();
-  },
-  renameTrip: async (id, title) => {
-    const current = await serverTripClient.get(id); if (!current) throw new Error("Trip unavailable");
-    await serverTripClient.mutate({ tripId: id, baseRevision: current.revision, mutationId: crypto.randomUUID(),
-      proposal: { tripId: id, baseRevision: current.revision, summary: "旅程名を変更", patches: [{ type: "title", title }] } });
-    await serverTripList.refresh();
-  },
   archiveTrip: async (id) => { await serverTripClient.archive(id); await serverTripList.refresh(); },
   openMap: () => { void startMap(); selectSidebarMapMode(); },
   journeySettings: () => ({ transferPace: journeyTransferPace.value, rankingPreference: journeyRankingPreference.value }),
