@@ -22,6 +22,9 @@
   & :where(.product-page, .trip-workspace, .ai-guide-panel, .consultation-page) :is(input:not([type="checkbox"]), select, textarea) { min-width: 0; max-width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid var(--tf-line); border-radius: 7px; padding: 8px; background: var(--tf-bg); color: var(--tf-ink); font: 400 16px/1.4 var(--product-font); }
   & :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--tf-blue); outline-offset: 3px; }
   & .ds-icon { width: 17px; height: 17px; flex-shrink: 0; }
+  & .ai-guide-failure-actions button { display: inline-grid; place-items: center; box-sizing: border-box; width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--tf-muted); }
+  & .ai-guide-failure-actions button:hover:not(:disabled) { color: var(--tf-blue); }
+  & .ai-guide-failure-actions .ds-icon { display: block; width: 16px; height: 16px; }
   & .product-nav { box-shadow: none; background: var(--tf-bg); border-color: var(--tf-line); border-radius: 9px; }
   & .product-nav :is(a, button) { font-size: 12px; font-weight: 500; min-height: 44px; color: var(--tf-muted); border: 0; }
   & .product-nav .ds-icon { width: 19px; height: 19px; }
