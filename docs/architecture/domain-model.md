@@ -80,3 +80,5 @@ Trace / feedbackの過去の保存契約と残存schemaはproductionの送信口
 
 詳細は[Domain所有権](domain-ownership.md)、[Module境界](module-boundaries.md)、[Server state](server-state-persistence.md)、
 [Trip保存](trip-server-persistence.md)、[テストガイド](../../tests/README.md)を参照する。
+
+Tripには任意の[保存済み天気](trip-weather.md)を保持できる。予定ID・場所と日時のbasis・取得日時・有効期限を束ねた予報観測であり、リアルタイムの状態や安全性の判定ではない。

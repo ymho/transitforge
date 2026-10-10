@@ -4,6 +4,12 @@ import { TripWriteRejected } from "../../usecases/trip-plan/server-trip-client";
 import { HttpServerTripClient } from "./server-trip-client";
 const trip = createTrip("11111111-1111-4111-8111-111111111111", "旅", "2026-09-13T01:00:00Z");
 describe("Trip HTTP client", () => {
+  it("requests a server-owned retained weather update with revision and mutation identity", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ version: "trip-api-v1", trip: { ...trip, revision: 1 } })));
+    const client = new HttpServerTripClient("/api/trips/v1", request), mutationId = "22222222-2222-4222-8222-222222222222";
+    expect((await client.refreshWeather(trip.id, "visit", 0, mutationId)).revision).toBe(1);
+    expect(JSON.parse(request.mock.calls[0]![1]!.body as string)).toEqual({ version: "trip-api-v1", operation: "refresh-weather", tripId: trip.id, itemId: "visit", baseRevision: 0, mutationId });
+  });
   it("does not label feasibility rejection as booking-change consent", async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ version: "trip-api-v1", error: "feasibility-required" }), { status: 409 }));
     const client = new HttpServerTripClient("/api/trips/v1", request);

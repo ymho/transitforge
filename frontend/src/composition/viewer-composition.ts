@@ -414,6 +414,11 @@ const tripWorkspace = configureTripWorkspace({
   showMap: focusTripMap, loadInTripContext: (tripId) => inTripContextClient.read(tripId),
   ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
   openSharing: () => tripSharing.open(),
+  refreshWeather: async (trip, itemId) => {
+    const source = tripWorkspaceController.source();
+    await serverTripClient.refreshWeather(trip.id, itemId, trip.revision, crypto.randomUUID());
+    if (source === tripWorkspaceController.source()) await source?.retry?.();
+  },
   regenerateTitle: async (trip) => {
     const source = tripWorkspaceController.source();
     await regenerateTripTitle(serverTripClient, trip.id);

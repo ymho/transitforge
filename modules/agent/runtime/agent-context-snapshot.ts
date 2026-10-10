@@ -1,3 +1,4 @@
+import { currentTripWeather, type TripItemWeather } from "@raiquora/trip/trip-weather";
 import type { UserProfile } from "@raiquora/trip/travel-profile";
 import { travelPreferenceLabels } from "@raiquora/trip/travel-profile";
 import { validateTrip, type Trip, type ItineraryItem } from "@raiquora/trip/trip";
@@ -46,6 +47,8 @@ export interface AgentContextSnapshot {
 }
 
 export interface AgentTripScheduleItem {
+  weather?: TripItemWeather;
+  weatherSemantics?: "saved-forecast-not-current-conditions-check-validUntil";
   observedPrice?: import("@raiquora/trip/money").PriceObservation;
   priceSemantics?: "retained-selection-observation-not-current-price";
   /** Stable Trip reference for item-scoped constraints and assumption effects. */
@@ -104,11 +107,15 @@ function selectedTripSnapshot(trip: Trip): NonNullable<AgentContextSnapshot["tri
     scheduleTruncated: trip.items.length > 24,
     totalItemCount: trip.items.length,
     omittedItemCount: Math.max(0, trip.items.length - 24),
-    schedule: trip.items.slice(0, 24).map(selectedTripItemSnapshot) };
+    schedule: trip.items.slice(0, 24).map(item => selectedTripItemSnapshot(item, trip)) };
 }
 
 /** Same allowlisted item projection for the full itinerary and ephemeral focused-item context. */
-export function selectedTripItemSnapshot(item: ItineraryItem): AgentTripScheduleItem {
+export function selectedTripItemSnapshot(item: ItineraryItem, trip?: Trip): AgentTripScheduleItem {
+  const core = selectedTripItemCore(item), weather = trip && currentTripWeather(trip, item);
+  return weather ? { ...core, weather: structuredClone(weather), weatherSemantics: "saved-forecast-not-current-conditions-check-validUntil" } : core;
+}
+function selectedTripItemCore(item: ItineraryItem): AgentTripScheduleItem {
       const schedule = structuredClone(item.schedule);
       if (item.type === "activity") return { itemId: item.id, type: "activity", schedule,
         category: item.category, summary: bounded(item.title, 100)!,

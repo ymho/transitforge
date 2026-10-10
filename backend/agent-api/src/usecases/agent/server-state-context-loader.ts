@@ -93,7 +93,7 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       ...(effectiveProfile ? { travelProfile: effectiveProfile } : {}),
       ...(snapshot.trip ? { currentTrip: snapshot.trip } : {}),
       ...(focusedItem || calendarDate ? { featureContext: {
-        ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem) } } : {}),
+        ...(focusedItem ? { uiFocus: { itemId: focusedItem.id, item: selectedTripItemSnapshot(focusedItem, trip) } } : {}),
         ...(calendarDate ? { calendarDate } : {}),
       } } : {}),
     };

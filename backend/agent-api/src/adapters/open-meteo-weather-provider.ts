@@ -29,6 +29,7 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider, Weathe
   constructor(
     private readonly http: FetchPort,
     private readonly now: () => Date = () => new Date(),
+    private readonly requestTimeoutMs = 8_000,
   ) {}
 
   /** Internal recheck path: trusted coordinates, no geocoding/name inference. Existing Agent search is unchanged. */
@@ -41,7 +42,7 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider, Weathe
     const place = { id: 0, ...target.location, timezone: target.timezone };
     const url = forecastUrl(place, target.query);
     try {
-      const response = await this.http.fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+      const response = await this.http.fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(this.requestTimeoutMs) });
       if (!response.ok) return providerHttpFailure(response.status);
       const data = weatherForecast(await response.json(), place);
       if (!data) return failedExternalInformation({ code: "invalid_response", message: "invalid-forecast", retryable: true });
@@ -62,11 +63,11 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider, Weathe
       query.startDate && query.endDate && query.startDate > query.endDate) {
       return failedExternalInformation({ code: "invalid_request", message: "予報の日付または期間が不正です", retryable: false });
     }
-    const cacheKey = JSON.stringify({ location, startDate: query.startDate, endDate: query.endDate });
+    const cacheKey = JSON.stringify({ location, startDate: query.startDate, endDate: query.endDate, coordinate: query.coordinate, timeZone: query.timeZone });
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > this.now().getTime()) return cached.value;
     try {
-      const place = await this.geocode(location);
+      const place = query.coordinate ? { id: 0, name: location, latitude: query.coordinate.latitude, longitude: query.coordinate.longitude, timezone: query.timeZone ?? "auto" } : await this.geocode(location);
       if (!place) return failedExternalInformation({ code: "invalid_request", message: `${location}の位置を確認できません。施設名や都道府県付き住所ではなく、所在地の市区町村名で照会してください。所在地が不明な場合は先に公開情報で確認してください`, retryable: false });
       const retrievedAt = this.now();
       const timeZone = place.timezone === "auto" ? "UTC" : place.timezone;
@@ -76,11 +77,11 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider, Weathe
         startDate: query.startDate ?? today,
         endDate: query.endDate ?? query.startDate,
       } : query;
-      if (outsideForecastRange(datedQuery.startDate, today) || outsideForecastRange(datedQuery.endDate, today)) {
+      if (place.timezone !== "auto" && (outsideForecastRange(datedQuery.startDate, today) || outsideForecastRange(datedQuery.endDate, today))) {
         return failedExternalInformation({ code: "invalid_request", message: "指定日は予報期間外のため判断できません。現地の今日から15日後までが照会対象です", retryable: false });
       }
       const url = forecastUrl(place, datedQuery);
-      const response = await this.http.fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+      const response = await this.http.fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(this.requestTimeoutMs) });
       if (!response.ok) return providerHttpFailure(response.status);
       const value: unknown = await response.json();
       const data = weatherForecast(value, place);
@@ -127,7 +128,7 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider, Weathe
       const url = weatherGridUrl(query);
       const response = await this.http.fetch(url, {
         headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
       });
       if (!response.ok) return providerHttpFailure<WeatherGridSnapshot>(response.status);
       const value: unknown = await response.json();
@@ -167,7 +168,7 @@ export class OpenMeteoWeatherProvider implements WeatherForecastProvider, Weathe
   private async geocode(location: string): Promise<GeocodedPlace | undefined> {
     const params = new URLSearchParams({ name: location, count: "1", language: "ja", format: "json" });
     const response = await this.http.fetch(`https://geocoding-api.open-meteo.com/v1/search?${params}`, {
-      headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8_000),
+      headers: { Accept: "application/json" }, signal: AbortSignal.timeout(this.requestTimeoutMs),
     });
     if (!response.ok) return undefined;
     const value: unknown = await response.json();

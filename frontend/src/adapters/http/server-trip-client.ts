@@ -59,6 +59,15 @@ export class HttpServerTripClient implements ServerTripClient {
     }
     return structuredClone(result.trip as Trip);
   }
+  async refreshWeather(tripId: string, itemId: string, baseRevision: number, mutationId: string): Promise<Trip> {
+    const epoch = this.sessionVersion();
+    const result = await this.execute({ operation: "refresh-weather", tripId, itemId, baseRevision, mutationId });
+    if (epoch !== this.sessionVersion()) throw new ApiAuthenticationError("session-changed");
+    validateTrip(result?.trip as Trip);
+    const trip = result!.trip as Trip;
+    if (trip.id !== tripId || trip.revision !== baseRevision + 1) throw new Error("Wrong weather response");
+    return structuredClone(trip);
+  }
   async create(trip: Trip): Promise<Trip> {
     validateTrip(trip);
     const result = await this.execute({ operation: "create", trip });

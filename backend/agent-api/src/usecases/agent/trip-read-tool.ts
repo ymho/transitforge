@@ -38,14 +38,14 @@ export function registerTripReadTools(tools: AgentToolRegistry, evidence: ToolEv
         const wanted = new Set(input.itemIds), selected = trip.items.filter(item => wanted.has(item.id));
         const missing = input.itemIds.filter(id => !selected.some(item => item.id === id));
         return successfulAgentToolResult({ contractVersion: "trip-read-v1" as const, tripId: trip.id, sourceRevision: trip.revision,
-          items: selected.map(selectedTripItemSnapshot), coverage: { status: missing.length ? "partial" : "complete", requestedItemIds: input.itemIds, missingItemIds: missing },
+          items: selected.map(item => selectedTripItemSnapshot(item, trip)), coverage: { status: missing.length ? "partial" : "complete", requestedItemIds: input.itemIds, missingItemIds: missing },
           continuation: null });
       }
       const offset = input.cursor ? parseCursor(input.cursor, trip) : 0;
       if (offset === undefined) return failedAgentToolResult({ code: "stale_revision", message: "Trip cursor is stale or invalid", retryable: false });
       const limit = input.limit ?? 20, selected = trip.items.slice(offset, offset + limit), next = offset + selected.length;
       return successfulAgentToolResult({ contractVersion: "trip-read-v1" as const, tripId: trip.id, sourceRevision: trip.revision,
-        items: selected.map(selectedTripItemSnapshot), coverage: { status: next < trip.items.length ? "partial" : "complete", offset, returned: selected.length, total: trip.items.length,
+        items: selected.map(item => selectedTripItemSnapshot(item, trip)), coverage: { status: next < trip.items.length ? "partial" : "complete", offset, returned: selected.length, total: trip.items.length,
           omittedCount: Math.max(0, trip.items.length - next) }, continuation: next < trip.items.length ? cursor(trip, next) : null });
     },
   });

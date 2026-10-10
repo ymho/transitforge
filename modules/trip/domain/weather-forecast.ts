@@ -2,6 +2,9 @@ import type { ExternalTravelProviderPort } from "./external-travel-information";
 
 export interface WeatherForecastQuery {
   location: string;
+  /** Trusted retained coordinates avoid municipal-name inference. */
+  coordinate?: { latitude: number; longitude: number };
+  timeZone?: string;
   startDate?: string;
   endDate?: string;
 }

@@ -1,4 +1,6 @@
 import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/reservation";
+import { renderTripWeather } from "./trip-weather-view";
+import { tripWeatherTargets } from "@raiquora/trip/trip-weather";
 import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
 import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itinerary";
@@ -20,6 +22,7 @@ import { researchDateLabel } from "../../usecases/trip-plan/research-date";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
   options: { entry?: DayEntry; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
+    refreshWeather?: (trip: Trip, itemId: string) => Promise<void>;
     changeItemDecision?: (trip: Trip, item: ItineraryItem, action: "confirm" | "withdraw") => Promise<void> }, issues: TripFeasibilityIssue[] = []): HTMLElement {
   const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id; card.dataset.itemType = item.type;
   const header = element("header");
@@ -51,6 +54,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const placeName = item.type === "stay" ? item.selection.status === "selected" ? item.selection.accommodation.place.name : item.selection.place?.name : item.type === "activity" ? item.place?.name : undefined;
   if (placeName && placeName !== item.title) body.append(element("p", "trip-item-meta", placeName));
   if (stayRole) body.append(element("p", "trip-item-meta", stayRole));
+  const weather = renderTripWeather(trip, item, options.entry?.localDate); if (weather) body.append(weather);
   const decisionStatus = element("span", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" : item.decision ? "確定" : "未確定");
   decisionStatus.title = "予定の状態です。予約・購入の確認ではありません。";
   if (options.entry?.role !== "end" && options.entry?.role !== "continue") {
@@ -83,6 +87,15 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     decision.disabled = item.type === "stay" && item.selection.status !== "selected" || item.type === "transport" && item.detail.status !== "selected" ||
       item.type === "activity" && !item.place && item.category !== "free-time";
     actions.append(decision);
+  }
+  if (options.refreshWeather && tripWeatherTargets(trip, item).length) {
+    const updateWeather = control("天気を更新", () => {
+      updateWeather.disabled = true;
+      void options.refreshWeather!(trip, item.id).catch(() => options.report("天気を更新できませんでした。旅程を再読み込みしてお試しください。"))
+        .finally(() => { updateWeather.disabled = false; });
+    });
+    updateWeather.classList.add("trip-weather-update");
+    if (weather) weather.append(updateWeather); else body.append(updateWeather);
   }
   const askAboutItem = (intent: string) => {
     controller.focus(item.id);

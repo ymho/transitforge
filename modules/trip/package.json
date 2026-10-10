@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./trip-weather": "./domain/trip-weather.ts",
     "./search-selection-target": "./domain/search-selection-target.ts",
     "./trip-adoption": "./domain/trip-adoption.ts",
     "./trip-item-proposal": "./domain/trip-item-proposal.ts",

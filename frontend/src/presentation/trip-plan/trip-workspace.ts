@@ -31,6 +31,7 @@ export function configureTripWorkspace(options: {
   openSharing?(): void;
   changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
   changeItemDecision?(trip: Trip, item: Trip["items"][number], action: "confirm" | "withdraw"): Promise<void>;
+  refreshWeather?(trip: Trip, itemId: string): Promise<void>;
   regenerateTitle?(trip: Trip): Promise<void>;
   branchTrip?(trip: Trip, title: string): Promise<void>;
   conversationId?(): string;
@@ -279,13 +280,14 @@ export function configureTripWorkspace(options: {
       entries.forEach((entry, index) => {
         const { item, entryKey } = entry;
         ids.add(entryKey);
-        const key = JSON.stringify([item, trip.costs?.lines, controller.canConfirm(), entry.role, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id),
+        const key = JSON.stringify([item, trip.weather?.find(value => value.itemId === item.id), trip.costs?.lines, controller.canConfirm(), entry.role, itemAssumptions(trip, item.id), controller.reservations()?.filter((r) => r.itineraryItemId === item.id),
           evaluation.issues.filter((i) => i.itemIds.includes(item.id)), personalOwner && !!options.changeItemDecision]);
         const collapseKey = `${activeSession}:${trip.id}:${entryKey}`;
         let card = cards.get(entryKey);
         if (card?.key !== key) {
           const node = renderWorkspaceCard(trip, item, controller, { entry, collapsed: collapsed.get(collapseKey) ?? true,
             collapse: (value) => collapsed.set(collapseKey, value), chat, report,
+            ...(role !== "viewer" && options.refreshWeather ? { refreshWeather: options.refreshWeather } : {}),
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           const pending = pendingCostEditors.get(entryKey);
           if (pending?.tripId === trip.id && controller.canConfirm()) node.querySelector(".trip-item-cost")?.append(pending.node);
