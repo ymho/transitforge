@@ -2,7 +2,7 @@ import type { Trip } from "@raiquora/trip/trip";
 import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 
 /** Send the clicked day/entry as traveller-visible context; IDs stay in uiFocus. */
-export function tripAddConsultation(trip: Trip, dayKey: string, afterId?: string, title?: string, options: { beforeId?: string; placeName?: string } = {}): { prompt: string; itemId?: string } {
+export function tripAddConsultation(trip: Trip, dayKey: string, afterId?: string, title?: string, options: { beforeId?: string } = {}): { prompt: string; itemId?: string } {
   const projection = projectDailyItinerary(trip, { limit: 90 });
   const day = projection.days.find(value => value.dayKey === dayKey);
   const entries = day?.localDate
@@ -18,6 +18,6 @@ export function tripAddConsultation(trip: Trip, dayKey: string, afterId?: string
   const date = day?.localDate ?? day?.label;
   const position = anchor ? `${date ? `${date}の` : ""}「${anchor.title}」${role}の後${next ? `、次の「${next.title}」の前` : ""}`
     : next ? `${date ? `${date}の` : ""}最初の予定「${next.title}」の前` : date ? `${date}の旅程` : "日時未定の旅程";
-  return { prompt: `${position}に${title?.trim() ? `予定を追加したい。\n希望：${title.trim()}` : "追加する予定を相談したい。"}${options.placeName?.trim() ? `\n場所名：${options.placeName.trim()}` : ""}`,
+  return { prompt: `${position}に${title?.trim() ? `予定を追加したい。\n希望：${title.trim()}` : "追加する予定を相談したい。"}`,
     ...(anchor ? { itemId: anchor.id } : {}) };
 }

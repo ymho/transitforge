@@ -210,3 +210,16 @@
 #app[data-primary-view] .trip-workspace-day > button.trip-timeline-add:hover { color: var(--tf-blue); background: var(--tf-bg); }
 #app .trip-workspace-add { grid-template-columns: minmax(0,1fr); gap: 12px; padding: 16px; }
 #app .trip-workspace-add textarea { width: 100%; min-width: 0; resize: vertical; border: 1px solid var(--tf-line); border-radius: 10px; background: var(--tf-bg); color: var(--tf-ink); padding: 10px; font: inherit; font-size: 16px; }
+
+/* The card's main action is consultation; details use a quiet disclosure control. */
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .trip-timeline-content > header { align-items: center; flex-wrap: wrap; gap: 8px; }
+  & .trip-workspace-item-focus { flex: 1; min-width: 0; }
+  & .trip-timeline-content > header > .trip-item-toggle { background: transparent; border: 0; box-shadow: none; color: var(--tf-muted); padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+  & .trip-timeline-content > header > .trip-item-consult { background: var(--tf-blue); color: #fff; border: 0; box-shadow: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  & .trip-timeline-content > header > .trip-item-consult:hover { background: var(--tf-blue); color: #fff; filter: brightness(.92); }
+}
+
+#app[data-primary-view] .trip-item-toggle { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+.trip-item-toggle svg { width: 18px; height: 18px; }
+.trip-item-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
