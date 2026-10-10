@@ -270,3 +270,14 @@ dialog.trip-order-editor :focus-visible { outline: 2px solid #37675f; outline-of
   & .trip-timeline-content > header > .trip-item-rename[hidden] { display: none; }
   & .trip-workspace-day > button.trip-timeline-add { margin: 8px auto; min-height: 24px; padding: 2px 10px; }
 }
+
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .trip-item-title-group { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
+  & .trip-item-title-group > .trip-workspace-item-focus { flex: 0 1 auto; min-width: 0; }
+  & .trip-item-title-group > .trip-item-rename { flex: 0 0 auto; min-width: 22px; min-height: 28px; padding: 2px; border: 0; background: transparent; color: var(--tf-muted); box-shadow: none; }
+  & .trip-item-title-group > .trip-item-rename[hidden] { display: none; }
+  & .trip-workspace-item-body { margin-top: 6px; padding: 6px 0 0; }
+  & .trip-workspace-editing { margin: 0; padding: 0; }
+  & .trip-workspace-actions button { border: 1px solid var(--tf-line); background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; }
+  & .trip-workspace-item-body button { min-height: 28px; padding: 3px 8px; }
+}
