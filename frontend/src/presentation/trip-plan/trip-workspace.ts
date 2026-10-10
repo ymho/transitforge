@@ -84,10 +84,8 @@ export function configureTripWorkspace(options: {
   let addAnchor: HTMLElement | undefined;
   const addLabel = element("label", "", "どんな予定を追加したい？"), addTitle = element("textarea");
   addTitle.required = true; addTitle.maxLength = 2000; addTitle.rows = 3;
-  addTitle.placeholder = "夕食に地元のものを食べたい、景色のいい場所で休憩したい など";
+  addTitle.placeholder = "湖畔で休憩したい、出雲大社の近くで夕食を食べたい など";
   addLabel.append(addTitle);
-  const placeLabel = element("label", "", "場所名（任意）"), addPlace = element("input");
-  addPlace.maxLength = 200; placeLabel.append(addPlace);
   const closeAdd = () => {
     add.hidden = true;
     const dialog = add.closest("dialog"); if (dialog?.open) dialog.close();
@@ -100,13 +98,13 @@ export function configureTripWorkspace(options: {
     }
     if (!addTitle.value.trim()) { addTitle.focus(); return; }
     const context = tripAddConsultation(trip, addContext.dayKey, addContext.afterId, addTitle.value,
-      { beforeId: addContext.beforeId, placeName: addPlace.value });
+      { beforeId: addContext.beforeId });
     closeAdd(); controller.focus(context.itemId); chat(context.prompt);
   });
   const submit = element("button", "trip-primary-action", "相談して追加"); submit.type = "submit";
   const addActions = element("div", "trip-form-actions");
   addActions.append(control("取消", () => { closeAdd(); (addAnchor?.isConnected ? addAnchor : panel).focus(); }), submit);
-  add.append(addLabel, placeLabel, addActions);
+  add.append(addLabel, addActions);
   const startAdd = (trip: Trip, dayKey: string, afterId?: string, beforeId?: string, anchor?: HTMLElement) => {
     addContext = { tripId: trip.id, revision: trip.revision, session: controller.sessionId(), dayKey, afterId, beforeId };
     addAnchor = anchor; add.reset(); openTripEditor(add, "予定を追加"); addTitle.focus();
