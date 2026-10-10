@@ -42,8 +42,13 @@
     & .product-brand small { grid-column: 2; font-size: 9px; color: var(--tf-muted); letter-spacing: .06em; }
     & .product-brand-mark { grid-row: 1 / span 2; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--workspace-accent-soft); color: var(--tf-blue); transform: rotate(-6deg); }
     & .product-brand-mark .ds-icon { width: 22px; height: 22px; }
-    & .product-nav :is(a, button) { flex-direction: row; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 20px; border-radius: 24px; font-size: 13px; }
-    & .product-nav [data-account] { margin-left: 24px; border: 1px solid var(--tf-line); }
+    & .product-nav :is(a, button) { flex-direction: row; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 20px; border: 0; border-radius: 0; background: transparent; box-shadow: none; position: relative; font-size: 13px; }
+    & .product-nav [data-account] { margin-left: 0; border: 0; }
+    & .product-nav [aria-current="page"] { background: transparent; color: var(--tf-blue); }
+    & .product-nav :is(a,button) + :is(a,button)::before { content: ""; position: absolute; left: -6px; top: 50%; width: 1px; height: 18px; transform: translateY(-50%); background: currentColor; opacity: .25; pointer-events: none; }
+    & .product-nav :is(a,button)[aria-current="page"]::after { content: ""; position: absolute; left: 20px; right: 20px; bottom: 2px; height: 2px; background: currentColor; pointer-events: none; }
+    & .product-nav :is(a,button):hover { text-decoration: underline; text-underline-offset: 5px; }
+    & .product-nav :is(a,button):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
     & .product-page:not([data-page="chat"]) { padding: 128px max(32px, calc((100vw - 1100px)/2)) 64px; }
     & .home-hero { margin: 0; }
   }
@@ -177,9 +182,9 @@
 @media (min-width:62.001rem) {
   #app[data-primary-view="chat"][data-consultation-mode="landing"]:is([data-primary-view]) {
     & .product-nav { background: transparent; border: 0; box-shadow: none; }
-    & .product-nav :is(a,button) { color: #fff; border-radius: 12px; background: #20332f80; border: 1px solid #ffffff40; backdrop-filter: blur(8px); }
-    & .product-nav [aria-current="page"] { background: #fff; color: var(--tf-blue); border-color: #fff; }
-    & .product-nav [data-account] { border-color: #ffffff55; }
+    & .product-nav :is(a,button) { color: #fff; border-radius: 0; background: transparent; border: 0; backdrop-filter: none; text-shadow: 0 1px 5px #102f3b80; }
+    & .product-nav [aria-current="page"] { background: transparent; color: #fff; }
+    & .product-nav [data-account] { border: 0; }
     & .product-nav .kaiho-logo { color: #fff; }
     & .product-nav .kaiho-logo-ai { background: #fff; color: #68716e; }
   }
@@ -187,8 +192,8 @@
     --product-header-height: 84px;
     & #map { top: 0; }
     & .product-nav { background: #ffffffd9; border-bottom: 1px solid #dfe4e8; box-shadow: 0 2px 8px #152a3314; }
-    & .product-nav :is(a,button) { border-radius: 12px; background: transparent; color: #37675f; border: 1px solid transparent; box-shadow: none; backdrop-filter: none; }
-    & .product-nav [aria-current="page"] { background: var(--tf-blue); color: #fff; border-color: var(--tf-blue); }
+    & .product-nav :is(a,button) { border-radius: 0; background: transparent; color: #37675f; border: 0; box-shadow: none; backdrop-filter: none; }
+    & .product-nav [aria-current="page"] { background: transparent; color: var(--tf-blue); }
     & .product-nav .kaiho-logo { color: #68716e; filter: none; }
     & .product-nav .kaiho-logo-ai { background: #68716e; color: #fff; }
     & .mapboxgl-ctrl-top-right { top: calc(var(--product-header-height) + .5rem); }
