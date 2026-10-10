@@ -158,7 +158,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       }); return button;
     };
     if (trip) {
-      row("旅の目的", trip.request.goal ?? "まだ決まっていません", state.viewer ? undefined : () => edit("旅の目的", trip.request.goal ?? "", (goal) =>
+      if (trip.request.goal?.trim()) row("旅の目的", trip.request.goal, state.viewer ? undefined : () => edit("旅の目的", trip.request.goal ?? "", (goal) =>
         proposeTripRequestUpdate(trip, { ...trip.request, goal: goal.trim() ? boundedConditionText(goal) : undefined }, "user")));
       for (const constraint of effectiveTripConstraints(trip.request)) {
         const r = constraint.requirement;
@@ -167,13 +167,13 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
           : r.type === "pace" ? ["ペース", r.value <= .4 ? "ゆっくり" : r.value >= .7 ? "いろいろ巡る" : "バランス"]
           : r.type === "experience" ? [r.intent === "avoid" ? "避けたいこと" : "好み", r.text]
           : r.type === "budget" ? ["予算", `${formatMoney(r.limit)}${r.basis === "per-person" ? " / 1人" : ""}`]
-          : r.type === "mobility" ? ["移動", [r.maxTravelMinutes ? `移動 ${r.maxTravelMinutes}分まで` : "", r.maxTransfers !== undefined ? `乗換 ${r.maxTransfers}回まで` : "", r.transferPace ? `ペース: ${r.transferPace}` : ""].filter(Boolean).join(" ・ ") || "未定"]
+          : r.type === "mobility" ? ["移動", [r.maxTravelMinutes ? `移動 ${r.maxTravelMinutes}分まで` : "", r.maxTransfers !== undefined ? `乗換 ${r.maxTransfers}回まで` : "", r.transferPace ? `ペース: ${r.transferPace}` : ""].filter(Boolean).join(" ・ ")]
           : r.type === "duration" ? ["泊数・日数", `${r.minimum === r.maximum ? r.minimum : `${r.minimum}〜${r.maximum}`}${r.unit === "nights" ? "泊" : "日"}`]
           : r.type === "depart_after" ? ["出発", r.at.at]
           : r.type === "arrive_by" ? ["到着", r.at.at]
           : r.type === "relative_distance" ? ["距離", r.direction === "nearer" ? "もっと近く" : "もっと遠く"]
           : r.type === "adventure" ? ["移動", "冒険度を調整"] : undefined;
-        if (!display) continue;
+        if (!display || !display[1]?.trim()) continue;
         const source = constraint.source === "user" ? "あなたが指定" : constraint.source === "profile" ? "プロフィール由来" : "仮置き";
         const editable = conditionKinds.some(([type]) => type === r.type);
         const item = row(display[0]!, display[1]!, !state.viewer && editable ? () => editConstraint(r.type as EditableCondition, constraint) : undefined, source);
@@ -200,14 +200,20 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         if (display) row(display[0]!, display[1]!, undefined, "あなたが指定");
       }
       const partialParty = (trip.request.partialConditions ?? []).some(({ target }) => target === "party_size");
-      if (!partialParty)       row("同行者", party ?? "人数は未設定", state.viewer ? undefined : () => editFields([
+      const editParty = () => editFields([
         { key: "adults", label: "大人の人数（全て空欄で未設定）", type: "number", value: trip.request.party ? String(trip.request.party.adults) : "" },
         { key: "children", label: "子どもの年齢（カンマ区切り・不明は?）", value: trip.request.party?.children.map((child) => child.age === undefined ? "?" : String(child.age)).join(",") ?? "" },
-      ], (v) => editTripParty(trip, v.adults!, v.children!)));
+      ], (v) => editTripParty(trip, v.adults!, v.children!));
+      if (!partialParty && party) row("同行者", party, state.viewer ? undefined : editParty);
       if (!state.viewer) {
         const add = node("div", "consultation-add-condition"), kind = node("select", ""); kind.setAttribute("aria-label", "追加する条件");
         for (const [value, label] of conditionKinds) { const option = node("option", "", label); option.value = value; kind.append(option); }
-        const button = node("button", "", "条件を追加"); button.type = "button"; button.addEventListener("click", () => editConstraint(kind.value as EditableCondition));
+        for (const [value, label] of [["goal", "旅の目的"], ["party", "同行者"]]) { const option = node("option", "", label); option.value = value!; kind.append(option); }
+        const button = node("button", "", "条件を追加"); button.type = "button"; button.addEventListener("click", () => {
+          if (kind.value === "party") editParty();
+          else if (kind.value === "goal") edit("旅の目的", trip.request.goal ?? "", (goal) => proposeTripRequestUpdate(trip, { ...trip.request, goal: goal.trim() ? boundedConditionText(goal) : undefined }, "user"));
+          else editConstraint(kind.value as EditableCondition);
+        });
         add.append(kind, button); rows.append(add);
         for (const assumption of trip.request.assumptions.filter((a) => a.status === "unconfirmed")) {
           const item = row("仮置き", assumption.text);
@@ -220,7 +226,6 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     } else {
       const origin = ports.profile()?.usualOrigin;
       if (origin) row("普段の出発地", origin);
-      row("今回の条件", "会話で追加できます");
     }
     if (interruptedEditor && trip && !state.viewer) {
       rows.append(interruptedEditor);

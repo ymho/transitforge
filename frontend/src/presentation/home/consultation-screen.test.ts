@@ -133,3 +133,19 @@ it("displays accepted composition and does not repeat an end already present in 
   expect(f.panel.textContent).toContain("2026-10-24〜2026-10-25");
   expect(f.panel.textContent).not.toContain("開始日未定");
 });
+it("omits unset conditions while keeping purpose and party available to add", () => {
+  const f = setup();
+  f.setTrip(createTrip(f.trip.id, "新しい旅", f.trip.createdAt));
+  expect(f.panel.querySelectorAll(".consultation-condition-row")).toHaveLength(0);
+  expect(f.panel.textContent).not.toContain("まだ決まっていません");
+  expect(f.panel.textContent).not.toContain("人数は未設定");
+  const kind = f.panel.querySelector<HTMLSelectElement>('[aria-label="追加する条件"]')!;
+  kind.value = "goal";
+  [...f.panel.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "条件を追加")!.click();
+  expect(f.panel.querySelector<HTMLInputElement>('[aria-label="旅の目的"]')?.value).toBe("");
+  [...f.panel.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "取消")!.click();
+  kind.value = "party";
+  [...f.panel.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "条件を追加")!.click();
+  expect(f.panel.querySelector('input[name="adults"]')).not.toBeNull();
+  expect(f.preview).not.toHaveBeenCalled();
+});
