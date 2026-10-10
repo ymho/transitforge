@@ -7,7 +7,6 @@ import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
 import { nonRailTransportModes } from "@raiquora/trip/transport-detail";
-import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 import { itemAssumptions } from "./trip-workspace-projection";
 import { renderTripWarnings } from "./trip-warning-view";
 import { element, control, option } from "./trip-workspace-elements";
@@ -48,19 +47,18 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   content.append(header); card.append(renderTripTimeEditor(trip, item, options.entry, controller, options.report), rail, content);
   const stayRole = item.type === "stay" ? options.entry?.role === "end" ? "チェックアウト" : options.entry?.role === "continue" ? "連泊" : "チェックイン" : undefined;
   const placeName = item.type === "stay" ? item.selection.status === "selected" ? item.selection.accommodation.place.name : item.selection.place?.name : item.type === "activity" ? item.place?.name : undefined;
-  if (placeName && placeName !== item.title) content.append(element("p", "trip-item-meta", placeName));
-  if (stayRole) content.append(element("p", "trip-item-meta", stayRole));
-  const decisionStatus = element("p", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" : item.decision ? "確定" : "仮の予定");
+  if (placeName && placeName !== item.title) body.append(element("p", "trip-item-meta", placeName));
+  if (stayRole) body.append(element("p", "trip-item-meta", stayRole));
+  const decisionStatus = element("span", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" : item.decision ? "確定" : "未確定");
   decisionStatus.title = "予定の状態です。予約・購入の確認ではありません。";
-  content.append(decisionStatus);
   if (options.entry?.role !== "end" && options.entry?.role !== "continue") {
-    const cost = renderItemCost(trip, item, controller, options.report); if (cost) content.append(cost);
+    const cost = renderItemCost(trip, item, controller, options.report); if (cost) body.append(cost);
   }
   const warning = renderTripWarnings([...issues.map(feasibilityIssueText), ...itemAssumptions(trip, item.id).map(a => a.text)]);
-  if (warning) content.append(warning);
+  if (warning) body.append(warning);
   const information = element("details", "trip-item-information"); information.append(element("summary", "", "予約情報"));
   for (const r of controller.reservations()?.filter(r => r.itineraryItemId === item.id) ?? []) information.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
-  if (item.type === "transport") content.append(renderTripRouteTimeline(item));
+  if (item.type === "transport") body.append(renderTripRouteTimeline(item));
   if (information.childElementCount > 1) body.append(information);
   if (item.type === "stay" && item.selection.status === "selected") {
     const detail = renderStayDetails(item.selection.accommodation); if (detail) body.append(detail);
@@ -92,12 +90,6 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     controller.focus(item.id);
     options.chat("この予定の日付と地域の天気を確認し、必要なら近くの候補や予定の変更案を相談したい。確定済みの予定は確認するまで変更しないでください");
   }));
-  const dayLabel = element("label", "", "移動先の日 "), day = element("select", "trip-workspace-day-target");
-  day.append(option("移動先を選択", ""), option("日時未定", "unscheduled"));
-  for (const view of projectDailyItinerary(trip, { limit: 90 }).days) day.append(option(view.localDate ?? view.dayKey, view.dayKey));
-  dayLabel.append(day);
-  actions.append(dayLabel, control("日付変更案", () => safe(() => controller.preview(proposeTripItemChange(controller.current()!,
-    { action: "change-day", itemId: item.id, dayKey: day.value })))));
   if (item.type === "stay") actions.append(control("宿候補を相談", () => { controller.focus(item.id); options.chat("この宿泊予定の候補を比較したい"); }));
   if (item.type === "transport") actions.append(control(item.detail.status === "selected" ? "経路全体を選び直す" : "交通手段を選ぶ", () => {
     controller.focus(item.id);
@@ -148,21 +140,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const editing = element("details", "trip-workspace-editing");
   editing.append(element("summary", "", "予定を編集"), actions, editor);
   if (manualActivityForm) editing.append(manualActivityForm);
-  header.append(consult); body.append(editing); content.append(body);
+  header.append(decisionStatus, consult); body.append(editing); content.append(body);
   return card;
 }
 
-/** Refresh sibling references without replacing the card, editor or keyboard focus. */
-export function refreshMoveTargets(card: HTMLElement, trip: Trip, _itemId: string): void {
-  const day = card.querySelector<HTMLSelectElement>(".trip-workspace-day-target");
-  if (day) refreshOptions(day, [["", "移動先を選択"], ["unscheduled", "日時未定"],
-    ...projectDailyItinerary(trip, { limit: 90 }).days.map((view) => [view.dayKey, view.localDate ?? view.dayKey])]);
-}
-function refreshOptions(select: HTMLSelectElement, choices: string[][]): void {
-  const key = JSON.stringify(choices);
-  if (select.dataset.targets === key) return;
-  const value = select.value;
-  select.replaceChildren(...choices.map(([id, label]) => option(label!, id!)));
-  select.value = choices.some(([id]) => id === value) ? value : "";
-  select.dataset.targets = key;
-}
