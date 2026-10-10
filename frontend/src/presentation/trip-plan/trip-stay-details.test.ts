@@ -20,8 +20,20 @@ it("shows search-time photos, review stars, price and an external reservation li
 it("links legacy Rakuten stays by verified facility ID without inventing pictures, ratings or prices", () => {
   const old = stay(); delete (old as { observedDetails?: unknown }).observedDetails; delete (old as { observedPrice?: unknown }).observedPrice;
   const root = renderStayDetails(old)!;
-  expect(root.querySelector<HTMLAnchorElement>("a")?.href).toBe("https://travel.rakuten.co.jp/HOTEL/42/42.html");
+  expect(root.querySelector<HTMLAnchorElement>("a")?.href).toBe("https://hotel.travel.rakuten.co.jp/hotelinfo/plan/42?f_nen1=2026&f_tuki1=10&f_hi1=24&f_nen2=2026&f_tuki2=10&f_hi2=25&f_heya_su=1&f_static=0");
   expect(root.querySelector("img, dl")).toBeNull();
   expect(renderStayDetails({ ...old, provider: "travel-provider" })).toBeUndefined();
   expect(renderStayDetails({ ...old, providerItemId: "plan-42" })).toBeUndefined();
+});
+
+
+it("updates saved Rakuten link dates to the stay dates after editing", () => {
+  const value = stay();
+  const updated = { ...value, observedDetails: { observedAt: at, sourceUrl: "https://hotel.travel.rakuten.co.jp/hinfo/42/?f_nen1=2025&f_otona_su=2" } };
+  const link = renderStayDetails(updated)!.querySelector<HTMLAnchorElement>("a")!;
+  const url = new URL(link.href);
+  expect(url.pathname).toBe("/hotelinfo/plan/42");
+  expect(url.searchParams.get("f_nen1")).toBe("2026");
+  expect(url.searchParams.get("f_hi1")).toBe("24");
+  expect(url.searchParams.get("f_otona_su")).toBe("2");
 });

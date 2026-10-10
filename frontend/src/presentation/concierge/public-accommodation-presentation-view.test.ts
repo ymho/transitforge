@@ -41,8 +41,8 @@ it("keeps all hotel comparisons through SSE, the viewer projection and restored 
   expect(item.querySelector("h3")?.textContent).toBe(cards.cards[0]!.name);
   expect(item.textContent).toContain("指定日の空室・料金は未確認です。");
   expect(item.textContent).toContain("日本時間");
-  expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe("宿3件を表示しました。パネルで比較できます。");
-  expect(item.querySelector<HTMLDetailsElement>(".candidate-reply-details")?.open).toBe(false);
+  expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe(final.response);
+  expect(item.querySelector(".candidate-reply-details")).toBeNull();
   expect(item.querySelector("a")?.rel).toBe("noopener noreferrer");
 });
 
@@ -69,10 +69,8 @@ it("merges hotel facts and adoption once, keeping source-ID binding when names a
   const adoption = vi.fn(), detail = vi.fn(); item.addEventListener("raiquora:preview-plan-adoption", adoption); item.addEventListener("raiquora:detailed-research", detail);
   const longText = "宿の名前・価格・評価の長い説明。".repeat(20);
   resolveAssistantMessage(item, { text: longText, publicAccommodationPresentation: hotels, publicPlanPresentation: plan }, { animate: false });
-  expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe("宿2件を表示しました。パネルで比較できます。");
-  const explanation = item.querySelector<HTMLDetailsElement>(".candidate-reply-details")!;
-  expect(explanation.open).toBe(false); expect(explanation.textContent).toContain(longText);
-  explanation.open = true; expect(explanation.textContent).toContain(longText);
+  expect(item.querySelector(".ai-guide-message-copy")?.textContent).toBe(longText);
+  expect(item.querySelector(".candidate-reply-details")).toBeNull();
   expect(item.querySelectorAll(".public-accommodation-presentation")).toHaveLength(1);
   expect(item.querySelector(".public-plan-presentation")).toBeNull();
   expect(item.querySelector(".public-plan-days")).toBeNull();
@@ -187,4 +185,19 @@ it("keeps differing dates on each hotel and does not invent absent introductions
   expect(section.querySelector(".accommodation-conditions")).toBeNull();
   expect(section.querySelector(".accommodation-facts")?.textContent).toContain("宿泊日2026-10-05〜2026-10-06");
   expect(section.querySelector(".accommodation-introduction")).toBeNull();
+});
+
+
+it("repairs restored Rakuten links with search dates and removes unusable review continuation text", () => {
+  const { hotels } = hotelFixture();
+  hotels.cards[0]!.sourceUrl = "https://hotel.travel.rakuten.co.jp/hinfo/42/";
+  hotels.cards[0]!.summary += "\n検索人数: 大人2名\n口コミ（投稿例）: 接客が丁寧でした。 続きはこちら 投稿ページ";
+  const section = renderPublicAccommodationPresentation(hotels);
+  const url = new URL(section.querySelector<HTMLAnchorElement>(".accommodation-source-link")!.href);
+  expect(url.pathname).toBe("/hotelinfo/plan/42");
+  expect(url.searchParams.get("f_nen1")).toBe("2026");
+  expect(url.searchParams.get("f_hi1")).toBe("5");
+  expect(url.searchParams.get("f_hi2")).toBe("6");
+  expect(url.searchParams.get("f_otona_su")).toBe("2");
+  expect(section.querySelector(".accommodation-introduction")?.textContent).toBe("口コミの一例：接客が丁寧でした。");
 });

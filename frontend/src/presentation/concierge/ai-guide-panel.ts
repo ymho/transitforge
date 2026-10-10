@@ -539,7 +539,7 @@ export function resolveAssistantMessage(
     ...(response.publicAccommodationPresentation ? [`宿${response.publicAccommodationPresentation.cards.length}件`] : []),
   ];
   const text = visibleAssistantText(response.text);
-  if (candidateGroups.length) {
+  if (candidateGroups.length && !response.publicAccommodationPresentation) {
     renderAssistantCopy(item, `${candidateGroups.join("・")}を表示しました。パネルで比較できます。`, false);
     // Keep explanations available without duplicating the comparison in the main reading flow.
     if (text.trim()) {

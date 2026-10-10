@@ -2,6 +2,7 @@ import { accommodationPublicUrl, type AccommodationSnapshot } from "@raiquora/tr
 import { formatMoney } from "@raiquora/trip/money";
 import { element } from "./trip-workspace-elements";
 import "./trip-stay-details.css";
+import { rakutenAccommodationLink } from "../shared/rakuten-accommodation-link";
 
 export function renderStayDetails(stay: AccommodationSnapshot): HTMLElement | undefined {
   const details = stay.observedDetails;
@@ -24,7 +25,7 @@ export function renderStayDetails(stay: AccommodationSnapshot): HTMLElement | un
   if (stay.observedPrice) facts.append(element("dt", "", "検索時の参考料金"), element("dd", "", `${formatMoney(stay.observedPrice.price)}${stay.observedPrice.basis === "reference-minimum" ? "〜 / 1室1泊" : ""}`));
   if (facts.childElementCount) root.append(facts);
   if (sourceUrl) {
-    const link = element("a", "trip-stay-booking-link", "宿の詳細・予約へ ↗"); link.href = sourceUrl; link.target = "_blank"; link.rel = "noopener noreferrer"; root.append(link);
+    const link = element("a", "trip-stay-booking-link", "宿の詳細・予約へ ↗"); link.href = rakutenAccommodationLink(sourceUrl, { checkInDate: stay.checkInDate, checkOutDate: stay.checkOutDate }); link.target = "_blank"; link.rel = "noopener noreferrer"; root.append(link);
   }
   const at = details?.observedAt ?? stay.observedPrice?.observedAt;
   const footer = element("footer", "trip-stay-source");
