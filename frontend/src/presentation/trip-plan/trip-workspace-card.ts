@@ -64,6 +64,24 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   }
   const warning = renderTripWarnings([...issues.map(feasibilityIssueText), ...itemAssumptions(trip, item.id).map(a => a.text)]);
   if (warning) body.append(warning);
+  const booking = element("label", "trip-item-booking", "予約 ");
+  const bookingInput = element("select"); bookingInput.setAttribute("aria-label", `${item.title}の予約状態`);
+  for (const [value, text] of [["", "未確認"], ["booked", "予約済"], ["not-required", "予約不要"]]) {
+    const option = element("option", "", text); option.value = value!; bookingInput.append(option);
+  }
+  bookingInput.value = item.bookingStatus ?? ""; bookingInput.disabled = !controller.canConfirm();
+  bookingInput.addEventListener("change", async () => {
+    if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || !controller.canConfirm()) { bookingInput.value = item.bookingStatus ?? ""; return; }
+    const status = bookingInput.value as "booked" | "not-required" | "";
+    bookingInput.disabled = true;
+    try {
+      await controller.applyConfirmed({ tripId: trip.id, baseRevision: trip.revision, summary: "予約状態を変更",
+        patches: [{ type: "item_booking", itemId: item.id, ...(status ? { status } : {}) }] });
+      options.report("予約状態を保存しました。");
+    } catch { bookingInput.value = item.bookingStatus ?? ""; options.report("予約状態を保存できませんでした。最新の旅程を確認してください。"); }
+    finally { bookingInput.disabled = !controller.canConfirm(); }
+  });
+  booking.append(bookingInput); body.append(booking);
   const information = element("details", "trip-item-information"); information.append(element("summary", "", "予約情報"));
   for (const r of controller.reservations()?.filter(r => r.itineraryItemId === item.id) ?? []) information.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
   if (item.type === "transport" && item.detail.status === "selected") body.append(renderTripRouteTimeline(item));

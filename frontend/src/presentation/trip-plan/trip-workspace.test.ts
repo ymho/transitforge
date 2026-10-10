@@ -362,3 +362,31 @@ it("deletes only after confirmation without showing a proposal panel, and preser
   await vi.waitFor(() => expect(f.controller.proposal()).toBeUndefined());
   expect(trip.items).toHaveLength(2);
 });
+
+it("warns with unmarked hotel names and allows cancelling or continuing Trip confirmation", async () => {
+ const trip = createTrip(placesTripId, "旅", placesAt, [{ id: "hotel", title: "テストホテル", type: "stay",
+   selection: { status: "unselected" }, schedule: { type: "day", date: "2026-10-12", timeZone: "Asia/Tokyo" } }]);
+ const changeAdoption = vi.fn(async () => undefined);
+ const f = setup({ getCurrentTrip: () => trip }, undefined, { changeAdoption });
+ button(f.ui.panel, "旅程を確定").click();
+ expect(document.querySelector("dialog")?.textContent).toContain("テストホテル");
+ expect(document.querySelector("dialog")?.textContent).toContain("未確認");
+ document.querySelector<HTMLButtonElement>("dialog button[type=button]")!.click();
+ await Promise.resolve(); expect(changeAdoption).not.toHaveBeenCalled();
+ button(f.ui.panel, "旅程を確定").click();
+ document.querySelector<HTMLButtonElement>("dialog button[type=submit]")!.click();
+ await vi.waitFor(() => expect(changeAdoption).toHaveBeenCalledWith(trip, "confirm"));
+});
+
+it("saves booking marks through a revision-bound proposal and disables them for viewers", async () => {
+ const trip = multiCityTrip(), confirmProposal = vi.fn(async (_proposal: unknown) => undefined);
+ const f = setup({ getCurrentTrip: () => trip, confirmProposal, getRole: () => "owner" });
+ const input = f.ui.panel.querySelector<HTMLSelectElement>(".trip-item-booking select")!;
+ input.value = "booked"; input.dispatchEvent(new Event("change"));
+ await vi.waitFor(() => expect(confirmProposal).toHaveBeenCalled());
+ const proposal = confirmProposal.mock.calls[0]![0] as unknown as { baseRevision: number; patches: { type: string; status: string }[] };
+ expect(proposal.baseRevision).toBe(trip.revision); expect(proposal.patches[0]).toMatchObject({ type: "item_booking", status: "booked" });
+ f.app.remove();
+ const viewer = setup({ getCurrentTrip: () => trip, confirmProposal, getRole: () => "viewer" });
+ expect(viewer.ui.panel.querySelector<HTMLSelectElement>(".trip-item-booking select")!.disabled).toBe(true);
+});

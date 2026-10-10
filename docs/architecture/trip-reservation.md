@@ -1,5 +1,7 @@
 # Reservation（#398）
 
+利用者の予約済・予約不要の自己申告は[予定の予約マーク](trip-booking-marks.md)を参照する。独立Reservationの仕様とは区別する。
+
 #402で[採用済みTripの成立性](trip-feasibility.md)へReservationFactを接続した。
 bookedの固定時刻矛盾、unknown、danglingは派生issueとし、予約・Tripへ自動修正を行わない。
 

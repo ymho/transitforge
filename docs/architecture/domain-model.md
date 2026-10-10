@@ -1,5 +1,7 @@
 # 標準データモデル（Current）
 
+利用者の予約済・予約不要の自己申告は[予定の予約マーク](trip-booking-marks.md)を参照する。独立Reservationの仕様とは区別する。
+
 基準: main `32d51f68487a1cdc8aa56d9d732738cc90024eb9`、2026-10-05。
 型・validator・Application・Terraformを正本とし、この文書は保存先と所有境界への入口とする。
 旧型の導入経緯は[Trip lifecycleのHistorical節](trip-lifecycle.md#9-段階migrationとownership)と[ADR索引](../decisions/README.md)に残す。
