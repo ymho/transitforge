@@ -1,4 +1,4 @@
-import { iconMarkup } from "../shared/primitives";
+import { iconMarkup, setLoadingStatus } from "../shared/primitives";
 import { travelPreferenceLabels, type TravelPreference, type UserProfile } from "@raiquora/trip/travel-profile";
 import type { ProfileUiController } from "../../usecases/personal-state/profile-ui-controller";
 
@@ -13,7 +13,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
 
   const status = (text: string, state = "") => {
     const el = page.querySelector<HTMLElement>("[data-profile-message]"); if (!el) return;
-    el.textContent = text; el.dataset.state = state;
+    setLoadingStatus(el, text, state === "loading" || state === "saving"); el.dataset.state = state;
     const retry = page.querySelector<HTMLButtonElement>("[data-profile-retry]"); if (retry) retry.hidden = state !== "error";
   };
   const readForm = (): Draft => {

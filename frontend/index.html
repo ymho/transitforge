@@ -8,15 +8,19 @@
     <style>
       #app:not([data-primary-view]) { visibility: hidden; }
       #startup-status { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; gap: 1rem; padding: 2rem; background: #f4f7fb; color: #23455e; font: 1rem/1.6 system-ui, sans-serif; }
+      #startup-status .startup-spinner { width: 1.5rem; height: 1.5rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: startup-spin .8s linear infinite; }
+      @keyframes startup-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { #startup-status .startup-spinner { animation-duration: 2s; } }
       #startup-status button { padding: .75rem 1.5rem; border: 1px solid currentColor; border-radius: 1rem; color: inherit; background: white; font: inherit; cursor: pointer; }
     </style>
     <title>Raiquora — Agentic Transit Intelligence</title>
   </head>
   <body>
-    <section id="startup-status" role="status" aria-live="polite"><p>画面を読み込んでいます。</p></section>
+    <section id="startup-status" role="status" aria-live="polite"><span class="startup-spinner" aria-hidden="true"></span><p>画面を読み込んでいます。</p></section>
     <main id="app" data-loading-state="ready" data-display-mode="digital-twin" aria-busy="false">
       <section id="loading-screen" class="loading-screen" role="status" aria-live="polite" aria-atomic="true" aria-hidden="true" hidden>
         <div class="loading-screen-content">
+          <span class="ds-spinner" aria-hidden="true"></span>
           <p id="loading-screen-message" class="loading-screen-message">地図と列車表示を読み込んでいます。</p>
           <ol class="loading-steps" aria-label="読み込み状況">
             <li data-loading-step="map" data-state="pending"><span class="loading-step-indicator" aria-hidden="true"></span><span>地図</span></li>

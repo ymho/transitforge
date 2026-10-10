@@ -1,3 +1,4 @@
+import { setLoadingStatus } from "../shared/primitives";
 import type { TripSharingClient, TripShareLink } from "../../usecases/trip-plan/trip-sharing-client";
 import type { TripRole, SharedTripRole } from "@raiquora/trip/trip-sharing";
 import { element, control, option } from "./trip-workspace-elements";
@@ -16,10 +17,10 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
   const grants = element("ul"); let pending = options.initialLink, generation = 0, busy = false;
   const close = () => { ++generation; pending = undefined; link.value = ""; link.hidden = true; input.value = ""; dialog.close(); };
   async function action(work: () => Promise<void>) {
-    if (busy) return; busy = true; const epoch = generation; status.textContent = "処理しています。";
+    if (busy) return; busy = true; const epoch = generation; setLoadingStatus(status, "処理しています。", true);
     try { await work(); if (epoch === generation) status.textContent = "更新しました。"; }
     catch { if (epoch === generation) status.textContent = "共有操作を完了できません。認証・権限・期限・接続を確認し、再読み込みしてください。"; }
-    finally { busy = false; }
+    finally { busy = false; if (epoch === generation) status.setAttribute("aria-busy", "false"); }
   }
   async function manage(after?: string) {
     const current = options.current(); if (current?.role !== "owner") return;

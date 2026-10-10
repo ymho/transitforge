@@ -612,7 +612,7 @@ primaryShell = configureAiFirstShell(document, app, {
   resetConsultation,
   cancelNavigation: () => { tripNavigation.cancel(); },
   openChat: () => { aiGuideController.open(); if (tripWorkspaceController.current()) tripWorkspace.show("chat"); delete app.dataset.mapFocusMode; },
-  openTrip: (id) => { void tripNavigation.open(id, "trip").catch(() => aiGuideController.notify("旅程を読み込めませんでした。")); },
+  openTrip: (id) => tripNavigation.open(id, "trip"),
   openTravelMode: (id) => { void tripNavigation.open(id, "trip").then(() => tripWorkspace.openTravelMode()).catch(() => aiGuideController.notify("旅行モードを開けませんでした。")); },
   consultTrip: (id) => tripNavigation.open(id, "chat"),
   renameTrip: async (id, title) => {

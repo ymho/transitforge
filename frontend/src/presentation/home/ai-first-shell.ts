@@ -1,5 +1,5 @@
 import { homeReadModel, tripDisplayLabels, type HomeReadInput } from "../../usecases/trip-plan/home-read-model";
-import { adoptComposer, iconMarkup, pageHeadingMarkup, type ProductIconName } from "../shared/primitives";
+import { adoptComposer, iconMarkup, pageHeadingMarkup, loadingMarkup, setLoadingStatus, type ProductIconName } from "../shared/primitives";
 import type { Trip } from "@raiquora/trip/trip";
 import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
 import { partyMarkup } from "../trip-plan/trip-party-control";
@@ -17,7 +17,7 @@ export interface AiFirstShellPorts {
   resetConsultation(): void;
   cancelNavigation?(): void;
   openChat(): void;
-  openTrip(id: string): void;
+  openTrip(id: string): Promise<void> | void;
   openTravelMode?(id: string): void;
   consultTrip?(id: string): Promise<void> | void;
   renameTrip?(id: string, title: string): Promise<void>;
@@ -47,6 +47,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <section class="product-page" data-page="chat" aria-label="相談"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>Raiquora original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
     <form class="home-prompt"><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="例：${selectedExample}"></textarea><button type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
     <p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
+    <section class="trip-route-progress" data-trip-route-progress role="status" hidden></section>
     <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("", "旅程")}</div><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="設定" hidden><div class="my-shell">${pageHeadingMarkup("SETTINGS", "設定")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="いつもの好み設定"></div></section>
     <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>`;
@@ -67,6 +68,8 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   let current: PrimaryView = "chat", composing = false;
   let consultationMode: "landing" | "starting" | "conversation" | "unavailable" = "landing";
   let entryGeneration = 0, appliedRoute = "";
+  let tripEntry: "loading" | "loaded" | "unavailable" = "loaded";
+  let pendingTripId: string | undefined;
   const scrolls = new Map<string, number>();
   const textarea = root.querySelector<HTMLTextAreaElement>("#home-prompt")!;
   const homeForm = root.querySelector<HTMLFormElement>(".home-prompt")!;
@@ -137,7 +140,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const journey = ports.journeySettings(); transferPace.value = journey.transferPace; rankingPreference.value = journey.rankingPreference;
     const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
       : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
-    root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, tripDisplayLabels[row.group], row.group === "current")).join("") : `<p role="status">${stateText}</p>`;
+    root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, tripDisplayLabels[row.group], row.group === "current")).join("") : `<p role="status" aria-busy="${view.state === "loading"}">${view.state === "loading" ? loadingMarkup(stateText) : stateText}</p>`;
     root.querySelectorAll<HTMLButtonElement>("[data-trip]").forEach((button) => button.addEventListener("click", () => {
       if (!canNavigate()) return;
       window.history.pushState({ tripId: button.dataset.trip! }, "", "#trip"); apply();
@@ -177,7 +180,11 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     if (route === "trips" || isTrip) current = "trips";
     else if (route === "my") current = "my";
     else if (!isMap) current = "chat";
-    app.dataset.primaryView = isMap ? "map" : isTrip ? "trip" : current;
+    app.dataset.primaryView = isMap ? "map" : isTrip ? tripEntry === "loaded" ? "trip" : "trip-loading" : current;
+    const tripProgress = root.querySelector<HTMLElement>("[data-trip-route-progress]")!;
+    tripProgress.hidden = !isTrip || tripEntry === "loaded";
+    setLoadingStatus(tripProgress, tripEntry === "loading" ? "旅程を読み込んでいます。" : "旅程を読み込めませんでした。旅程一覧から再試行してください。", tripEntry === "loading");
+    setLoadingStatus(entryStatus, entryStatus.textContent ?? "", consultationMode === "starting");
     app.dataset.consultationMode = consultationMode;
     hero.hidden = consultationMode !== "landing";
     progress.hidden = consultationMode === "landing" || consultationMode === "conversation";
@@ -207,6 +214,8 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     appliedRoute = routeKey(); paintRoute();
   }
   function showTrip(tripId: string) {
+    if (pendingTripId && pendingTripId !== tripId) return;
+    if (!pendingTripId) tripEntry = "loaded";
     if (window.location.hash !== "#trip") window.history.pushState({ tripId }, "", "#trip");
     else window.history.replaceState({ tripId }, "", "#trip");
     appliedRoute = routeKey(); paintRoute();
@@ -221,6 +230,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     if (previous) scrolls.set(current, previous.scrollTop);
     appliedRoute = routeKey();
     const generation = ++entryGeneration;
+    pendingTripId = route === "trip" ? window.history.state?.tripId : undefined;
     ports.cancelNavigation?.();
     if (route === "chat") {
       const tripId = window.history.state?.consultation === "trip" ? window.history.state?.tripId : undefined;
@@ -242,9 +252,21 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
         window.history.replaceState({ consultation: "new" }, "", "#chat"); appliedRoute = routeKey(); paintRoute();
       }
     } else {
+      if (route === "trip") tripEntry = "loading";
       paintRoute();
       if (route === "trips") void ports.retry();
-      if (route === "trip" && typeof window.history.state?.tripId === "string") ports.openTrip(window.history.state.tripId);
+      if (route === "trip" && typeof window.history.state?.tripId === "string") {
+        const tripId = window.history.state.tripId;
+        void (async () => {
+          if (generation === entryGeneration && isSignedIn()) await ports.openTrip(tripId);
+        })().then(() => {
+          if (generation !== entryGeneration || !root.isConnected) return;
+          pendingTripId = undefined; tripEntry = "loaded"; paintRoute();
+        }, () => {
+          if (generation !== entryGeneration || !root.isConnected) return;
+          pendingTripId = undefined; tripEntry = "unavailable"; paintRoute();
+        });
+      } else if (route === "trip") { tripEntry = "unavailable"; paintRoute(); }
       if (route === "map") ports.openMap();
     }
     const page = root.querySelector<HTMLElement>(`[data-page="${current}"]`);

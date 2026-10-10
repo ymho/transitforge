@@ -15,7 +15,9 @@ start/end/durationを複数Toolへ分けない。1回の呼出しをApplication�
 
 ## Model input
 
-`action=set`のperiodには利用者が今回の発言で明示した要素だけを入れる。省略した要素は未設定へ戻し、以前の期間値と黙って混在させない。
+検索依頼に新しく述べた実際の人数・日程も条件writerで受理してから検索する。登録という別指示を待たず、受理済みで変わらない条件だけを再利用する。
+
+`action=set`のperiodには利用者が今回の発言で明示した全要素だけを一度に入れる。例えば「2026年10月24日から25日の1泊」は省略表記の終了日25日も含め、start/end/durationの全体をquoteに含める。省略した要素は未設定へ戻し、以前の期間値と黙って混在させない。
 
 日付入力は`calendar_date`または`relative_date`だけとする。
 
@@ -77,3 +79,5 @@ Nova 2 Lite final travel-period live run 36280727426を3回独立実行し、3/3
 - お礼: 条件更新なし
 
 各actual更新は2 model calls（writer→structured output）、what-ifも2 calls、更新不要turnは1 callだった。固定test repositoryでの結果であり、実Provider・実ブラウザとは区別する。
+
+条件欄では終了日未設定を開始日で埋めず「終了日未定」と表示する。startのearliest/latestは出発日の許容幅であり旅行期間ではない。

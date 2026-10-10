@@ -45,3 +45,13 @@ function escapeHtml(value: string): string {
 }
 
 function escapeAttribute(value: string): string { return escapeHtml(value); }
+
+/** Shared async status; preserves an accessible label without announcing decoration. */
+export function loadingMarkup(label: string): string {
+  const escaped = label.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return `<span class="ds-loading"><span class="ds-spinner" aria-hidden="true"></span><span>${escaped}</span></span>`;
+}
+export function setLoadingStatus(element: HTMLElement, label: string, busy: boolean): void {
+  element.setAttribute("aria-busy", String(busy));
+  if (busy) element.innerHTML = loadingMarkup(label); else element.textContent = label;
+}

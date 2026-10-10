@@ -158,12 +158,13 @@ it("all secondary actions use existing feature ports", () => {
   click("[data-notifications]");
   expect(ports.openNotifications).toHaveBeenCalledOnce();
 });
-it("opens the actual Trip as a trips subview, not a selected chat tab", () => {
+it("opens the actual Trip as a trips subview, not a selected chat tab", async () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
   const { ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip] }) });
   expect(document.querySelector('.trip-list-emblem svg[aria-hidden="true"]')).not.toBeNull();
   click('[data-primary="trips"]'); click("[data-trip]");
-  expect(document.querySelector("main")!.dataset.primaryView).toBe("trip");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("trip-loading");
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.primaryView).toBe("trip"));
   expect(document.querySelector('[data-primary="trips"]')!.getAttribute("aria-current")).toBe("page");
   expect(document.querySelector('[data-primary="chat"]')!.hasAttribute("aria-current")).toBe(false);
   expect(ports.openTrip).toHaveBeenCalledWith(trip.id);
@@ -291,4 +292,21 @@ it.each(["/", "/index.html", "/#chat", "/#trip", "/#map", "/#my"])("mounts the a
   expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(false);
   expect(ports.openMap).not.toHaveBeenCalled(); expect(list).not.toHaveBeenCalled();
   shell.refresh(); shell.dispose(); source.dispose();
+});
+
+
+it("keeps a Trip behind the loading status until activation finishes, fences cancelled navigation and reports failure", async () => {
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
+  let complete!: () => void;
+  const openTrip = vi.fn(() => new Promise<void>(resolve => { complete = resolve; }));
+  const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "検証" }), read: () => ({ state: "available", trips: [trip] }), openTrip });
+  shell.navigate("trips"); click("[data-trip]");
+  shell.showTrip(trip.id); // History restoration can publish before navigation finishes.
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("trip-loading");
+  expect(document.querySelector('[data-trip-route-progress] .ds-spinner')).not.toBeNull();
+  shell.navigate("my"); complete(); await Promise.resolve(); await Promise.resolve();
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("my");
+  openTrip.mockRejectedValueOnce(new Error("offline")); shell.navigate("trips"); click("[data-trip]");
+  await vi.waitFor(() => expect(document.querySelector('[data-trip-route-progress]')!.textContent).toContain("読み込めませんでした"));
+  expect(document.querySelector('[data-trip-route-progress] .ds-spinner')).toBeNull();
 });

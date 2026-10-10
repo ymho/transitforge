@@ -16,7 +16,7 @@ function setup(bound = true) {
     read: () => ({ trip: current, sessionId }), profile: () => undefined, subscribe: (f) => { changed = f; return () => {}; },
     preview, showTrip, newConversation: vi.fn(),
   });
-  return { trip, panel, messages, form, input, preview, showTrip, submit, screen, switch: () => { current = undefined; sessionId = "session-b"; changed(); } };
+  return { trip, panel, messages, form, input, preview, showTrip, submit, screen, setTrip: (value: typeof trip) => { current = value; changed(); }, switch: () => { current = undefined; sessionId = "session-b"; changed(); } };
 }
 it("uses the explicit bound Trip and preserves message/composer nodes and listeners", () => {
   const f = setup(); expect(f.panel.classList.contains("ai-guide-panel")).toBe(false);
@@ -100,4 +100,15 @@ it("uses the existing Trip for inspiration and never exposes a second save-draft
   expect(f.panel.textContent).not.toContain("条件はこの相談に保存");
   const back = [...f.panel.querySelectorAll("button")].find(button => button.textContent === "旅程に戻る")!;
   expect(back.hidden).toBe(false); back.click(); expect(f.showTrip).toHaveBeenCalledOnce();
+});
+
+
+it("shows an unknown end honestly and displays the explicit end when received", () => {
+  const f = setup();
+  const dates = { id: "dates", source: "user" as const, strength: "hard" as const, scope: { type: "trip" as const }, requirement: { type: "dates" as const, start: { earliest: "2026-10-24", latest: "2026-10-24" } } };
+  f.setTrip({ ...f.trip, request: { ...f.trip.request, constraints: [...f.trip.request.constraints, dates] } });
+  expect(f.panel.textContent).toContain("2026-10-24〜終了日未定");
+  expect(f.panel.textContent).not.toContain("2026-10-24〜2026-10-24");
+  f.setTrip({ ...f.trip, request: { ...f.trip.request, constraints: [f.trip.request.constraints[0]!, { ...dates, requirement: { ...dates.requirement, end: { earliest: "2026-10-25", latest: "2026-10-25" } } }] } });
+  expect(f.panel.textContent).toContain("2026-10-24〜2026-10-25");
 });
