@@ -9,7 +9,7 @@
 .accommodation-facts dd { margin: 0; }
 .accommodation-stars { position: relative; display: inline-block; color: #d5d8dc; white-space: nowrap; }
 .accommodation-stars > span { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: #bc7900; }
-.accommodation-notice { padding: .5rem .65rem; margin-block: .65rem; border-radius: 6px; background: #fff8e7; color: #785923; font-size: 12px; }
+.accommodation-notice { padding: .5rem .65rem; margin-block: .65rem; border-radius: 6px; background: #edf5ff; color: #315579; font-size: 12px; }
 .accommodation-notice p { margin: .2rem 0 0; white-space: pre-line; }
 .accommodation-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
 .public-accommodation-presentation .accommodation-source-link { font-size: 12px; line-height: 1.5; }
