@@ -70,7 +70,7 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
   const consent = element("input"); consent.type = "checkbox";
   const key = reservationChangeKey(proposal, controller.reservations() ?? []);
   const needsConsent = warnings.length > 0 || !!replan?.confirmationKey;
-  const caution = renderTripWarnings(warnings.length ? ["予約済みの予定が変わります。予約の変更・取消は別途必要です。"] : []);
+  const caution = renderTripWarnings(warnings.length ? ["予約済みの予定が変わります。"] : [], "変更の影響を確認し、下のチェック欄にチェックしてください。予約の変更・取消が必要な場合は、予約先で手続きしてください。");
   if (caution) section.append(caution);
   if (needsConsent) {
     const label = element("label", "trip-workspace-assumption");

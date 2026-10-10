@@ -102,9 +102,11 @@
 }
 /* Icons belong to the time axis; card text shares a single left edge. */
 .trip-warning-box { background: #fff7dc; border: 1px solid #ead28c; border-radius: 10px; padding: 10px 14px; color: #66501a; margin-block: 10px; font-size: 12px; }
-.trip-warning-box summary { cursor: pointer; font-weight: 600; }
+#app[data-primary-view] .trip-warning-box > summary { cursor: pointer; font-weight: 600; min-height: 0; padding: 0; margin: 0; line-height: 1.5; }
 .trip-warning-box summary span { margin-right: 8px; }
-.trip-warning-box li { margin-block: 6px; }
+.trip-warning-box > ul { margin: 8px 0 0; padding-left: 20px; }
+.trip-warning-box li { margin-block: 4px; line-height: 1.6; }
+.trip-warning-box > .trip-warning-action { margin: 8px 0 0; line-height: 1.6; }
 .trip-order-list { list-style: none; padding: 0; }
 .trip-order-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--tf-line); padding: 10px 0; }
 .trip-order-title { flex: 1; min-width: 0; }

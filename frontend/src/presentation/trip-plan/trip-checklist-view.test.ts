@@ -33,5 +33,5 @@ it("read-only host disables edits, preserves nonblocking unknown and does not cl
   const ui = renderTripChecklist({ controller: c.checklist, trip, readiness: c.readiness()!, newId: vi.fn(), focus: vi.fn(), ask: vi.fn(), report: vi.fn() });
   expect(ui.querySelector<HTMLInputElement>('input[type="checkbox"]')!.disabled).toBe(true);
   expect(ui.textContent).toContain("編集は現在利用できません");
-  expect(renderTripReadiness(c.readiness()!, trip, vi.fn()).textContent).toContain("利用可能と確認済みという意味ではありません");
+  expect(renderTripReadiness(c.readiness()!, trip, vi.fn()).textContent).toContain("宿泊日の営業・利用条件を宿泊先の公式サイトや予約先で確認してください。");
 });
