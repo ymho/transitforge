@@ -62,8 +62,16 @@ it("direct origin edit produces a revision-bound Proposal, never mutates Trip or
   expect(proposal.patches[0].request.constraints[0].requirement.place).toEqual({ name: "大阪", sources: [] });
   expect(JSON.stringify(f.trip)).toBe(before);
 });
-it("shows each condition's source without treating it as a second editable state", () => {
-  const f = setup(); expect(f.panel.textContent).toContain("あなたが指定"); expect(f.panel.textContent).toContain("今回の条件");
+it("keeps condition content concise and groups secondary actions underneath", () => {
+  const f = setup();
+  expect(f.panel.textContent).not.toContain("あなたが指定");
+  expect(f.panel.querySelector(".consultation-condition-source")).toBeNull();
+  const edit = f.panel.querySelector('[aria-label="出発地を編集"]')!;
+  const remove = f.panel.querySelector('[aria-label="出発地を削除"]')!;
+  expect(edit.parentElement).toBe(remove.parentElement);
+  expect(remove.parentElement?.className).toBe("consultation-condition-actions");
+  expect(remove.textContent).toBe("削除");
+  expect(f.panel.textContent).toContain("京都");
 });
 it("stale editor cannot submit into another session and mobile conditions close via Escape", () => {
   const f = setup(); f.panel.querySelector<HTMLButtonElement>('[aria-label="出発地を編集"]')!.click();

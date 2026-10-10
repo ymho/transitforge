@@ -104,9 +104,8 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     tripButton.querySelector("svg")!.toggleAttribute("hidden", !trip);
     help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "条件を編集し、変更案を確認して保存できます。列車・宿・予約は自動で変更されません。"
       : "条件は会話で追加できます。普段の好みより、今回の希望を優先します。";
-    const row = (label: string, value: string, edit?: () => void, source?: string) => {
+    const row = (label: string, value: string, edit?: () => void, _source?: string) => {
       const item = node("div", "consultation-condition-row"); item.append(node("span", "", label), node("strong", "", value));
-      if (source) item.append(node("small", "consultation-condition-source", source));
       const actions = node("div", "consultation-condition-actions");
       if (edit) { const button = node("button", "", "編集"); button.type = "button"; button.setAttribute("aria-label", `${label}を編集`); button.addEventListener("click", edit); actions.append(button); }
       item.append(actions);
