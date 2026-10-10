@@ -55,7 +55,7 @@ workspace = configureTripWorkspace({ app, chat: panel, messages, input, controll
 configureConsultationScreen(panel, messages, form, input, {
   read: () => ({ sessionId: controller.sessionId(), trip: controller.current() }), profile: () => undefined,
   subscribe: listener => { const unsubscribe = controller.subscribe(listener); listeners.add(listener); return () => { unsubscribe(); listeners.delete(listener); }; },
-  preview: proposal => controller.preview(proposal), showTrip: () => workspace.show("trip"), newConversation: () => shell.navigate("chat"),
+  save: proposal => controller.saveConditions(proposal), showTrip: () => workspace.show("trip"), newConversation: () => shell.navigate("chat"),
 });
 form.addEventListener("submit", event => { event.preventDefault(); if (input.value.trim()) { append("user", input.value.trim()); input.value = ""; } });
 document.body.dataset.consultationPreview = "ready";

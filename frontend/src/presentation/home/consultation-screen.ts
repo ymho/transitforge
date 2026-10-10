@@ -15,7 +15,7 @@ export interface ConsultationScreenPorts {
   read(): { sessionId: string; trip?: Trip; unavailable?: boolean; viewer?: boolean };
   profile(): UserProfile | undefined;
   subscribe(listener: () => void): () => void;
-  preview(proposal: TripUpdateProposal): void;
+  save(proposal: TripUpdateProposal): Promise<void>;
   showTrip(): void;
   newConversation(): void;
 }
@@ -78,7 +78,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   });
   layout.append(conversation, aside, backdrop);
   panel.classList.remove("ai-guide-panel"); panel.classList.add("consultation-page"); panel.replaceChildren(layout);
-  let lastKey = "";
+  let lastKey = "", saving = false;
   const canLeave = () => {
     const editor = rows.querySelector(".consultation-condition-editor");
     if (!editor || doc.defaultView?.confirm("編集中の条件を破棄して移動しますか？")) { editor?.remove(); return true; }
@@ -87,6 +87,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
   let renderedSession = "";
   const render = () => {
     const state = ports.read(), trip = state.trip;
+    if (saving && renderedSession === state.sessionId) return;
     const key = JSON.stringify([state, ports.profile()?.usualOrigin]); if (key === lastKey) return; lastKey = key;
     const interruptedEditor = renderedSession === state.sessionId ? rows.querySelector(".consultation-condition-editor") : null;
     renderedSession = state.sessionId;
@@ -98,7 +99,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     const party = trip ? tripPartyView(trip)?.text : undefined;
     meta.textContent = [...dates, ...(party ? [party] : [])].join(" ・ "); meta.hidden = true;
     note.hidden = true;
-    note.textContent = trip ? "会話で受理した今回条件は旅程に保存されます。手動編集は変更案を確認して保存します。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
+    note.textContent = trip ? "会話で受理した今回条件は旅程に保存されます。手動編集は保存すると反映されます。" : state.unavailable ? "参照先を確認してから相談を続けてください。" : "まだ旅程に紐付いていません。";
     tripButton.disabled = !trip;
     tripButton.setAttribute("aria-label", trip ? `${trip.title}の旅程に戻る` : name.textContent!);
     tripButton.querySelector("svg")!.toggleAttribute("hidden", !trip);
@@ -112,7 +113,26 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       item.append(actions);
       rows.append(item); return item;
     };
-    const previewProposal = (proposal: TripUpdateProposal) => ports.preview(proposal);
+    const saveProposal = async (proposal: TripUpdateProposal) => {
+      if (saving) return;
+      const session = state.sessionId;
+      saving = true;
+      const buttons = [...aside.querySelectorAll<HTMLButtonElement>("button")];
+      buttons.forEach(button => { button.disabled = true; });
+      status.textContent = "保存中…";
+      try {
+        await ports.save(proposal);
+        if (ports.read().sessionId === session) {
+          rows.querySelector(".consultation-condition-editor")?.remove();
+          saving = false; lastKey = ""; render();
+        }
+      } catch (error) {
+        if (ports.read().sessionId === session) status.textContent = error instanceof Error ? `保存できませんでした。${error.message}` : "保存できませんでした。";
+      } finally {
+        saving = false;
+        buttons.forEach(button => { button.disabled = false; });
+      }
+    };
     const editFields = (fields: ConditionField[], update: (values: Record<string, string>) => TripUpdateProposal) => {
       const existing = rows.querySelector(".consultation-condition-editor");
       if (existing && !doc.defaultView?.confirm("編集中の入力を破棄しますか？")) return;
@@ -128,10 +148,11 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         else { (field as HTMLInputElement).type = spec.type ?? "text"; (field as HTMLInputElement).maxLength = 240; }
         field.value = spec.value; label.append(field); editor.append(label);
       }
-      const preview = node("button", "", "変更案を確認"), cancel = node("button", "", "取消"); preview.type = "submit"; cancel.type = "button";
+      const preview = node("button", "", "保存"), cancel = node("button", "", "取消"); preview.type = "submit"; cancel.type = "button";
       cancel.addEventListener("click", () => editor.remove()); editor.append(preview, cancel); rows.append(editor); editor.querySelector<HTMLElement>("input, select")?.focus();
       editor.addEventListener("submit", (event) => {
         event.preventDefault();
+        if (saving) return;
         const current = ports.read();
         if (current.viewer || current.unavailable || current.sessionId !== base.sessionId || current.trip?.id !== base.trip?.id || current.trip?.revision !== base.trip?.revision) {
           status.textContent = "対象の旅程が変わりました。現在の条件から編集し直してください。"; return;
@@ -139,8 +160,8 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
         try {
           const values: Record<string, string> = {};
           for (const field of editor.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select")) values[field.name] = field.value.trim();
-          previewProposal(update(values)); status.textContent = "変更案を作成しました。旅程で内容を確認してください。まだ保存されていません。"; editor.remove();
-        } catch (error) { status.textContent = error instanceof Error ? `入力と旅程の状態を確認してください。${error.message}` : "この条件では変更案を作成できません。"; }
+          void saveProposal(update(values));
+        } catch (error) { status.textContent = error instanceof Error ? `入力と旅程の状態を確認してください。${error.message}` : "この条件を保存できません。"; }
       });
     };
     const edit = (label: string, value: string, update: (value: string) => TripUpdateProposal) =>
@@ -153,9 +174,10 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     const offer = (label: string, proposal: () => TripUpdateProposal) => {
       const button = node("button", "", label); button.type = "button";
       button.addEventListener("click", () => {
+        if (saving) return;
         const current = ports.read();
         if (current.sessionId !== state.sessionId || current.trip?.id !== trip?.id || current.trip?.revision !== trip?.revision || current.viewer) return;
-        try { previewProposal(proposal()); } catch { status.textContent = "関連する予定に影響があります。旅程の変更案から確認してください。"; }
+        try { void saveProposal(proposal()); } catch { status.textContent = "関連する予定に影響があるため保存できません。"; }
       }); return button;
     };
     if (trip) {

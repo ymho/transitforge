@@ -145,6 +145,18 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
       preview({ tripId: trip.id, baseRevision: trip.revision, summary, patches });
     },
     dismiss() { const s = state(); if (s) { delete s.proposal; delete s.base; } publish(); },
+    async saveConditions(proposal: TripUpdateProposal) {
+      const s = state(), trip = current();
+      if (!s || !trip || s.confirming || !s.source.confirmProposal) throw new Error("旅程を保存できません");
+      if (s.source.getRole?.() === "viewer") throw new TripWriteRejected("この旅程は閲覧専用です");
+      if (proposal.tripId !== trip.id || proposal.baseRevision !== trip.revision) throw new TripRevisionConflict();
+      if (!proposal.patches.length || proposal.patches.some(patch => patch.type !== "request")) throw new Error("条件以外の変更は保存できません");
+      applyTripProposal(trip, proposal);
+      assertItineraryEditingAllowed(trip, proposal);
+      s.confirming = true;
+      try { await s.source.confirmProposal(structuredClone(proposal)); }
+      finally { s.confirming = false; publish(); }
+    },
     canConfirm() { return state()?.source.getRole?.() !== "viewer" && !!state()?.source.confirmProposal; },
     async confirm(confirmation?: TripProposalConfirmation) {
       const s = state(), trip = current(), selectedSession = sessionId;

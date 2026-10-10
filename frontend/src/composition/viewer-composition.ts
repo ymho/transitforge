@@ -662,7 +662,7 @@ const consultationScreen = configureConsultationScreen(aiGuidePanel, aiGuideMess
     const left = tripWorkspaceController.subscribe(listener), right = profileUi.subscribe(listener), draft = conversationUi.subscribe(listener);
     return () => { left(); right(); draft(); };
   },
-  preview: (proposal) => { tripWorkspaceController.preview(proposal); tripWorkspace.show("trip"); },
+  save: (proposal) => tripWorkspaceController.saveConditions(proposal),
   showTrip: () => { if (tripWorkspaceController.current()) tripWorkspace.show("trip"); },
   newConversation: () => { primaryShell?.navigate("chat"); },
 

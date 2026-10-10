@@ -63,3 +63,16 @@ describe("Trip workspace read/proposal host", () => {
     expect(after.items.slice(0, 2)).toEqual(trip.items.slice(0, 2)); expect(trip).toEqual(before);
   });
 });
+
+it("saves conditions directly through the host without creating a preview and rejects other or stale changes", async () => {
+  let trip = multiCityTrip(); const before = structuredClone(trip.items);
+  const c = createTripWorkspaceController("one");
+  c.attach("one", { getCurrentTrip: () => trip, confirmProposal: async p => { trip = { ...applyTripProposal(trip, p), revision: trip.revision + 1 }; } });
+  const proposal = { tripId: trip.id, baseRevision: trip.revision, summary: "条件変更", patches: [{ type: "request" as const, request: { ...trip.request, goal: "新しい目的" } }] };
+  await c.saveConditions(proposal);
+  expect(trip.request.goal).toBe("新しい目的"); expect(trip.items).toEqual(before); expect(c.proposal()).toBeUndefined();
+  await expect(c.saveConditions(proposal)).rejects.toThrow();
+  await expect(c.saveConditions({ ...proposal, baseRevision: trip.revision, patches: [{ type: "remove", itemId: "activity" }] })).rejects.toThrow("条件以外");
+  c.attach("one", { getCurrentTrip: () => trip, getRole: () => "viewer", confirmProposal: async () => { throw new Error("must not write"); } });
+  await expect(c.saveConditions({ ...proposal, baseRevision: trip.revision })).rejects.toThrow("閲覧専用");
+});

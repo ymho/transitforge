@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from "vitest";
 import { configureConsultationScreen } from "./consultation-screen";
-import { createTrip } from "@raiquora/trip/trip";
+import { createTrip, type TripUpdateProposal } from "@raiquora/trip/trip";
 
 beforeEach(() => { document.body.innerHTML = '<section class="ai-guide-panel"><header>旧見出し<div class="guide-panel-actions"></div></header><ol id="messages"></ol><form><input><button type="submit">送信</button></form></section>'; });
 function setup(bound = true) {
@@ -11,12 +11,12 @@ function setup(bound = true) {
   });
   const panel = document.querySelector<HTMLElement>("section")!, messages = document.querySelector("ol")!, form = document.querySelector("form")!, input = document.querySelector("input")!;
   let current = bound ? trip : undefined, sessionId = "session-a", changed = () => {};
-  const preview = vi.fn(), showTrip = vi.fn(), submit = vi.fn((e: Event) => e.preventDefault()); form.addEventListener("submit", submit);
+  const save = vi.fn(async (_proposal: TripUpdateProposal) => {}), showTrip = vi.fn(), submit = vi.fn((e: Event) => e.preventDefault()); form.addEventListener("submit", submit);
   const screen = configureConsultationScreen(panel, messages, form, input, {
     read: () => ({ trip: current, sessionId }), profile: () => undefined, subscribe: (f) => { changed = f; return () => {}; },
-    preview, showTrip, newConversation: vi.fn(),
+    save, showTrip, newConversation: vi.fn(),
   });
-  return { trip, panel, messages, form, input, preview, showTrip, submit, screen, setTrip: (value: typeof trip) => { current = value; changed(); }, switch: () => { current = undefined; sessionId = "session-b"; changed(); } };
+  return { trip, panel, messages, form, input, save, showTrip, submit, screen, setTrip: (value: typeof trip) => { current = value; changed(); }, switch: () => { current = undefined; sessionId = "session-b"; changed(); } };
 }
 it("uses the explicit bound Trip and preserves message/composer nodes and listeners", () => {
   const f = setup(); expect(f.panel.classList.contains("ai-guide-panel")).toBe(false);
@@ -45,7 +45,7 @@ it("shows persisted partial people and budget without inventing missing details"
   });
   const panel = document.querySelector<HTMLElement>("section")!, messages = document.querySelector("ol")!, form = document.querySelector("form")!, input = document.querySelector("input")!;
   configureConsultationScreen(panel, messages, form, input, { read: () => ({ trip, sessionId: "partial" }), profile: () => undefined,
-    subscribe: () => () => {}, preview: vi.fn(), showTrip: vi.fn(), newConversation: vi.fn() });
+    subscribe: () => () => {}, save: vi.fn(), showTrip: vi.fn(), newConversation: vi.fn() });
   expect(panel.textContent).toContain("3人（内訳未定）");
   expect(panel.textContent).toContain("500（通貨未定）（対象未定）");
   expect(panel.textContent).not.toContain("大人3人");
@@ -57,9 +57,9 @@ it("direct origin edit produces a revision-bound Proposal, never mutates Trip or
   f.panel.querySelector<HTMLButtonElement>('[aria-label="出発地を編集"]')!.click();
   const editor = f.panel.querySelector<HTMLFormElement>(".consultation-condition-editor")!;
   editor.querySelector("input")!.value = "大阪"; editor.dispatchEvent(new Event("submit", { cancelable: true }));
-  expect(f.preview).toHaveBeenCalledOnce(); const proposal = f.preview.mock.calls[0]![0];
+  expect(f.save).toHaveBeenCalledOnce(); const proposal = f.save.mock.calls[0]![0];
   expect(proposal.tripId).toBe(f.trip.id); expect(proposal.baseRevision).toBe(0);
-  expect(proposal.patches[0].request.constraints[0].requirement.place).toEqual({ name: "大阪", sources: [] });
+  expect(proposal.patches[0]).toMatchObject({ type: "request", request: { constraints: [{ requirement: { place: { name: "大阪", sources: [] } } }] } });
   expect(JSON.stringify(f.trip)).toBe(before);
 });
 it("keeps condition content concise and groups secondary actions underneath", () => {
@@ -76,7 +76,7 @@ it("keeps condition content concise and groups secondary actions underneath", ()
 it("stale editor cannot submit into another session and mobile conditions close via Escape", () => {
   const f = setup(); f.panel.querySelector<HTMLButtonElement>('[aria-label="出発地を編集"]')!.click();
   const stale = f.panel.querySelector(".consultation-condition-editor")!; f.switch();
-  stale.dispatchEvent(new Event("submit", { cancelable: true })); expect(f.preview).not.toHaveBeenCalled();
+  stale.dispatchEvent(new Event("submit", { cancelable: true })); expect(f.save).not.toHaveBeenCalled();
   const toggle = f.panel.querySelector<HTMLButtonElement>(".consultation-conditions-toggle")!; toggle.click(); expect(toggle.getAttribute("aria-expanded")).toBe("true");
   f.panel.querySelector("aside")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); expect(toggle.getAttribute("aria-expanded")).toBe("false");
 });
@@ -131,5 +131,30 @@ it("omits unset conditions and manual condition creation for a bound trip", () =
   expect(f.panel.textContent).not.toContain("まだ決まっていません");
   expect(f.panel.textContent).not.toContain("人数は未設定");
   expect(f.panel.querySelector(".consultation-add-condition")).toBeNull();
-  expect(f.preview).not.toHaveBeenCalled();
+  expect(f.save).not.toHaveBeenCalled();
+});
+
+it("saves from the editor without navigation and blocks duplicate submissions while pending", async () => {
+  const f = setup(); let finish!: () => void;
+  f.save.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  f.panel.querySelector<HTMLButtonElement>('[aria-label="出発地を編集"]')!.click();
+  const editor = f.panel.querySelector<HTMLFormElement>(".consultation-condition-editor")!;
+  editor.querySelector("input")!.value = "大阪";
+  expect(editor.querySelector('button[type="submit"]')!.textContent).toBe("保存");
+  editor.dispatchEvent(new Event("submit", { cancelable: true }));
+  editor.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(f.save).toHaveBeenCalledOnce(); expect(f.showTrip).not.toHaveBeenCalled();
+  expect(editor.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+  finish(); await vi.waitFor(() => expect(f.panel.querySelector(".consultation-condition-editor")).toBeNull());
+  expect(f.panel.textContent).not.toContain("変更案を確認");
+});
+it("retains input and enables retry after a failed save", async () => {
+  const f = setup(); f.save.mockRejectedValueOnce(new Error("通信に失敗しました"));
+  f.panel.querySelector<HTMLButtonElement>('[aria-label="出発地を編集"]')!.click();
+  const editor = f.panel.querySelector<HTMLFormElement>(".consultation-condition-editor")!;
+  editor.querySelector("input")!.value = "大阪"; editor.dispatchEvent(new Event("submit", { cancelable: true }));
+  await vi.waitFor(() => expect(f.panel.textContent).toContain("保存できませんでした"));
+  expect(editor.querySelector("input")!.value).toBe("大阪");
+  expect(editor.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
+  expect(f.showTrip).not.toHaveBeenCalled();
 });
