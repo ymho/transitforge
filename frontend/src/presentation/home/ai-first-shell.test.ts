@@ -350,3 +350,16 @@ it("consumes the pending send on authentication notification without retrying a 
   expect(document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value).toBe("京都へ");
   f.shell.dispose();
 });
+
+it("dismisses trip menus outside their own bounds and unregisters on dispose", () => {
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
+  const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "検証" }), read: () => ({ state: "available", trips: [trip] }) });
+  shell.navigate("trips");
+  const menu = document.querySelector<HTMLDetailsElement>(".home-trip-manage")!;
+  menu.open = true; menu.querySelector("summary")!.dispatchEvent(new Event("click", { bubbles: true })); expect(menu.open).toBe(true);
+  document.body.click(); expect(menu.open).toBe(false);
+  const header = document.createElement("details"); header.className = "trip-header-management";
+  document.querySelector("main")!.append(header); header.open = true;
+  document.body.click(); expect(header.open).toBe(false);
+  shell.dispose(); header.open = true; document.body.click(); expect(header.open).toBe(true);
+});

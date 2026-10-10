@@ -171,3 +171,27 @@
 }
 @media (max-width:62rem) { #app[data-primary-view]:is([data-primary-view]) .trip-library-entries { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width:44rem) { #app[data-primary-view]:is([data-primary-view]) .trip-library-entries { grid-template-columns: 1fr; } }
+
+/* The composer owns its focus ring, so it follows the visible rounded frame. */
+#app[data-primary-view]:is([data-primary-view]) {
+  & :is(.home-prompt,.consultation-composer):focus-within { outline: 2px solid var(--tf-blue); outline-offset: 3px; }
+  & :is(.home-prompt,.consultation-composer) :is(input,textarea):focus-visible { outline: none; }
+  & .consultation-composer-dock:focus-within { outline: 2px solid var(--tf-blue); outline-offset: 3px; }
+  & .consultation-composer-dock .consultation-composer:focus-within { outline: none; }
+}
+@media (min-width:62.001rem) {
+  #app[data-primary-view="chat"][data-consultation-mode="landing"]:is([data-primary-view]) {
+    & .product-nav { background: transparent; border: 0; box-shadow: none; }
+    & .product-nav :is(a,button) { color: #fff; }
+    & .product-nav [aria-current="page"] { background: #ffffff26; color: #fff; }
+    & .product-nav [data-account] { border-color: #ffffff55; }
+    & .product-nav .kaiho-logo { color: #fff; }
+    & .product-nav .kaiho-logo-ai { background: #fff; color: #68716e; }
+  }
+  #app[data-primary-view="map"]:is([data-primary-view]) {
+    --product-header-height: 0px;
+    & .product-nav { background: transparent; border: 0; box-shadow: none; }
+    & .product-nav :is(a,button) { background: #ffffffb3; color: #37675f; backdrop-filter: blur(8px); }
+    & .product-nav [aria-current="page"] { background: #fcf0edd9; color: var(--tf-blue); }
+  }
+}
