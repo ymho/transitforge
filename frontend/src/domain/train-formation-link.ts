@@ -91,7 +91,7 @@ function addKansaiAirportKishujiLinks(
     const airportNumber = numericTrainNumber(airportTrain.train_no);
     if (
       airportNumber === undefined ||
-      !airportTrain.service_type.includes("関空快速")
+      !/関空(?:紀州路)?快速/u.test(airportTrain.service_type)
     ) {
       continue;
     }

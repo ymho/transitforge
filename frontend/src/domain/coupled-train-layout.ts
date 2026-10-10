@@ -88,7 +88,7 @@ export function coupledTrainLayouts(
   const kansaiAirportRapid = linkedPositions
     .filter(
       ({ serviceUid, serviceType }) =>
-        !pairedServiceUids.has(serviceUid) && serviceType.includes("関空快速"),
+        !pairedServiceUids.has(serviceUid) && /関空(?:紀州路)?快速/u.test(serviceType),
     )
     .sort(compareServiceUid);
   const kishujiRapid = linkedPositions

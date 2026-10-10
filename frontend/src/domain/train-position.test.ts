@@ -5,7 +5,7 @@ import type { Train } from "@raiquora/train/train";
 import {
   activeTrainPositions,
   destinationCoordinateForTrain,
-  freezeLongTimeStoppingPositions,
+  LongTimeStoppingPositionTracker,
   interpolatedRouteMeter,
   PathGeometryIndex,
   positionForTrain,
@@ -79,38 +79,32 @@ describe("train position", () => {
     ).toMatchObject({ routeMeter: 100, coordinate: [136, 34] });
   });
 
-  it("keeps a long-time-stopping train at its previously displayed position", () => {
-    const previous = {
-      serviceUid: "service-a",
-      trainNo: "1A",
-      serviceType: "普通",
-      routeMeter: 80,
-      coordinate: [135.8, 34] as [number, number],
-      bearingRadians: 0,
-    };
-    const moving = { ...previous, routeMeter: 100, coordinate: [136, 34] as [number, number] };
+  it("anchors a newly stopped train after applying delay, and resumes when released", () => {
+    const tracker = new LongTimeStoppingPositionTracker();
+    const geometry = new PathGeometryIndex([path]);
+    const moving = activeTrainPositions([train], geometry, 1450);
+    tracker.update(moving, new Map());
+    const delayed = activeTrainPositions([train], geometry, 1450, new Map([[train.train_no, 10]]));
+    const stopped = new Map([[train.service_uid, { delayMinutes: 10, destination: train.destination_station }]]);
+    expect(tracker.update(delayed, stopped)).toEqual(delayed);
+    const later = activeTrainPositions([train], geometry, 1455, new Map([[train.train_no, 10]]));
+    expect(tracker.update(later, stopped)).toEqual(delayed);
+    expect(tracker.update([], new Map(stopped))).toEqual(delayed);
+    expect(tracker.update(later, new Map())).toEqual(later);
+  });
 
-    expect(freezeLongTimeStoppingPositions(
-      [moving],
-      [previous],
-      new Set(["service-a"]),
-    )).toEqual([previous]);
-    expect(freezeLongTimeStoppingPositions(
-      [moving],
-      [previous],
-      new Set(),
-    )).toEqual([moving]);
-    expect(freezeLongTimeStoppingPositions(
-      [],
-      [previous],
-      new Set(["service-a"]),
-    )).toEqual([previous]);
-    expect(freezeLongTimeStoppingPositions(
-      [],
-      [previous],
-      new Set(["service-a"]),
-      new Set(["service-a"]),
-    )).toEqual([]);
+  it("reanchors a stopped train when its delay or destination changes", () => {
+    const tracker = new LongTimeStoppingPositionTracker();
+    const geometry = new PathGeometryIndex([path]);
+    const state = { delayMinutes: 10, destination: train.destination_station };
+    const first = activeTrainPositions([train], geometry, 1450, new Map([[train.train_no, 10]]));
+    tracker.update(first, new Map([[train.service_uid, state]]));
+    const delayed = activeTrainPositions([train], geometry, 1455, new Map([[train.train_no, 20]]));
+    expect(tracker.update(delayed, new Map([[train.service_uid, { ...state, delayMinutes: 20 }]]))).toEqual(delayed);
+    const changed = activeTrainPositions([train], geometry, 1456, new Map([[train.train_no, 20]]));
+    expect(tracker.update(changed, new Map([[train.service_uid, { delayMinutes: 20, destination: "途中駅" }]]))).toEqual(changed);
+    expect(tracker.update([], new Map())).toEqual([]);
+    expect(tracker.update(first, new Map([[train.service_uid, state]]))).toEqual(first);
   });
 
   it("removes a destination-changed train when it reaches the new destination", () => {

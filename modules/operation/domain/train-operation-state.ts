@@ -68,16 +68,15 @@ export function operationsWithTimetableTrainNumberAliases(
   }
   const resolved = new Map(operations);
   for (const train of timetableTrains) {
-    if (resolved.has(train.train_no)) {
-      continue;
-    }
     const alias = realtimeTrainNumberAlias(train);
-    const operation = alias ? operations.get(alias) : undefined;
-    if (operation && !operation.sources.includes("osakaloop")) {
+    const operation = resolved.get(train.train_no) ?? (alias ? operations.get(alias) : undefined);
+    if (!resolved.has(train.train_no) && operation && !operation.sources.includes("osakaloop")) {
       continue;
     }
     if (operation) {
-      resolved.set(train.train_no, operation);
+      const destination = operation.destination ? operationDestination(train, operation) : operation.destination;
+      resolved.set(train.train_no, destination === operation.destination
+        ? operation : { ...operation, destination });
     }
   }
   return resolved;
@@ -144,8 +143,7 @@ export function operationsWithCoupledTrainOperations(
       delayMinutes,
       destination:
         changedDestination ??
-        leftOperation?.destination ??
-        left.destination_station,
+        (leftOperation ? operationDestination(left, leftOperation) : left.destination_station),
       sources: effectiveSources,
       longTimeStopping,
     });
@@ -153,8 +151,7 @@ export function operationsWithCoupledTrainOperations(
       delayMinutes,
       destination:
         changedDestination ??
-        rightOperation?.destination ??
-        right.destination_station,
+        (rightOperation ? operationDestination(right, rightOperation) : right.destination_station),
       sources: effectiveSources,
       longTimeStopping,
     });
@@ -167,7 +164,7 @@ export function trainWithOperation(
   operation: TrainOperation,
   destinationChanged = false,
 ): Train {
-  const destination = operation.destination || train.destination_station;
+  const destination = operationDestination(train, operation);
   if (
     normalizeStationName(destination) ===
     normalizeStationName(train.destination_station)
@@ -297,8 +294,20 @@ function stopsThroughDestination(
   return stops.slice(0, lastDestinationIndex + 1);
 }
 
+function operationDestination(train: Train, operation: TrainOperation): string {
+  const destination = operation.destination.trim();
+  const combinedDirection = destination.replace(/\s/gu, "");
+  if (
+    /関空(?:紀州路)?快速|紀州路快速/u.test(train.service_type) &&
+    /^関西空港[／/]和歌山(?:方面)?$/u.test(combinedDirection)
+  ) {
+    return train.destination_station;
+  }
+  return destination || train.destination_station;
+}
+
 function realtimeTrainNumberAlias(train: Train): string | undefined {
-  if (!train.service_type.includes("関空快速")) {
+  if (!/関空(?:紀州路)?快速/u.test(train.service_type)) {
     return undefined;
   }
   const match = /^(\d+)M$/u.exec(train.train_no);

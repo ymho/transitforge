@@ -147,6 +147,34 @@ describe("train operation state", () => {
     expect(resolved?.has("4204M")).toBe(false);
   });
 
+  it("uses individual timetable destinations only for the combined airport/Kishuji direction", () => {
+    const airport = coupledTrain("airport", "4127M", "関西空港");
+    const kishuji = coupledTrain("kishuji", "4527H", "和歌山");
+    const resolved = operationsWithCoupledTrainOperations(
+      [airport, kishuji],
+      operationsWithTimetableTrainNumberAliases([airport, kishuji], new Map([
+        ["4127M", operation(12, " 関西空港/和歌山方面  ", "hanwahagoromo")],
+        ["4527H", operation(8, "関西空港／和歌山方面", "hanwahagoromo")],
+      ])),
+      coupledLinks(),
+    );
+    expect(trainsForOperations([airport, kishuji], resolved).map((train) => train.destination_station)).toEqual(["関西空港", "和歌山"]);
+    expect(resolved?.get("4127M")?.destination).toBe("関西空港");
+    expect(resolved?.get("4527H")?.destination).toBe("和歌山");
+    expect(destinationChangedServiceUids([airport, kishuji], resolved).size).toBe(0);
+  });
+
+  it("keeps actual realtime destinations and supports combined service number aliases", () => {
+    const trains = [train("4237M", "関西空港", "関空紀州路快速")];
+    const resolved = operationsWithTimetableTrainNumberAliases(trains, new Map([
+      ["4237", operation(3, "日根野", "osakaloop")],
+    ]));
+    expect(trainsForOperations(trains, resolved)[0].destination_station).toBe("日根野");
+    expect(trainsForOperations([train("100A", "姫路")], new Map([
+      ["100A", operation(3, "大阪", "source-a")],
+    ]))[0].destination_station).toBe("大阪");
+  });
+
   it("shares the largest delay across a coupled airport and Kishuji formation", () => {
     const airport = coupledTrain("airport", "4127M", "関西空港");
     const kishuji = coupledTrain("kishuji", "4527H", "和歌山");

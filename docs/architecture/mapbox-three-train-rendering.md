@@ -92,6 +92,7 @@ flowchart LR
 - 同一列車の続きと実際の併結は別の種別として保持する
 - 連結した二つの表示は半分ずつとし 全体を単一列車と同じ長さにする
 - 離れた場所にある同じ列車番号は連結しない
+- 関空・紀州路快速の併結区間は編成全体の混雑を中央の棒1本で表示する。個々の半車体の前後オフセットを棒へ加えない
 
 編成の増解結を伴わない単純な時刻表分割は同時表示せず
 その時点で運行中の区間だけを表示する
@@ -107,6 +108,7 @@ flowchart LR
 ## 実装場所と確認方法
 
 - 実装: `frontend/src/presentation/train-viewer/rendering/mapbox-three-train-layer.ts`
+- 混雑データの番号対応・共有棒の選択: `frontend/src/domain/train-congestion-layout.ts`
 - 行先アーチの純粋な高さ・頂点計算: `frontend/src/domain/destination-arc-geometry.ts`
 - WebGLに依存しない行先アーチ計算は単体テストし、描画クラスはMapbox・Three.jsへの
   データ反映に専念する。
