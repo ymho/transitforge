@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import { confirmAction } from "../shared/app-dialog";
 import type { Trip } from "@raiquora/trip/trip";
 import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
@@ -26,7 +27,7 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
   const close = () => { ++generation; pending = undefined; clearLink(); input.value = ""; expiry.value = ""; updateExpiry(); dialog.close(); };
   async function action(work: () => Promise<void>, announce = true) {
     if (busy) return; busy = true; const epoch = generation; setLoadingStatus(status, "処理しています。", true);
-    try { await work(); if (epoch === generation) status.textContent = announce ? "更新しました。" : ""; }
+    try { await work(); if (epoch === generation) { status.textContent = ""; if (announce) notifySaved(dialog.ownerDocument, "共有設定を更新しました。"); } }
     catch { if (epoch === generation) status.textContent = "共有操作を完了できません。認証・権限・期限・接続を確認し、再読み込みしてください。"; }
     finally { busy = false; if (epoch === generation) status.setAttribute("aria-busy", "false"); }
   }
@@ -55,7 +56,7 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
     if (!link.value || busy) return;
     const value = link.value, epoch = generation;
     void dialog.ownerDocument.defaultView?.navigator.clipboard?.writeText(value).then(() => {
-      if (epoch === generation && link.value === value) status.textContent = "コピーしました。";
+      if (epoch === generation && link.value === value) notifySaved(dialog.ownerDocument, "コピーしました。");
     }).catch(() => { if (epoch === generation) { link.focus(); link.select(); status.textContent = "コピーできませんでした。リンクを選択してコピーしてください。"; } });
     if (!dialog.ownerDocument.defaultView?.navigator.clipboard) { link.focus(); link.select(); status.textContent = "リンクを選択してコピーしてください。"; }
   });
@@ -98,7 +99,7 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
     const epoch = generation;
     if (options.authenticated && !options.authenticated()) { if (!options.login) throw new Error("Authentication required"); await options.login(value); return; }
     const result = await options.client.redeem(value); pending = undefined;
-    if (epoch !== generation) return; await options.navigate(result.tripId); close();
+    if (epoch !== generation) return; notifySaved(dialog.ownerDocument, "共有旅程に参加しました。"); await options.navigate(result.tripId); close();
   }); });
   const refresh = () => action(async () => { const epoch = generation; const current = options.current(); management.hidden = Boolean(pending) || current?.role !== "owner"; if (!management.hidden) await manage();
     officialActions.hidden = true; if (!pending && options.official && current?.role === "owner" && current.trip && await options.official.officialCapabilities() && epoch === generation && options.current()?.tripId === current.tripId) officialActions.hidden = false; }, false);

@@ -78,3 +78,15 @@ it("retains a chosen candidate as a Trip memo with its cited retrieval time and 
   expect(() => proposeTripItemChange(current, { action: "add-researched-activity", itemId: "bad", dayKey,
     title: "庭園", category: "sightseeing", sourceUrl: "https://example.org/", observedAt: "2026-09-99T10:00:00Z" })).toThrow();
 });
+
+it("saves and clears multiline plain text without changing confirmed itinerary semantics", () => {
+  const current = { ...trip(), adoption: { confirmedAt: at }, items: trip().items.map(item => ({ ...item, decision: { confirmedAt: at } })) };
+  const text = "持ち物\n<script>alert(1)</script> **そのまま**";
+  const updated = applyTripProposal(current, proposeTripItemChange(current, { action: "set-memo", itemId: "shrine", memo: text }));
+  expect(updated.items[0]).toEqual({ ...current.items[0], memo: text });
+  expect(updated.adoption).toEqual(current.adoption);
+  expect(updated.items[1]).toEqual(current.items[1]);
+  expect(applyTripProposal(updated, proposeTripItemChange(updated, { action: "set-memo", itemId: "shrine", memo: "  " })).items[0]).not.toHaveProperty("memo");
+  expect(() => proposeTripItemChange(current, { action: "set-memo", itemId: "missing", memo: text })).toThrow();
+  expect(() => proposeTripItemChange(current, { action: "set-memo", itemId: "shrine", memo: "a".repeat(4001) })).toThrow();
+});

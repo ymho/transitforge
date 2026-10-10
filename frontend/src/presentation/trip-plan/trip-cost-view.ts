@@ -28,9 +28,10 @@ export function renderItemCost(trip: Trip, item: ItineraryItem, controller: Trip
     // A reference minimum is not the user's total; do not prefill it as one.
     input.value = cost?.source === "user" ? formatMoney(cost.amount).split(" ")[1]!.replaceAll(",", "") : "";
     for (const code of Object.keys(currencyMinorUnits)) currency.append(option(code, code));
-    currency.value = cost?.amount.currency ?? "JPY"; label.append(input);
+    currency.value = cost?.amount.currency ?? "JPY";
+    const amount = element("div", "trip-cost-input-group"); amount.append(input, currency); label.append(amount);
     const submit = element("button", "", "変更案を確認"); submit.type = "submit";
-    form.append(label, currency, submit, control("取消", () => { form.remove(); edit.focus(); }));
+    form.append(label, submit, control("取消", () => { form.remove(); edit.focus(); }));
     if (cost?.source === "user") form.append(control("入力を削除", () => {
       if (!current()) { report("旅程が更新されました。最新の予定から入力し直してください。"); return; }
       controller.propose(`${item.title}の概算費用を削除`, [editItemCost(trip, item.id)]); form.remove();

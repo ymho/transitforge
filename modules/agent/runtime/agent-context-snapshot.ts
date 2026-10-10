@@ -47,6 +47,7 @@ export interface AgentContextSnapshot {
 }
 
 export interface AgentTripScheduleItem {
+  readonly memo?: string;
   bookingStatus?: "booked" | "not-required";
   bookingSemantics?: "user-mark-not-provider-verified";
   weather?: TripItemWeather;
@@ -119,13 +120,13 @@ export function selectedTripItemSnapshot(item: ItineraryItem, trip?: Trip): Agen
 }
 function selectedTripItemCore(item: ItineraryItem): AgentTripScheduleItem {
       const schedule = structuredClone(item.schedule);
-      if (item.type === "activity") return { itemId: item.id, type: "activity", schedule,
+      if (item.type === "activity") return { ...(item.memo ? { memo: item.memo } : {}), itemId: item.id, type: "activity", schedule,
         category: item.category, summary: bounded(item.title, 100)!,
         ...(item.place ? { placeName: bounded(item.place.name, 100) } : {}),
         ...(item.research ? { researchObservedAt: item.research.observedAt, researchSourceUrl: item.research.sourceUrl } : {}) };
       if (item.type === "stay") {
         const place = item.selection.status === "selected" ? item.selection.accommodation.place : item.selection.place;
-        return { itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,
+        return { ...(item.memo ? { memo: item.memo } : {}), itemId: item.id, type: "stay", schedule, selectionStatus: item.selection.status,
           ...(item.selection.status === "selected" && item.selection.accommodation.observedPrice ? {
             observedPrice: structuredClone(item.selection.accommodation.observedPrice),
             priceSemantics: "retained-selection-observation-not-current-price",
@@ -133,12 +134,12 @@ function selectedTripItemCore(item: ItineraryItem): AgentTripScheduleItem {
           summary: bounded(place?.name ?? item.title, 100) ?? "宿泊",
           ...(place ? { placeName: bounded(place.name, 100), area: bounded(place.area, 100) } : {}) };
       }
-      if (item.detail.status === "unresolved") return { itemId: item.id, type: "transport", schedule, mode: item.detail.mode, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
-      if (item.detail.mode !== "rail") return { itemId: item.id, type: "transport", schedule, mode: item.detail.mode,
+      if (item.detail.status === "unresolved") return { ...(item.memo ? { memo: item.memo } : {}), itemId: item.id, type: "transport", schedule, mode: item.detail.mode, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
+      if (item.detail.mode !== "rail") return { ...(item.memo ? { memo: item.memo } : {}), itemId: item.id, type: "transport", schedule, mode: item.detail.mode,
         origin: item.detail.origin.name, destination: item.detail.destination.name, provenanceType: item.detail.provenance.type,
         selectionStatus: "selected", summary: bounded(item.title, 100) ?? "移動" };
       const journey = item.detail.journey;
-      return { itemId: item.id, type: "transport", schedule, selectionStatus: "selected", mode: "rail", provenanceType: "verified_timetable",
+      return { ...(item.memo ? { memo: item.memo } : {}), itemId: item.id, type: "transport", schedule, selectionStatus: "selected", mode: "rail", provenanceType: "verified_timetable",
         origin: journey.legs[0]!.origin.name, destination: journey.legs.at(-1)!.destination.name,
         summary: `${bounded(journey.legs[0]!.origin.name, 80)}→${bounded(journey.legs.at(-1)!.destination.name, 80)}（計画 ${journey.legs[0]!.scheduledDeparture.at} → ${journey.legs.at(-1)!.scheduledArrival.at}）`,
         date: journey.serviceDate };

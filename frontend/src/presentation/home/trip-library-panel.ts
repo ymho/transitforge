@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
 import type { OfficialGuide } from "@raiquora/trip/official-guide";
 import { tripCoverImage } from "../shared/trip-cover";
@@ -85,7 +86,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
     let busy = false; const id = crypto.randomUUID();
     form.addEventListener("submit", event => { event.preventDefault(); if (disposed || session !== options.session() || !options.authenticated() || busy || !form.reportValidity()) return; busy = true; submit.disabled = true; feedback.innerHTML = loadingMarkup("旅程を作っています。");
       void client.officialImport(guide, id, start.value, Number(adults.value), Number(children.value)).then(async trip => {
-        if (session !== options.session() || !dialog.isConnected) return; await options.openTrip(trip.id); dialog.close(); dialog.remove();
+        if (session !== options.session() || !dialog.isConnected) return; notifySaved(document, "旅程を追加しました。"); await options.openTrip(trip.id); dialog.close(); dialog.remove();
       }).catch(() => { feedback.textContent = "旅程を作成・表示できませんでした。公開状態と入力を確認して再試行してください。"; }).finally(() => { busy = false; submit.disabled = false; });
     });
     dialogs.add(dialog); dialog.addEventListener("cancel", () => { dialog.remove(); dialogs.delete(dialog); });

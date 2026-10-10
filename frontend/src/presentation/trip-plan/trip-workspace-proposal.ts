@@ -81,7 +81,7 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
     const server = controller.source()?.confirmationPersistence === "server";
     const confirm = control(server ? "確認して旅程を保存" : "確認して、この画面内に反映", () => {
       confirm.disabled = true;
-      void controller.confirm(needsConsent && consent.checked ? { reservationChangeKey: key, replanConfirmationKey: replan?.confirmationKey } : undefined).then(() => report(server ? controller.loadState() === "loaded" ? "旅程を保存しました。" : "保存後の最新旅程を取得できません。再読み込みしてください。" : "この画面内に反映しました。永続保存はしていません。"))
+      void controller.confirm(needsConsent && consent.checked ? { reservationChangeKey: key, replanConfirmationKey: replan?.confirmationKey } : undefined).then(() => report(server ? controller.loadState() === "loaded" ? "" : "保存後の最新旅程を取得できません。再読み込みしてください。" : "この画面内に反映しました。永続保存はしていません。"))
         .catch((error: unknown) => { confirm.disabled = false; report(error instanceof TripNotFeasible ? "最新情報では旅程が不成立または未確認です。成立性の表示と変更案を確認し直してください。" : error instanceof Error ? error.message : "変更案を確認できませんでした"); });
     });
     confirm.classList.add("trip-primary-action");

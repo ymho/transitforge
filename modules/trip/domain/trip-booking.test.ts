@@ -22,6 +22,8 @@ it("keeps a mark on title changes but removes it on date/target changes and does
  const marked = { ...trip(), adoption: { confirmedAt: "2026-10-10T00:00:00Z" }, items: [{ ...item, bookingStatus: "booked" as const }] };
  const apply = (patches: TripPatch[]) => applyTripProposal(marked, { tripId: marked.id, baseRevision: 0, summary: "変更", patches });
  expect(apply([{ type: "replace", itemId: item.id, item: { ...marked.items[0]!, title: "宿" } }]).items[0]!.bookingStatus).toBe("booked");
+ expect(apply([{ type: "item_memo", itemId: item.id, memo: "集合場所" }]).items[0]!.bookingStatus).toBe("booked");
+ expect(apply([{ type: "replace", itemId: item.id, item: { ...marked.items[0]!, memo: "集合場所" } }]).items[0]!.bookingStatus).toBe("booked");
  expect(apply([{ type: "replace", itemId: item.id, item: { ...marked.items[0]!, schedule: { ...item.schedule, date: "2026-10-13" } } }]).items[0]!.bookingStatus).toBeUndefined();
  expect(apply([{ type: "item_booking", itemId: item.id, status: "not-required" }]).adoption?.needsReconfirmation).toBeUndefined();
 });

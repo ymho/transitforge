@@ -253,17 +253,17 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(button(f.ui.nav, "旅程").getAttribute("aria-pressed")).toBe("true");
     expect(f.app.contains(f.chat)).toBe(true); expect(f.ui.panel.querySelectorAll(".trip-order-preview")).toHaveLength(1);
   });
-  it("direct edits only preview, then update one card at explicit in-memory confirmation", async () => {
-    let trip = multiCityTrip(); const f = setup({ getCurrentTrip: () => trip, confirmProposal: async (p) => { trip = applyTripProposal(trip, p); } });
+  it("renames an item through the popup and saves without a separate proposal panel", async () => {
+    let trip = multiCityTrip(); const f = setup({ getCurrentTrip: () => trip, confirmProposal: async p => { trip = applyTripProposal(trip, p); } });
     const oldHotel = f.ui.panel.querySelector('[data-item-id="hotel"]');
     const activity = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
-    activity.querySelector<HTMLButtonElement>(".trip-item-rename")!.click(); const editor = activity.querySelector<HTMLFormElement>(".trip-workspace-editor")!, input = editor.querySelector("input")!;
-    expect(document.activeElement).toBe(input); input.value = "ゆっくり散策"; editor.dispatchEvent(new Event("submit", { cancelable: true }));
-    expect(trip.items[2]?.title).toBe("Zürich"); expect(f.ui.panel.textContent).toContain("変更後");
-    button(f.ui.panel, "確認して、この画面内に反映").click(); await vi.waitFor(() => expect(trip.items[2]?.title).toBe("ゆっくり散策"));
+    activity.querySelector<HTMLButtonElement>(".trip-item-rename")!.click();
+    const input = document.querySelector<HTMLInputElement>("dialog.app-dialog input")!;
+    expect(document.activeElement).toBe(input); expect(input.value).toBe("Zürich");
+    input.value = "ゆっくり散策"; document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
+    await vi.waitFor(() => expect(trip.items[2]?.title).toBe("ゆっくり散策"));
+    expect(f.controller.proposal()).toBeUndefined(); expect(activity.querySelector(".trip-workspace-editor")).toBeNull();
     expect(f.ui.panel.querySelector('[data-item-id="hotel"]')).toBe(oldHotel);
-    expect(oldHotel?.querySelector(".trip-workspace-move-target")).toBeNull();
-    await vi.waitFor(() => expect(f.ui.panel.querySelector('[role="status"]')?.textContent).toContain("永続保存はしていません"));
   });
   it("remove/move use the shared proposal path and consultation sends intent with focus", () => {
     const trip = multiCityTrip(), f = setup({ getCurrentTrip: () => trip });
@@ -361,6 +361,23 @@ it("deletes only after confirmation without showing a proposal panel, and preser
   await Promise.resolve();
   await vi.waitFor(() => expect(f.controller.proposal()).toBeUndefined());
   expect(trip.items).toHaveLength(2);
+});
+
+it("saves item memo directly as plain text and gives viewers a read-only field", async () => {
+  let trip = multiCityTrip();
+  const save = vi.fn(async p => { trip = { ...applyTripProposal(trip, p), revision: trip.revision + 1 }; });
+  const f = setup({ getCurrentTrip: () => trip, confirmProposal: save });
+  const form = f.ui.panel.querySelector<HTMLFormElement>('[data-item-id="activity"] .trip-item-memo')!;
+  form.querySelector("textarea")!.value = "集合場所\n<script>unsafe()</script> **そのまま**";
+  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  await vi.waitFor(() => expect(trip.items[2]?.memo).toBe("集合場所\n<script>unsafe()</script> **そのまま**"));
+  expect(f.controller.proposal()).toBeUndefined(); expect(f.ui.panel.querySelector(".trip-item-memo script")).toBeNull();
+  const viewer = setup({ getCurrentTrip: () => trip, getRole: () => "viewer" });
+  const field = viewer.ui.panel.querySelector<HTMLTextAreaElement>('[data-item-id="activity"] .trip-item-memo textarea')!;
+  expect(field.readOnly).toBe(true); expect(field.value).toBe(trip.items[2]?.memo);
+  expect(field.closest("form")!.querySelector("button")).toBeNull();
+  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(save).toHaveBeenCalledOnce();
 });
 
 it("warns with unmarked hotel names and allows cancelling or continuing Trip confirmation", async () => {

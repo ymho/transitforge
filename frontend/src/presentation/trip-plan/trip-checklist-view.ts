@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import { checklistCategories, type TripChecklistItem } from "@raiquora/trip/trip-checklist";
 import type { ChecklistCommand } from "@raiquora/trip/checklist-edit";
 import type { Trip } from "@raiquora/trip/trip";
@@ -11,7 +12,7 @@ export function renderTripChecklist(options: { controller: ChecklistWorkspaceCon
   const { controller, trip, readiness, report } = options, writable = controller.canWrite();
   const section = element("section", "trip-workspace-checklist"); section.setAttribute("aria-label", "旅行前の準備");
   section.append(element("h2", "", "旅行前の準備"), element("p", "", "旅程・予約とは別の準備リストです。すべて完了しても旅程の成立を保証しません。"));
-  const run = (action: () => Promise<void>) => { void action().then(() => report("準備リストを更新しました。")).catch(() => report("準備リストを更新できませんでした。最新の状態を再読み込みし、内容を確認してください。")); };
+  const run = (action: () => Promise<void>) => { void action().then(() => notifySaved(document, "準備リストを更新しました。")).catch(() => report("準備リストを更新できませんでした。最新の状態を再読み込みし、内容を確認してください。")); };
   if (!writable) section.append(element("p", "", "準備リストの編集は現在利用できません。"));
   const items = controller.items();
   if (!items) { section.append(element("p", "", "準備リストは未取得です。未準備・完了とは判定できません。")); return section; }

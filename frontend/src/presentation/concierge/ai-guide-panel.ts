@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import { iconMarkup, setLoadingStatus } from "../shared/primitives";
 import { previewPlanAdoption } from "./plan-adoption-view";
 import { canCombineAccommodationPlan, renderPublicAccommodationPresentation } from "./public-accommodation-presentation-view";
@@ -329,7 +330,7 @@ export function configureAiGuidePanel(
         if (response.publicPlanPresentation) elements.onPlanPresentation?.(response.publicPlanPresentation, !response.publicAccommodationPresentation);
         if (!submitFeedback) pendingMessage.querySelector(".conversation-feedback")?.remove();
         pendingMessage.dataset.messageId = assistantMessage.messageId;
-        if (response.tripMutationReceipt) elements.onTripConditionsSaved?.();
+        if (response.tripMutationReceipt) { elements.onTripConditionsSaved?.(); notifySaved(pendingMessage.ownerDocument, "旅程の変更を保存しました。"); }
         if (!response.publicPlanPresentation && response.semanticReceipt?.changes.some(
           change => change.status === "accepted" && change.frame === "actual")) elements.onTripConditionsSaved?.();
       })

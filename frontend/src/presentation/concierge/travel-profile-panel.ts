@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import { setLoadingStatus } from "../shared/primitives";
 import { travelPreferenceLabels, type TravelPreference, type UserProfile } from "@raiquora/trip/travel-profile";
 import type { ProfileUiController } from "../../usecases/personal-state/profile-ui-controller";
@@ -35,7 +36,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
     };
     status("保存中…", "saving");
     void client.autosave(profile).then((saved) => {
-      read = saved; if (own !== generation) return; dirty = false; status("保存済み", "saved");
+      read = saved; if (own !== generation) return; dirty = false; status("", "saved"); notifySaved(document, "プロフィールを保存しました。");
     }).catch(() => { if (own === generation) { dirty = true; status("保存できませんでした。入力は保持しています。", "error"); } });
   };
   const changed = (immediate = false) => {
@@ -60,7 +61,7 @@ export function configureTravelProfile(document: Document, client: ProfileUiCont
       const button = page.querySelector<HTMLButtonElement>("[data-delete]")!;
       if (button.dataset.confirm !== "yes") { button.dataset.confirm = "yes"; button.textContent = "削除を確定する"; return; }
       if (read?.revision === undefined) return;
-      void client.delete(read.revision).then(() => { read = undefined; draft = emptyDraft(); dirty = false; generation++; render(); status("プロフィールを削除しました。", "saved"); })
+      void client.delete(read.revision).then(() => { read = undefined; draft = emptyDraft(); dirty = false; generation++; render(); status("", "saved"); notifySaved(document, "プロフィールを削除しました。"); })
         .catch(() => status("削除できませんでした。", "error"));
     });
   };
