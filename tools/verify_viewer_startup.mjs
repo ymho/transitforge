@@ -106,7 +106,13 @@ try {
       assert.equal(typography.font, "16px");
       assert.match(typography.transform, /0\.875/);
     }
+    if (viewport.width > 992) assert.equal(await page.locator(".product-nav").evaluate(el => getComputedStyle(el).backgroundColor), "rgba(0, 0, 0, 0)");
+    await page.locator("#home-prompt").fill("来週、出雲大社にいきたい");
+    await page.locator("#home-prompt").focus();
+    assert.equal(await page.locator("#home-prompt").evaluate(el => getComputedStyle(el).outlineStyle), "none");
+    assert.equal(await page.locator(".home-prompt").evaluate(el => getComputedStyle(el).outlineWidth), "2px");
     await page.screenshot({ path: `.artifacts/product-design/home-${viewport.width}.png` });
+    await page.locator("#home-prompt").fill("");
     await page.locator("[data-account]").click();
     await page.waitForSelector('[data-primary-view="my"]');
     assert.match(await page.locator("[data-my-account-status]").textContent(), /ログイン中/);
@@ -218,6 +224,7 @@ try {
     await page.locator('[data-map-navigation]').click();
     await page.waitForSelector('#app[data-primary-view="map"]');
     await page.getByText('地図を起動できませんでした。もう一度開くと再試行できます。相談は引き続き利用できます。').first().waitFor();
+    if (viewport.width > 992) assert.equal(await page.locator("#map").evaluate(el => getComputedStyle(el).top), "0px");
     await checkLayout("operation-unavailable");
     await page.unroute("**/mapbox-*.js");
     await page.locator('[data-account]').click();
