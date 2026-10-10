@@ -161,7 +161,8 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const editing = element("div", "trip-workspace-editing");
   editing.append(actions, editor);
   if (manualActivityForm) editing.append(manualActivityForm);
-  header.append(rename, decisionStatus);
+  const titleGroup = element("div", "trip-item-title-group"); titleGroup.append(focus, rename);
+  focus.replaceWith(titleGroup); header.append(decisionStatus);
   if (!item.decision || item.decision.needsReconfirmation) header.append(consult); body.append(editing); content.append(body);
   return card;
 }
