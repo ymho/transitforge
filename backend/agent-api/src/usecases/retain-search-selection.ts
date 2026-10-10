@@ -5,7 +5,7 @@ import type { CanonicalPlanCandidateDraft } from "./plan-candidate-retention.js"
 /** Retain without changing the Trip. A focused item or uniquely matching whole
  * selected journey precedes unresolved slots. Adoption alone replaces the item. */
 export function searchSelectionDraft(items: readonly ItineraryItem[], trip: Trip, focusedItemId?: string): CanonicalPlanCandidateDraft | undefined {
-  if (!items.length || items.length > 5 || items.some(item => item.type !== items[0]!.type)) return undefined;
+  if (!items.length || items.length > 10 || items.some(item => item.type !== items[0]!.type)) return undefined;
   if (focusedItemId && !trip.items.some(item => item.id === focusedItemId)) return undefined;
   const kind = items[0]!.type;
   const slots = trip.items.filter(item => item.type === kind &&

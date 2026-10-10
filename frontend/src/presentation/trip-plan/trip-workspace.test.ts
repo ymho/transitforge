@@ -189,9 +189,9 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
     expect(button(f.ui.panel, "この予定を確定")).toBeUndefined();
   });
-  it("places disclosure before the title and hides route numbering while preserving the saved name", () => {
+  it.each(["経路1: 向日町駅→出雲市駅", "向日町駅→出雲市駅（経路1）"])("places disclosure before the title and hides route numbering in %s", title => {
     const base = multiCityTrip(), route = base.items.find(item => item.type === "transport")!;
-    const trip = { ...base, items: base.items.map(item => item.id === route.id ? { ...item, title: "経路1: 向日町駅→出雲市駅" } : item) };
+    const trip = { ...base, items: base.items.map(item => item.id === route.id ? { ...item, title } : item) };
     const f = setup({ getCurrentTrip: () => trip });
     const card = f.ui.panel.querySelector<HTMLElement>(`[data-item-id="${route.id}"]`)!;
     const header = card.querySelector("header")!;
@@ -201,7 +201,22 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(header.querySelector(".trip-item-consult")?.textContent).toBe("相談");
     header.querySelector<HTMLButtonElement>(".trip-item-toggle")!.click();
     expect(header.querySelector(".trip-item-toggle")?.getAttribute("aria-expanded")).toBe("true");
-    expect(trip.items.find(item => item.id === route.id)?.title).toBe("経路1: 向日町駅→出雲市駅");
+    expect(trip.items.find(item => item.id === route.id)?.title).toBe(title);
+  });
+  it("groups manual transport fields with Japanese choices and omits an empty route disclosure", () => {
+    const base = multiCityTrip(), route = base.items.find(item => item.type === "transport")!;
+    const trip = { ...base, items: base.items.map(item => item.id === route.id ? { ...item, detail: { status: "unresolved" as const } } : item) };
+    const f = setup({ getCurrentTrip: () => trip });
+    const card = f.ui.panel.querySelector<HTMLElement>(`[data-item-id="${route.id}"]`)!;
+    expect(card.querySelector(".trip-route")).toBeNull();
+    const form = card.querySelector<HTMLFormElement>(".trip-workspace-manual-transport")!;
+    expect(form.querySelector("h3")?.textContent).toBe("手入力");
+    expect(form.querySelectorAll(".trip-manual-transport-fields label")).toHaveLength(3);
+    expect([...form.querySelectorAll("option")].map(o => o.textContent)).toEqual(["飛行機", "バス", "フェリー", "車", "レンタカー", "タクシー", "配車", "徒歩", "自転車", "移動"]);
+    form.querySelector("select")!.value = "air";
+    const fields = form.querySelectorAll("input"); fields[0]!.value = "大阪"; fields[1]!.value = "東京";
+    form.dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "replace", item: { detail: { mode: "air", origin: { name: "大阪" }, destination: { name: "東京" } } } });
   });
   it("preserves input, session, both scroll positions, focus, collapse and proposal through chat/trip/chat", () => {
     const f = setup({ getCurrentTrip: multiCityTrip }); f.input.value = "編集中の文章"; f.messages.scrollTop = 240; f.input.focus();

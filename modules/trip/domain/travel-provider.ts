@@ -20,6 +20,8 @@ export interface AccommodationProviderResult {
   longitude?: number;
   reviewAverage?: number;
   reviewCount?: number;
+  description?: string;
+  reviewExcerpt?: string;
   price?: PriceObservation;
   availability?: "available" | "unknown";
 }
@@ -43,6 +45,8 @@ export function createAccommodationOffering(
     ...optional("areaName", result.areaName),
     ...optionalHttpsUrl("imageUrl", result.imageUrl),
     ...optional("address", result.address),
+    ...optional("description", result.description),
+    ...optional("reviewExcerpt", result.reviewExcerpt),
     ...coordinate("latitude", result.latitude, -90, 90),
     ...coordinate("longitude", result.longitude, -180, 180),
     ...boundedNumber("reviewAverage", result.reviewAverage, 0, 5),

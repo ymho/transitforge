@@ -53,11 +53,14 @@ export function parseProviderResponse(value: unknown, request: TravelProviderSea
     if (value.ok !== true || !Array.isArray(value.accommodations) || value.accommodations.length > request.limit) throw new Error();
     const accommodations = value.accommodations.map(item => {
       if (!record(item)) throw new Error();
-      keys(item, ["kind", "provider", "providerItemId", "name", "checkInDate", "checkOutDate", "availability", "bookingUrl", "imageUrl", "areaName", "address", "latitude", "longitude", "reviewAverage", "reviewCount", "price"]);
+      keys(item, ["kind", "provider", "providerItemId", "name", "checkInDate", "checkOutDate", "availability", "bookingUrl", "imageUrl", "areaName", "address", "latitude", "longitude", "reviewAverage", "reviewCount", "description", "reviewExcerpt", "price"]);
       if (item.kind !== "accommodation" || !["travel-provider", "rakuten-travel"].includes(item.provider as string) || item.checkInDate !== request.checkInDate || item.checkOutDate !== request.checkOutDate || !["available", "unknown"].includes(item.availability as string)) throw new Error();
       for (const field of ["providerItemId", "name"]) if (typeof item[field] !== "string" || !(item[field] as string).trim()) throw new Error();
       for (const field of ["providerItemId", "name", "areaName", "address", "bookingUrl", "imageUrl"]) {
         if (item[field] !== undefined && (typeof item[field] !== "string" || (item[field] as string).length > 2_048)) throw new Error();
+      }
+      for (const field of ["description", "reviewExcerpt"]) {
+        if (item[field] !== undefined && (typeof item[field] !== "string" || (item[field] as string).length > 160 || /[\u0000-\u001f\u007f]/u.test(item[field] as string))) throw new Error();
       }
       for (const field of ["bookingUrl", "imageUrl"]) if (item[field] !== undefined) {
         const url = new URL(item[field] as string);
