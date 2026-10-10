@@ -206,15 +206,6 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
       ], (v) => editTripParty(trip, v.adults!, v.children!));
       if (!partialParty && party) row("同行者", party, state.viewer ? undefined : editParty);
       if (!state.viewer) {
-        const add = node("div", "consultation-add-condition"), kind = node("select", ""); kind.setAttribute("aria-label", "追加する条件");
-        for (const [value, label] of conditionKinds) { const option = node("option", "", label); option.value = value; kind.append(option); }
-        for (const [value, label] of [["goal", "旅の目的"], ["party", "同行者"]]) { const option = node("option", "", label); option.value = value!; kind.append(option); }
-        const button = node("button", "", "条件を追加"); button.type = "button"; button.addEventListener("click", () => {
-          if (kind.value === "party") editParty();
-          else if (kind.value === "goal") edit("旅の目的", trip.request.goal ?? "", (goal) => proposeTripRequestUpdate(trip, { ...trip.request, goal: goal.trim() ? boundedConditionText(goal) : undefined }, "user"));
-          else editConstraint(kind.value as EditableCondition);
-        });
-        add.append(kind, button); rows.append(add);
         for (const assumption of trip.request.assumptions.filter((a) => a.status === "unconfirmed")) {
           const item = row("仮置き", assumption.text);
           item.querySelector(".consultation-condition-actions")!.append(offer("仮定を承認", () => proposeAssumptionDecision(trip, assumption.id, "confirmed")),

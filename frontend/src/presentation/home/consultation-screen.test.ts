@@ -80,18 +80,6 @@ it("stale editor cannot submit into another session and mobile conditions close 
   const toggle = f.panel.querySelector<HTMLButtonElement>(".consultation-conditions-toggle")!; toggle.click(); expect(toggle.getAttribute("aria-expanded")).toBe("true");
   f.panel.querySelector("aside")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); expect(toggle.getAttribute("aria-expanded")).toBe("false");
 });
-it("adds exact dates through the same preview without changing adopted schedules", () => {
-  const f = setup();
-  f.panel.querySelector<HTMLSelectElement>('[aria-label="追加する条件"]')!.value = "dates";
-  f.panel.querySelector<HTMLButtonElement>(".consultation-add-condition button")!.click();
-  const editor = f.panel.querySelector<HTMLFormElement>(".consultation-condition-editor")!;
-  editor.querySelector<HTMLInputElement>('[name="start"]')!.value = "2026-10-01";
-  editor.querySelector<HTMLInputElement>('[name="end"]')!.value = "2026-10-03";
-  editor.dispatchEvent(new Event("submit", { cancelable: true }));
-  const proposal = f.preview.mock.calls[0]![0];
-  expect(proposal.patches).toHaveLength(1); expect(proposal.patches[0].type).toBe("request");
-  expect(proposal.patches[0].request.constraints.at(-1)).toMatchObject({ source: "user", requirement: { type: "dates", start: { earliest: "2026-10-01", latest: "2026-10-01" } } });
-});
 it("mobile sheet traps focus and restores background scrolling and trigger focus", () => {
   const f = setup(); document.body.style.overflow = "auto";
   const toggle = f.panel.querySelector<HTMLButtonElement>(".consultation-conditions-toggle")!; toggle.click();
@@ -133,19 +121,15 @@ it("displays accepted composition and does not repeat an end already present in 
   expect(f.panel.textContent).toContain("2026-10-24〜2026-10-25");
   expect(f.panel.textContent).not.toContain("開始日未定");
 });
-it("omits unset conditions while keeping purpose and party available to add", () => {
+it("omits unset conditions and manual condition creation for a bound trip", () => {
   const f = setup();
+  expect(f.panel.querySelector(".consultation-add-condition")).toBeNull();
+  expect(f.panel.querySelector('[aria-label="追加する条件"]')).toBeNull();
+  expect(f.panel.textContent).not.toContain("条件を追加");
   f.setTrip(createTrip(f.trip.id, "新しい旅", f.trip.createdAt));
   expect(f.panel.querySelectorAll(".consultation-condition-row")).toHaveLength(0);
   expect(f.panel.textContent).not.toContain("まだ決まっていません");
   expect(f.panel.textContent).not.toContain("人数は未設定");
-  const kind = f.panel.querySelector<HTMLSelectElement>('[aria-label="追加する条件"]')!;
-  kind.value = "goal";
-  [...f.panel.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "条件を追加")!.click();
-  expect(f.panel.querySelector<HTMLInputElement>('[aria-label="旅の目的"]')?.value).toBe("");
-  [...f.panel.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "取消")!.click();
-  kind.value = "party";
-  [...f.panel.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "条件を追加")!.click();
-  expect(f.panel.querySelector('input[name="adults"]')).not.toBeNull();
+  expect(f.panel.querySelector(".consultation-add-condition")).toBeNull();
   expect(f.preview).not.toHaveBeenCalled();
 });
