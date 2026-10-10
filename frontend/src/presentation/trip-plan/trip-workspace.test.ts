@@ -35,7 +35,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("経路全体を再検索"));
     expect(f.controller.current()).toEqual(before); expect(f.controller.proposal()).toBeUndefined();
   });
-  it("shows an unsaved draft on the itinerary screen and requires preview then explicit save", async () => {
+  it("shows only a pending notice and returns to chat for adoption", async () => {
     const trip = createTrip(placesTripId, "出雲旅行", placesAt), confirm = vi.fn(async () => undefined);
     const adopt = vi.fn(async () => ({ changes: { added: 1, replaced: 0, removed: 0 }, confirm }));
     const f = setup({ getCurrentTrip: () => trip }, undefined, { conversationId: () => "one", onPlanAdoption: adopt });
@@ -48,12 +48,13 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.presentPlan(plan); f.ui.showPlan();
     expect(f.ui.panel.hidden).toBe(false);
     expect(f.ui.panel.querySelector<HTMLElement>("#trip-detail-itinerary")?.hidden).toBe(false);
-    expect(f.ui.panel.textContent).toContain("未保存の旅程案"); expect(f.ui.panel.textContent).toContain("出雲大社を参拝");
+    expect(f.ui.panel.textContent).toContain("未採用の提案があります");
+    expect(f.ui.panel.textContent).not.toContain("出雲大社を参拝");
+    expect(f.ui.panel.querySelector(".public-plan-presentation")).toBeNull();
     expect(trip.items).toEqual([]); expect(adopt).not.toHaveBeenCalled();
-    button(f.ui.panel, "この案を採用する").click();
-    await vi.waitFor(() => expect(button(f.ui.panel, "この変更を確認して保存")).toBeDefined());
-    expect(adopt).toHaveBeenCalledWith(expect.objectContaining({ conversationId: "one", tripId: trip.id, baseTripRevision: trip.revision }));
-    expect(confirm).not.toHaveBeenCalled(); button(f.ui.panel, "この変更を確認して保存").click(); await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+    button(f.ui.panel, "相談で確認").click();
+    expect(f.app.dataset.tripWorkspaceView).toBe("chat");
+    expect(confirm).not.toHaveBeenCalled();
     f.controller.activateSession("two"); expect(f.controller.plan()).toBeUndefined();
   });
   it("opens the timeline directly and retains useful controls in details", () => {
@@ -242,9 +243,9 @@ describe("Trip workspace DOM and mobile navigation", () => {
   });
   it("keeps candidate assessment outside adopted cards; unknown is not fine weather or zero price", () => {
     const f = setup(tripWorkspacePreviewSource()); const before = structuredClone(f.controller.current());
-    const candidates = f.ui.panel.querySelector(".trip-workspace-candidates")!;
-    expect(candidates.textContent).toContain("未採用"); expect(candidates.textContent).toContain("0円ではありません"); expect(candidates.textContent).toContain("旅行全体の評価ではありません");
-    expect(candidates.closest(".trip-workspace-card")).toBeNull(); expect(f.ui.panel.textContent).toContain("EUR 120.00");
+    expect(f.ui.panel.querySelector(".trip-workspace-candidates")).toBeNull();
+    expect(f.ui.panel.textContent).toContain("未採用の提案があります");
+    expect(f.ui.panel.textContent).toContain("EUR 120.00");
     expect(f.ui.panel.querySelector(".trip-party-control")?.textContent).toContain("大人"); expect(f.controller.current()).toEqual(before);
   });
   it("session change drops neither proposals nor selection; another Trip does not receive them", () => {
