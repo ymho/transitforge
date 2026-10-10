@@ -258,7 +258,8 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const trip = multiCityTrip(), f = setup({ getCurrentTrip: () => trip });
     const activity = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
     expect(activity.querySelector(".trip-workspace-move-target")).toBeNull();
-    expect(button(f.ui.panel, "並べ替え")).toBeDefined();
+    expect(button(f.ui.panel, "並び替え")?.parentElement).toBe(f.ui.panel.querySelector(".trip-itinerary-heading"));
+    expect(f.ui.panel.querySelector(".trip-workspace-day > h2")).toBeNull();
     expect(activity.querySelector(".trip-workspace-day-target")).toBeNull();
     expect(button(activity, "日付変更案")).toBeUndefined();
     button(activity, "相談").click(); expect(f.ask).toHaveBeenCalledWith(`相談対象：旅程「${trip.title}」の3番目の予定「Zürich」。\nこの予定を相談したい`); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
