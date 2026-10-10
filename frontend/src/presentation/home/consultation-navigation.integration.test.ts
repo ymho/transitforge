@@ -10,7 +10,9 @@ it("uses the same consultation surface from Trip, returns to Trip, and makes the
   document.body.innerHTML = '<main id="app"><section id="chat"><ol></ol><input></section></main>';
   window.history.replaceState(null, "", "#chat");
   const app = document.querySelector<HTMLElement>("main")!, chat = document.querySelector<HTMLElement>("#chat")!;
-  const trip = createTrip("45300000-0000-4000-8000-000000000001", "出雲旅行", "2026-09-27T00:00:00Z");
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "出雲旅行", "2026-09-27T00:00:00Z", [
+    { id: "shrine", title: "出雲大社", type: "activity", category: "sightseeing", schedule: { type: "unscheduled" } },
+  ]);
   const controller = createTripWorkspaceController("trip-conversation"), ask = vi.fn();
   controller.attach("trip-conversation", { getCurrentTrip: () => trip });
   let workspace: ReturnType<typeof configureTripWorkspace>;
@@ -29,9 +31,12 @@ it("uses the same consultation surface from Trip, returns to Trip, and makes the
   expect(app.dataset.primaryView).toBe("trip-loading");
   await vi.waitFor(() => expect(app.dataset.primaryView).toBe("trip"));
   expect(document.querySelector("[data-trip-chat]")).toBeNull();
-  document.querySelector<HTMLButtonElement>("[data-trip-consultation]")!.click();
+  expect(document.querySelector("[data-trip-consultation]")).toBeNull();
+  const item = document.querySelector<HTMLElement>('[data-item-id="shrine"]')!;
+  [...item.querySelectorAll("button")].find(button => button.textContent === "相談する")!.click();
   expect(app.dataset.primaryView).toBe("chat"); expect(app.dataset.consultationMode).toBe("conversation");
-  expect(window.history.state.tripId).toBe(trip.id); expect(ask).not.toHaveBeenCalled();
+  expect(window.history.state.tripId).toBe(trip.id); expect(ask).toHaveBeenCalledWith("この予定を相談したい");
+  expect(controller.uiFocus()).toEqual({ itemId: "shrine" });
   expect(controller.sessionId()).toBe("trip-conversation");
   workspace.show("trip"); expect(app.dataset.primaryView).toBe("trip");
   shell.navigate("chat"); expect(app.dataset.consultationMode).toBe("landing"); expect(window.history.state.tripId).toBeUndefined();
