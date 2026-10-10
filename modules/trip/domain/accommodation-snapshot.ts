@@ -5,6 +5,25 @@ import { projectStaySchedule, type LocalDate } from "./itinerary-schedule";
 import { validatePriceObservation, type PriceObservation } from "./money";
 
 /** Adopted accommodation product, not a search Offering, current availability or Reservation. */
+export interface AccommodationObservedDetails {
+  readonly observedAt: string;
+  readonly sourceUrl?: string;
+  readonly imageUrl?: string;
+  readonly reviewAverage?: number;
+  readonly reviewCount?: number;
+}
+
+/** Safe public references only; provider secrets and inline media never enter a Trip. */
+export function accommodationPublicUrl(value: unknown, image = false): string | undefined {
+  if (typeof value !== "string" || value.length > 2048) return undefined;
+  try {
+    const url = new URL(value);
+    if (!(image ? url.protocol === "https:" : ["https:", "http:"].includes(url.protocol)) || url.username || url.password ||
+      [...url.searchParams.keys()].some(key => /(?:token|secret|password|credential|authorization|cookie|signature|api_?key)/iu.test(key))) return undefined;
+    return url.href;
+  } catch { return undefined; }
+}
+
 export interface AccommodationSnapshot {
   readonly provider: string;
   readonly providerItemId: string;
@@ -15,6 +34,8 @@ export interface AccommodationSnapshot {
   readonly sources: readonly ExternalSourceEvidence[];
   /** Retained selection-time observation, not current availability, payable total or booking price. */
   readonly observedPrice?: PriceObservation;
+  /** Search-time presentation, never live availability or a reservation. */
+  readonly observedDetails?: AccommodationObservedDetails;
 }
 
 /** Selection-time chronology, never a claim that an observation remains current afterwards. */
@@ -31,7 +52,7 @@ export function validateAccommodationSource(source: ExternalSourceEvidence, prov
 }
 
 export function validateAccommodationSnapshot(value: AccommodationSnapshot): void {
-  exactKeys(value, ["provider", "providerItemId", "place", "selectedAt", "checkInDate", "checkOutDate", "sources", "observedPrice"]);
+  exactKeys(value, ["provider", "providerItemId", "place", "selectedAt", "checkInDate", "checkOutDate", "sources", "observedPrice", "observedDetails"]);
   if (typeof value.provider !== "string" || !value.provider.trim() || value.provider === "manual" ||
       typeof value.providerItemId !== "string" || !value.providerItemId.trim() || !validInstant(value.selectedAt) ||
       !validDate(value.checkInDate) || !validDate(value.checkOutDate) || value.checkInDate >= value.checkOutDate ||
@@ -44,6 +65,16 @@ export function validateAccommodationSnapshot(value: AccommodationSnapshot): voi
     // A retained price must have been observed by a retained product source's retrieval time.
     if (Date.parse(value.observedPrice.observedAt) > Date.parse(value.selectedAt) ||
         !value.sources.some((source) => Date.parse(value.observedPrice!.observedAt) <= Date.parse(source.retrievedAt))) throw new Error("Invalid retained price chronology");
+  }
+  if (value.observedDetails !== undefined) {
+    const detail = value.observedDetails;
+    exactKeys(detail, ["observedAt", "sourceUrl", "imageUrl", "reviewAverage", "reviewCount"]);
+    if (!validInstant(detail.observedAt) || Date.parse(detail.observedAt) > Date.parse(value.selectedAt) ||
+      !value.sources.some(source => Date.parse(detail.observedAt) <= Date.parse(source.retrievedAt)) ||
+      detail.sourceUrl !== undefined && !accommodationPublicUrl(detail.sourceUrl) ||
+      detail.imageUrl !== undefined && !accommodationPublicUrl(detail.imageUrl, true) ||
+      detail.reviewAverage !== undefined && (typeof detail.reviewAverage !== "number" || !Number.isFinite(detail.reviewAverage) || detail.reviewAverage < 0 || detail.reviewAverage > 5) ||
+      detail.reviewCount !== undefined && (!Number.isSafeInteger(detail.reviewCount) || detail.reviewCount < 0)) throw new Error("Invalid accommodation display observation");
   }
   if (value.place.capturedAt !== undefined && Date.parse(value.place.capturedAt) > Date.parse(value.selectedAt) ||
       value.place.sources.some((source) => Date.parse(source.retrievedAt) > Date.parse(value.selectedAt))) {
