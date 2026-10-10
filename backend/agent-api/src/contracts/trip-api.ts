@@ -39,6 +39,7 @@ function checkBounds(value: unknown, depth = 0): void {
   } else if (typeof value === "number" && !Number.isFinite(value)) throw new TripResourceError("invalid-input");
 }
 export type TripApiCommand =
+  | { version: typeof tripApiVersion; operation: "generate-title"; tripId: string; baseRevision: number }
   | { version: typeof tripApiVersion; operation: "create"; trip: Trip }
   | { version: typeof tripApiVersion; operation: "start-consultation"; tripId: string; title: string }
   | { version: typeof tripApiVersion; operation: "branch-consultation"; sourceTripId: string; sourceRevision: number; tripId: string; title: string }
@@ -123,6 +124,10 @@ export function parseTripCommand(value: unknown): TripApiCommand {
       keys = ["sourceTripId", "sourceRevision", "tripId", "title"]; tripIdentifier(v.sourceTripId); tripIdentifier(v.tripId);
       if (v.sourceTripId === v.tripId || !Number.isSafeInteger(v.sourceRevision) || Number(v.sourceRevision) < 0 ||
           typeof v.title !== "string" || !v.title.trim() || v.title.length > 160) throw new TripResourceError("invalid-input");
+      break;
+    case "generate-title":
+      keys = ["tripId", "baseRevision"]; tripIdentifier(v.tripId);
+      if (!Number.isSafeInteger(v.baseRevision) || Number(v.baseRevision) < 0) throw new TripResourceError("invalid-input");
       break;
     case "create": keys = ["trip"]; boundedTrip(v.trip); break;
     case "mutate": keys = ["tripId", "baseRevision", "mutationId", "proposal"]; validateMutation(v as unknown as TripMutation); break;

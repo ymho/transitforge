@@ -5,6 +5,9 @@ import { tripDynamoFixture } from "../adapters/trip-dynamodb.fixture.js";
 import { DynamoDbTripSharing } from "../adapters/dynamodb-trip-sharing.js";
 import { CryptographicShareSecret } from "../adapters/share-secret.js";
 import { TripSharingApplication } from "./trip-sharing-application.js";
+import { selectAccommodation } from "@raiquora/trip/select-accommodation";
+import { projectStaySchedule } from "@raiquora/trip/itinerary-schedule";
+import { rakutenAccommodationSelectionEvidence } from "../adapters/rakuten-accommodation-selection.js";
 import { TripApplication } from "./trip-application.js";
 import { parseSharingCommand } from "../contracts/trip-sharing-api.js";
 import { createTripSharingHandler } from "../trip-sharing-handler.js";
@@ -185,4 +188,16 @@ it("owned-shared lists active shares only and excludes revoked/expired links", a
   expect((await f.call(owner, "owned-shared")).trips).toEqual([]);
   await f.grant(); vi.spyOn(f.clock, "now").mockReturnValue(new Date("2026-12-01T00:00:00.000Z"));
   expect((await f.call(owner, "owned-shared")).trips).toEqual([]);
+});
+
+it("shares retained hotel search details with authorized viewers through the regular Trip read", async () => {
+  const f = setup(), at = "2026-09-13T00:00:00.000Z";
+  const offering = { kind: "accommodation" as const, provider: "rakuten-travel", providerItemId: "42", name: "宿", checkInDate: "2026-10-24", checkOutDate: "2026-10-25", imageUrl: "https://example.org/photo.jpg", reviewAverage: 4.35, bookingUrl: "https://example.org/hotel/42" };
+  const accommodation = selectAccommodation(offering, rakutenAccommodationSelectionEvidence(offering, at)!, at);
+  const trip = createTrip(id, "共有旅行", at, [{ id: "stay", type: "stay", title: "宿", schedule: projectStaySchedule(offering.checkInDate, offering.checkOutDate), selection: { status: "selected", accommodation } }]);
+  f.seed(trip, owner.subject);
+  const grant = await f.grant(); await f.redeem(grant);
+  expect(JSON.stringify(await f.get(guest))).toContain("https://example.org/photo.jpg");
+  expect(JSON.stringify(await f.get(guest))).toContain("https://example.org/hotel/42");
+  await expect(f.get(stranger)).rejects.toThrow();
 });

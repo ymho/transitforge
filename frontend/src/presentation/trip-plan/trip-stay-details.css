@@ -1,0 +1,10 @@
+.trip-stay-details { margin: .5rem 0 .8rem; font-size: 12px; }
+.trip-stay-photo { display: block; width: min(100%, 360px); max-height: 200px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; margin-bottom: .6rem; }
+.trip-stay-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .35rem .8rem; line-height: 1.6; margin: .5rem 0; }
+.trip-stay-facts dt { color: var(--product-muted); }
+.trip-stay-facts dd { margin: 0; }
+.trip-stay-stars { position: relative; display: inline-block; color: #d5d8dc; white-space: nowrap; }
+.trip-stay-stars > span { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: #bc7900; }
+.trip-stay-booking-link { display: inline-block; font-size: 12px; padding-block: .35rem; text-underline-offset: .2em; }
+.trip-stay-source { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; margin-top: .4rem; color: var(--product-muted); }
+.trip-stay-source small { font-size: 10px; }

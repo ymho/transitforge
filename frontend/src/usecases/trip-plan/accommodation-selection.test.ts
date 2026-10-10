@@ -119,3 +119,16 @@ describe("accommodation adoption boundary", () => {
     await expect(confirmCandidateSelection(f.trip, f.request, proposal, f.port, "2026-09-12T10:00:00Z")).rejects.toThrow(/expired/);
   });
 });
+
+it("persists only permitted search display observations through the common adoption boundary", async () => {
+  const f = setup();
+  Object.assign(f.record.candidate.accommodations[0]!, { imageUrl: "https://example.org/photo.jpg", bookingUrl: "https://example.org/hotel/1", reviewAverage: 4.35, reviewCount: 120 });
+  for (const permission of [undefined, "unknown", "forbidden", "permitted"] as const) {
+    f.record.accommodation!.displayRetention = permission;
+    const next = applyTripProposal(f.trip, await proposeCandidateSelection(f.trip, f.request, f.port, at));
+    const stay = next.items[0] as StayItineraryItem;
+    if (stay.selection.status !== "selected") throw Error("Missing stay");
+    if (permission === "permitted") expect(stay.selection.accommodation.observedDetails).toMatchObject({ imageUrl: "https://example.org/photo.jpg", sourceUrl: "https://example.org/hotel/1", reviewAverage: 4.35, reviewCount: 120 });
+    else expect(stay.selection.accommodation.observedDetails).toBeUndefined();
+  }
+});

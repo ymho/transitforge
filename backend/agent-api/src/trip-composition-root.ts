@@ -1,3 +1,4 @@
+import { BedrockTripTitleGenerator } from "./adapters/bedrock-trip-title-generator.js";
 import { DynamoDbOfficialGuide } from "./adapters/dynamodb-official-guide.js";
 import { OfficialGuideApplication } from "./usecases/official-guide-application.js";
 import { DynamoDbTripConsultationRepository } from "./adapters/dynamodb-trip-consultation-repository.js";
@@ -23,7 +24,8 @@ export function createAuthorizedTripApplications(table: string, stateTable?: str
     new OfficialGuideApplication(trips, new DynamoDbOfficialGuide(table), (process.env.OFFICIAL_PUBLISHER_SUBJECTS ?? "").split(",").map(s => s.trim()).filter(Boolean)));
   return { sharing, repository: trips, trips: new TripApplication(trips, trips, undefined, reservations, undefined, sharing,
     stateTable ? new DynamoDbConversationTurnRepository(stateTable) : undefined,
-    stateTable ? new DynamoDbTripConsultationRepository(table, stateTable) : undefined) };
+    stateTable ? new DynamoDbTripConsultationRepository(table, stateTable) : undefined,
+    process.env.TRIP_TITLE_MODEL_ID ? new BedrockTripTitleGenerator(process.env.TRIP_TITLE_MODEL_ID) : undefined) };
 }
 
 /** IAM/internal worker composition only. Every operation still requires an explicit trusted owner. */

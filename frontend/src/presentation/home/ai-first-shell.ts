@@ -26,6 +26,7 @@ export interface AiFirstShellPorts {
   openTrip(id: string): Promise<void> | void;
   openTravelMode?(id: string): void;
   consultTrip?(id: string): Promise<void> | void;
+  regenerateTripTitle?(id: string): Promise<void>;
   renameTrip?(id: string, title: string): Promise<void>;
   archiveTrip?(id: string): Promise<void>;
   openMap(): void;
@@ -153,6 +154,8 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const updateJourneySettings = () => ports.setJourneySettings({ transferPace: transferPace.value, rankingPreference: rankingPreference.value });
   transferPace.addEventListener("change", updateJourneySettings); rankingPreference.addEventListener("change", updateJourneySettings);
   root.querySelector("[data-notifications]")!.addEventListener("click", ports.openNotifications);
+  const titleBusy = new Set<string>();
+  const titleErrors = new Map<string, string>();
   const render = () => {
     if (!root.isConnected) return;
     libraryUi?.refresh(); officialUi?.refresh();
@@ -174,14 +177,30 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
       : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
     root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, tripDisplayLabels[row.group], row.group === "current")).join("") : `<p role="status" aria-busy="${view.state === "loading"}">${view.state === "loading" ? loadingMarkup(stateText) : stateText}</p>`;
-    root.querySelectorAll<HTMLButtonElement>("[data-trip]").forEach((button) => button.addEventListener("click", () => {
+    root.querySelectorAll<HTMLButtonElement>("[data-trip], [data-trip-open]").forEach((button) => button.addEventListener("click", () => {
       if (!canNavigate()) return;
-      window.history.pushState({ tripId: button.dataset.trip! }, "", "#trip"); apply();
+      window.history.pushState({ tripId: (button.dataset.trip ?? button.dataset.tripOpen)! }, "", "#trip"); apply();
     }));
     root.querySelectorAll<HTMLButtonElement>("[data-trip-travel]").forEach((button) => button.addEventListener("click", () => {
       if (!view.trips.some((row) => row.trip.id === button.dataset.tripTravel)) return;
       ports.openTravelMode?.(button.dataset.tripTravel!);
     }));
+    root.querySelectorAll<HTMLButtonElement>("[data-trip-regenerate-title]").forEach((button) => {
+      const id = button.dataset.tripRegenerateTitle!;
+      const trip = view.trips.find(row => row.trip.id === id)?.trip;
+      button.hidden = !ports.regenerateTripTitle;
+      button.disabled = titleBusy.has(id) || !trip?.items.length;
+      button.setAttribute("aria-busy", String(titleBusy.has(id)));
+      button.title = trip?.items.length ? "旅のタイトルを再生成" : "予定を追加するとタイトルを再生成できます";
+      const status = button.closest("article")!.querySelector<HTMLElement>(".trip-title-status")!;
+      status.textContent = titleErrors.get(id) ?? ""; status.hidden = !status.textContent;
+      button.addEventListener("click", () => {
+        if (button.disabled || !ports.regenerateTripTitle) return;
+        titleBusy.add(id); titleErrors.delete(id); render();
+        void ports.regenerateTripTitle(id).catch(() => { titleErrors.set(id, "タイトルを再生成できませんでした。最新の旅程を確認して、もう一度お試しください。"); })
+          .finally(() => { titleBusy.delete(id); render(); });
+      });
+    });
     root.querySelectorAll<HTMLButtonElement>("[data-trip-rename]").forEach((button) => button.addEventListener("click", () => {
       const current = view.trips.find((row) => row.trip.id === button.dataset.tripRename)?.trip;
       if (!current || !ports.renameTrip) return;
@@ -353,5 +372,5 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
 }
 function esc(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 function card(trip: Trip, group?: string, withTravelMode = false): string {
-  return `<article class="home-card home-trip-card"><button class="trip-list-choice" type="button" data-trip="${esc(trip.id)}"><span class="trip-list-cover" aria-hidden="true"><img src="${tripCoverImage(trip.id)}" alt="" loading="lazy"><small>旅のイメージ</small></span><span class="trip-list-copy"><strong>${esc(trip.title)}</strong><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span>${group ? `<small>${esc(group)}</small>` : ""}</span><span class="trip-list-open" aria-hidden="true">しおりを開く →</span></button><details class="home-trip-manage"><summary aria-label="旅程の操作">⋯</summary><div class="home-trip-menu"><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">削除</button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}</div></details></article>`;
+  return `<article class="home-card home-trip-card"><div class="trip-list-choice"><button class="trip-list-cover" type="button" data-trip-open="${esc(trip.id)}" aria-label="${esc(trip.title)}のしおりを開く"><img src="${tripCoverImage(trip.id)}" alt="" loading="lazy"><small>旅のイメージ</small></button><div class="trip-list-copy"><div class="trip-list-title-row"><button class="trip-list-title-open" type="button" data-trip="${esc(trip.id)}"><strong>${esc(trip.title)}</strong></button><button class="trip-title-regenerate" type="button" data-trip-regenerate-title="${esc(trip.id)}" aria-label="旅のタイトルを再生成">${iconMarkup("refresh")}</button></div><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span>${group ? `<small>${esc(group)}</small>` : ""}<p class="trip-title-status" role="status" hidden></p></div><button class="trip-list-open" type="button" data-trip-open="${esc(trip.id)}">しおりを開く →</button></div><details class="home-trip-manage"><summary aria-label="旅程の操作">⋯</summary><div class="home-trip-menu"><button type="button" data-trip-rename="${esc(trip.id)}">名称を編集</button><button type="button" data-trip-archive="${esc(trip.id)}">削除</button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}</div></details></article>`;
 }

@@ -1,6 +1,6 @@
 import { openTripEditor } from "./trip-editor-dialog";
 import { openTripOrderEditor } from "./trip-order-editor";
-import { setLoadingStatus } from "../shared/primitives";
+import { iconMarkup, setLoadingStatus } from "../shared/primitives";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
 import { tripWorkspaceProjection, itemAssumptions } from "./trip-workspace-projection";
@@ -34,6 +34,7 @@ export function configureTripWorkspace(options: {
   openSharing?(): void;
   changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
   changeItemDecision?(trip: Trip, item: Trip["items"][number], action: "confirm" | "withdraw"): Promise<void>;
+  regenerateTitle?(trip: Trip): Promise<void>;
   branchTrip?(trip: Trip, title: string): Promise<void>;
   conversationId?(): string;
   onPlanAdoption?: AiGuidePanelElements["onPlanAdoption"];
@@ -64,7 +65,18 @@ export function configureTripWorkspace(options: {
   adoption.classList.add("trip-confirm-button");
   const identity = element("div", "trip-header-identity");
   const folioBadge = element("p", "trip-header-eyebrow"); folioBadge.hidden = true;
-  identity.append(folioBadge, title, party);
+  let titleBusy = false;
+  const regenerateTitle = control("", () => {
+    const trip = controller.current(); if (!trip || titleBusy || !options.regenerateTitle || !trip.items.length) return;
+    titleBusy = true; regenerateTitle.disabled = true; regenerateTitle.setAttribute("aria-busy", "true");
+    void options.regenerateTitle(trip).then(() => { if (controller.current()?.id === trip.id) report("タイトルを再生成しました。"); })
+      .catch(() => { if (controller.current()?.id === trip.id) report("タイトルを再生成できませんでした。最新の旅程を確認して、もう一度お試しください。"); })
+      .finally(() => { titleBusy = false; regenerateTitle.setAttribute("aria-busy", "false"); regenerateTitle.disabled = !controller.current()?.items.length; });
+  });
+  regenerateTitle.className = "trip-title-regenerate"; regenerateTitle.innerHTML = iconMarkup("refresh");
+  regenerateTitle.setAttribute("aria-label", "旅のタイトルを再生成"); regenerateTitle.title = "旅のタイトルを再生成";
+  const titleRow = element("div", "trip-header-title-row"); titleRow.append(title, regenerateTitle);
+  identity.append(folioBadge, titleRow, party);
   const headerActions = element("div", "trip-header-actions"); headerActions.append(adoption, share);
   const cover = element("div", "trip-header-cover"); const coverImage = element("img");
   coverImage.alt = ""; coverImage.setAttribute("aria-hidden", "true");
@@ -232,6 +244,9 @@ export function configureTripWorkspace(options: {
     const view = tripWorkspaceProjection(trip), scroll = panel.scrollTop;
     const evaluation = controller.feasibility()!;
     title.textContent = view.title;
+    regenerateTitle.hidden = !options.regenerateTitle || controller.source()?.getRole?.() === "viewer";
+    regenerateTitle.disabled = titleBusy || !trip.items.length;
+    regenerateTitle.title = trip.items.length ? "旅のタイトルを再生成" : "予定を追加するとタイトルを再生成できます";
     const coverPath = tripCoverImage(trip.id); if (coverImage.getAttribute("src") !== coverPath) coverImage.src = coverPath;
     const role = controller.source()?.getRole?.(), personalOwner = role === undefined || role === "owner";
     adoption.hidden = !options.changeAdoption || !personalOwner || ["cancelled", "completed"].includes(trip.lifecycleState);
