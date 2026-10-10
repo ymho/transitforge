@@ -41,7 +41,6 @@
   & .trip-workspace-card[data-item-type="stay"] .trip-workspace-item-icon { background: #e9f2ef; color: #48766b; }
   & .trip-workspace-card[data-item-type="activity"] .trip-workspace-item-icon { background: #fcf0ed; color: #b34337; }
   & .trip-workspace-item-focus { font-size: 17px; font-weight: 600; color: var(--tf-ink); background: transparent; line-height: 1.5; padding-block: 5px; }
-  & .trip-timeline-content > header > button:last-child { color: var(--tf-muted); background: transparent; padding-inline: 4px; font-size: 11px; flex-shrink: 0; }
   & .trip-timeline-rail::after { width: 6px; height: 6px; margin-top: 39px; border: 3px solid var(--tf-muted); background: var(--workspace-canvas); }
   & .trip-timeline-rail::before { top: 43px; bottom: -18px; width: 1px; background: var(--tf-line); }
   & .trip-time-control { padding-top: 23px; }
@@ -123,8 +122,6 @@
   & .trip-workspace-item-body { padding-left: 0; }
   & .trip-timeline-content > header { align-items: flex-start; gap: 12px; }
   & .trip-workspace-item-focus { text-align: left; padding: 4px 0; min-height: 44px; }
-  & .trip-timeline-content > header > button:last-child { min-width: 44px; min-height: 44px; border-radius: 12px; padding: 8px; }
-  & .trip-timeline-content > header > button:last-child:hover { background: var(--tf-soft); color: var(--tf-ink); }
   & .trip-timeline-content > button { margin: 12px 0 0; min-height: 44px; padding: 10px 0; border-top: 1px solid var(--tf-line); border-radius: 0; width: 100%; text-align: left; }
   & .trip-workspace-actions { display: flex; flex-wrap: wrap; gap: 10px; padding-block: 16px 8px; }
   & .trip-workspace-actions button { min-height: 44px; padding: 10px 14px; border-radius: 12px; }
@@ -213,11 +210,11 @@
 
 /* The card's main action is consultation; details use a quiet disclosure control. */
 #app[data-primary-view]:not([data-primary-view="map"]) {
-  & .trip-timeline-content > header { align-items: center; flex-wrap: wrap; gap: 8px; }
+  & .trip-timeline-content > header { align-items: center; flex-wrap: nowrap; gap: 8px; }
   & .trip-workspace-item-focus { flex: 1; min-width: 0; }
   & .trip-timeline-content > header > .trip-item-toggle { background: transparent; border: 0; box-shadow: none; color: var(--tf-muted); padding: 4px 8px; font-size: 11px; white-space: nowrap; }
-  & .trip-timeline-content > header > .trip-item-consult { background: var(--tf-blue); color: #fff; border: 0; box-shadow: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-  & .trip-timeline-content > header > .trip-item-consult:hover { background: var(--tf-blue); color: #fff; filter: brightness(.92); }
+  & .trip-timeline-content > header > button.trip-item-consult { background: var(--tf-blue); color: #fff; border: 0; box-shadow: none; border-radius: 8px; min-height: 34px; flex: 0 0 auto; padding: 6px 14px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  & .trip-timeline-content > header > button.trip-item-consult:hover:not(:disabled) { background: var(--tf-blue); color: #fff; filter: brightness(.92); }
 }
 
 #app[data-primary-view] .trip-item-toggle { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }

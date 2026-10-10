@@ -188,6 +188,20 @@ describe("Trip workspace DOM and mobile navigation", () => {
     f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
     expect(button(f.ui.panel, "この予定を確定")).toBeUndefined();
   });
+  it("places disclosure before the title and hides route numbering while preserving the saved name", () => {
+    const base = multiCityTrip(), route = base.items.find(item => item.type === "transport")!;
+    const trip = { ...base, items: base.items.map(item => item.id === route.id ? { ...item, title: "経路1: 向日町駅→出雲市駅" } : item) };
+    const f = setup({ getCurrentTrip: () => trip });
+    const card = f.ui.panel.querySelector<HTMLElement>(`[data-item-id="${route.id}"]`)!;
+    const header = card.querySelector("header")!;
+    expect(header.firstElementChild?.classList.contains("trip-item-toggle")).toBe(true);
+    expect(header.querySelector(".trip-workspace-item-focus")?.textContent).toBe("向日町駅→出雲市駅");
+    expect(header.textContent).not.toContain("経路1");
+    expect(header.querySelector(".trip-item-consult")?.textContent).toBe("相談");
+    header.querySelector<HTMLButtonElement>(".trip-item-toggle")!.click();
+    expect(header.querySelector(".trip-item-toggle")?.getAttribute("aria-expanded")).toBe("true");
+    expect(trip.items.find(item => item.id === route.id)?.title).toBe("経路1: 向日町駅→出雲市駅");
+  });
   it("preserves input, session, both scroll positions, focus, collapse and proposal through chat/trip/chat", () => {
     const f = setup({ getCurrentTrip: multiCityTrip }); f.input.value = "編集中の文章"; f.messages.scrollTop = 240; f.input.focus();
     f.controller.focus("activity"); f.controller.propose("順序変更", [{ type: "move", itemId: "activity" }]);
