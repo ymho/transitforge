@@ -4,7 +4,7 @@ import { iconMarkup, setLoadingStatus } from "../shared/primitives";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import type { ContextViewKind } from "../../domain/context-workspace";
 import { tripWorkspaceProjection, itemAssumptions } from "./trip-workspace-projection";
-import { renderWorkspaceCard, refreshMoveTargets } from "./trip-workspace-card";
+import { renderWorkspaceCard } from "./trip-workspace-card";
 import { tripAddConsultation } from "./trip-add-consultation";
 import { renderWorkspaceProposal } from "./trip-workspace-proposal";
 import { element, control } from "./trip-workspace-elements";
@@ -298,7 +298,6 @@ export function configureTripWorkspace(options: {
           card = { node, key }; cards.set(entryKey, card);
         }
         card.node.classList.toggle("is-focused", controller.uiFocus()?.itemId === item.id);
-        refreshMoveTargets(card.node, trip, item.id);
         card.node.querySelector(".trip-workspace-item-focus")?.setAttribute("aria-pressed", String(controller.uiFocus()?.itemId === item.id));
         if (group!.children[childIndex] !== card.node) group!.insertBefore(card.node, group!.children[childIndex] ?? null);
         childIndex++;
