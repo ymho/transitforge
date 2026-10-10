@@ -8,6 +8,8 @@ import { parsePublicPlacePresentation, publicPlacePresentationVersion, publicPla
 
 export interface AgentV2ReplyContext {
   executionId: string;
+  /** Trusted presentation Port; absent adapters retain safe literal publication. */
+  renderCommentary?: (value: string) => string;
   evidence: readonly Evidence[];
   effectiveIntent?: EffectiveIntent;
   /** Supplied only by authenticated Application composition, never model JSON. */
@@ -43,20 +45,21 @@ const questions: Record<ReplyQuestion, string> = {
  * from prose, and never let a model-declared kind authorize arbitrary payloads. */
 export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext): AgentV2AdmittedReply {
   const proposal = parseAgentV2Reply(value);
+  const publicCommentaryMarkdown = (text: string) => context.renderCommentary?.(text) ?? escapeMarkdown(text);
   if (context.navigation && (proposal.kind !== "clarification" || proposal.target !== context.navigation.target)) throw new AgentV2ReplyError("invalid_question_target");
   const proof: AgentV2ReplyProof = { kind: proposal.kind, references: [] };
   const followUp = () => {
     if (!("nextQuestion" in proposal) || !proposal.nextQuestion) return "";
     proof.question = proposal.nextQuestion.target;
-    return `\n\n${escapeMarkdown(boundedText(proposal.nextQuestion.text))}`;
+    return `\n\n${publicCommentaryMarkdown(boundedText(proposal.nextQuestion.text))}`;
   };
   const reply = (text: string): AgentV2AdmittedReply => ({ text, evidence: [], claims: [], proof });
   switch (proposal.kind) {
     case "conversation":
-      if (proposal.text) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.text))); }
+      if (proposal.text) { proof.commentary = true; return reply(publicCommentaryMarkdown(boundedText(proposal.text))); }
       return reply(conversationText[proposal.message]);
     case "uncertainty":
-      if (proposal.text) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.text))); }
+      if (proposal.text) { proof.commentary = true; return reply(publicCommentaryMarkdown(boundedText(proposal.text))); }
       return reply("必要な情報をまだ確認できていません。未確認の内容を確定情報としては案内できません。");
     case "clarification":
       // A fixed questionnaire must not re-ask a known value. A contextual question
@@ -64,7 +67,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       if (!proposal.text && knownCondition(context.effectiveIntent, proposal.target)) throw new AgentV2ReplyError("known_condition");
       proof.question = proposal.target;
       if (context.navigation) return reply(escapeMarkdown(boundedText(context.navigation.text)));
-      if (proposal.text) { proof.commentary = true; return reply(escapeMarkdown(boundedText(proposal.text))); }
+      if (proposal.text) { proof.commentary = true; return reply(publicCommentaryMarkdown(boundedText(proposal.text))); }
       return reply(questions[proposal.target]);
     case "unavailable":
       if (context.availableOperations?.includes(proposal.operation)) throw new AgentV2ReplyError("operation_available");
@@ -103,7 +106,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
         const commentary = boundedText(proposal.commentary);
         proof.commentary = true;
         claims.push({ id: "v2-commentary", statement: commentary, kind: "inference", evidenceIds: [...admitted.keys()], bindings });
-        return { text: escapeMarkdown(commentary) + followUp(), evidence: [...admitted.values()], claims, proof, publicAccommodationPresentation };
+        return { text: publicCommentaryMarkdown(commentary) + followUp(), evidence: [...admitted.values()], claims, proof, publicAccommodationPresentation };
       }
       let publicPlacePresentation: PublicPlacePresentation;
       try {
@@ -130,7 +133,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       const commentary = boundedText(proposal.commentary);
       proof.commentary = true;
       claims.push({ id: "v2-commentary", statement: commentary, kind: "inference", evidenceIds: [...proposal.evidenceIds], bindings });
-      return { text: escapeMarkdown(commentary) + followUp(), evidence: selected.map((item) => structuredClone(item)), claims, proof, publicPlacePresentation };
+      return { text: publicCommentaryMarkdown(commentary) + followUp(), evidence: selected.map((item) => structuredClone(item)), claims, proof, publicPlacePresentation };
     }
     case "answer": {
       const selected = new Map<string, Evidence>();
@@ -171,11 +174,11 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
         proof.commentary = true;
         claims.push({ id: "v2-commentary", statement: commentary, kind: "inference",
           evidenceIds: [...selected.keys()], bindings: commentaryBindings });
-        parts.unshift(escapeMarkdown(commentary));
+        parts.unshift(publicCommentaryMarkdown(commentary));
       }
       for (const [index, section] of (proposal.sections ?? []).entries()) {
         const heading = boundedText(section.heading), text = boundedText(section.text);
-        parts.push(`### ${escapeMarkdown(heading).replaceAll("\n", " ")}\n\n${escapeMarkdown(text)}`);
+        parts.push(`### ${escapeMarkdown(heading).replaceAll("\n", " ")}\n\n${publicCommentaryMarkdown(text)}`);
         proof.commentary = true;
         claims.push({ id: `v2-section-${index + 1}`, statement: `${heading}\n${text}`, kind: "inference",
           evidenceIds: [...selected.keys()], bindings: commentaryBindings });

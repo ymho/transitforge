@@ -7,6 +7,9 @@ export interface ToolIntentPolicyDecision {
   accepted: boolean;
   dependencyTargets: IntentTarget[];
   error?: AgentToolError;
+  /** Closed metadata for the SDK; never echo input values or raw error text. */
+  recovery?: { kind: "resolve_conditions"; target: IntentTarget; inputField: string;
+    reason: "missing_input" | "not_accepted" | "unknown" | "insufficient_precision" | "stale_value" };
 }
 
 /** Validates model Tool input against the same Application-derived meaning projection
@@ -28,20 +31,20 @@ export function validateToolIntentUse(
     const inputPresent = input[requirement.inputField] !== undefined;
     if (!inputPresent && requirement.necessity === "optional") continue;
     if (!inputPresent) return reject("precondition_missing",
-      `Tool入力${requirement.inputField}がありません`);
+      `Tool入力${requirement.inputField}がありません`, requirement, "missing_input");
     const facts = effective.actualConversationFacts.filter(({ target }) => target === requirement.target);
     const usable = facts.filter((fact) => usableFact(fact, requirement));
     const basePresent = effective.activeBaseFacts.some(({ target }) => target === requirement.target) ||
       requirement.target === "goal" && effective.activeBaseGoal !== undefined ||
       requirement.target === "party_size" && effective.activeBaseParty !== undefined;
     if (facts.some(({ value }) => value.kind === "unknown")) return reject("precondition_missing",
-      `Tool入力${requirement.inputField}は利用者が未定・非開示とした${requirement.target}から補完できません`);
+      `Tool入力${requirement.inputField}は利用者が未定・非開示とした${requirement.target}から補完できません`, requirement, "unknown");
     if (requirement.necessity === "required" && !usable.length && !basePresent) return reject("precondition_missing",
-      `Tool入力${requirement.inputField}に必要な${requirement.target}が現在の意味状態にありません`);
+      `Tool入力${requirement.inputField}に必要な${requirement.target}が現在の意味状態にありません`, requirement, "not_accepted");
     if (inputPresent && facts.length && !usable.length) return reject("precondition_failed",
-      `Tool入力${requirement.inputField}に使える精度または強さの${requirement.target}がありません`);
+      `Tool入力${requirement.inputField}に使える精度または強さの${requirement.target}がありません`, requirement, "insufficient_precision");
     if (inputPresent && requirement.match === "exact" && usable.length && !usable.some(({ value }) => matchesInput(value, input[requirement.inputField]))) {
-      return reject("stale_revision", `Tool入力${requirement.inputField}が現在の${requirement.target}と一致しません`);
+      return reject("stale_revision", `Tool入力${requirement.inputField}が現在の${requirement.target}と一致しません`, requirement, "stale_value");
     }
   }
   return { accepted: true, dependencyTargets: [...dependencies] };
@@ -78,6 +81,8 @@ function matchesInput(value: IntentValue, input: unknown): boolean {
   return false;
 }
 
-function reject(code: "precondition_missing" | "precondition_failed" | "stale_revision", message: string): ToolIntentPolicyDecision {
-  return { accepted: false, dependencyTargets: [], error: { code, message, retryable: false } };
+function reject(code: "precondition_missing" | "precondition_failed" | "stale_revision", message: string,
+  requirement: AgentToolIntentRequirement, reason: NonNullable<ToolIntentPolicyDecision["recovery"]>["reason"]): ToolIntentPolicyDecision {
+  return { accepted: false, dependencyTargets: [], error: { code, message, retryable: false },
+    recovery: { kind: "resolve_conditions", target: requirement.target, inputField: requirement.inputField, reason } };
 }

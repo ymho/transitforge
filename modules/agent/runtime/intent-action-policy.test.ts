@@ -4,6 +4,7 @@ import { evidenceForCurrentIntent, validateToolIntentUse } from "./intent-action
 import type { AgentToolDescriptor } from "./tool-contract";
 import type { ConversationIntentFact } from "@raiquora/trip/conversation-intent";
 import type { Evidence } from "./evidence-model";
+import { accommodationToolDescriptor } from "./accommodation-tool-descriptor";
 
 const descriptor: AgentToolDescriptor = {
   name: "lookup",
@@ -28,6 +29,27 @@ describe("intent action policy", () => {
       .toBe("stale_revision");
     expect(validateToolIntentUse(descriptor, { location: "京都" }, effective).error?.code)
       .toBe("precondition_missing");
+  });
+
+  it("identifies the missing hotel condition without changing validation or leaking the model input", () => {
+    const input = { destination: "private-input", checkInDate: "2026-10-01", checkOutDate: "2026-10-02" };
+    const effective = intent([date("2026-10-01")]);
+    const missing = validateToolIntentUse(accommodationToolDescriptor, input, effective);
+    expect(missing).toMatchObject({ accepted: false, error: { code: "precondition_missing", retryable: false },
+      recovery: { kind: "resolve_conditions", target: "destination", inputField: "destination", reason: "not_accepted" } });
+    expect(JSON.stringify(missing)).not.toContain(input.destination);
+    expect(validateToolIntentUse(accommodationToolDescriptor, input, intent([place("出雲大社"), date("2026-10-01")])).accepted).toBe(true);
+    const unknown = { ...place("出雲大社"), value: { kind: "unknown" as const, reason: "undecided" as const } };
+    expect(validateToolIntentUse(accommodationToolDescriptor, input, intent([unknown])).recovery)
+      .toMatchObject({ target: "destination", reason: "unknown" });
+  });
+
+  it("distinguishes missing input and stale values from a missing accepted condition", () => {
+    const effective = intent([place("京都"), date("2026-10-01")]);
+    expect(validateToolIntentUse(descriptor, { location: "京都" }, effective).recovery)
+      .toMatchObject({ target: "start_date", inputField: "date", reason: "missing_input" });
+    expect(validateToolIntentUse(descriptor, { location: "大阪", date: "2026-10-01" }, effective).recovery)
+      .toMatchObject({ target: "destination", reason: "stale_value" });
   });
 
   it("invalidates only evidence depending on the changed target and drops untracked legacy evidence", () => {

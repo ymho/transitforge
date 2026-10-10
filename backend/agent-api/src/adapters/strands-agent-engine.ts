@@ -1,3 +1,4 @@
+import { publicCommentaryMarkdown } from "./public-commentary-markdown.js";
 import {
   Agent, BedrockModel, StructuredOutputError, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
@@ -232,7 +233,7 @@ export class StrandsAgentEngine {
         return;
       }
       try {
-        admitAgentV2Reply(reply, { executionId: input.executionId, evidence: merged.evidence,
+        admitAgentV2Reply(reply, { renderCommentary: publicCommentaryMarkdown, executionId: input.executionId, evidence: merged.evidence,
           effectiveIntent: currentEffectiveIntent, receipts: operationReceipts, navigation, availableOperations: input.candidateController?.context.canSave ? ["save"] : [] });
       } catch (error) {
         if (!(error instanceof AgentV2ReplyError)) throw error;
@@ -314,7 +315,8 @@ function createStrandsReadTools(input: {
       const effectiveIntent = input.getEffectiveIntent?.();
       const decision = validateToolIntentUse(descriptor, toolInput, effectiveIntent);
       if (!decision.accepted) return jsonValue({ ok: false, error: {
-        code: decision.error?.code ?? "precondition_failed", retryable: decision.error?.retryable ?? false } });
+        code: decision.error?.code ?? "precondition_failed", retryable: decision.error?.retryable ?? false },
+        ...(decision.recovery ? { recovery: decision.recovery } : {}) });
       if (context?.cancelSignal.aborted) return jsonValue({ ok: false, error: { code: "execution_failed", retryable: true } });
       if (input.maxToolCalls !== undefined && (input.budgetState?.toolCalls ?? 0) >= input.maxToolCalls ||
           input.reserveToolCall && !input.reserveToolCall()) {
