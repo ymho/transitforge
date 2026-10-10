@@ -1,4 +1,5 @@
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
+export type ConsultationStartResult = { trip: Trip; conversationId: string } | { status: "out-of-scope"; message: string };
 
 export interface TripMutationRequest { tripId: string; baseRevision: number; mutationId: string; proposal: TripUpdateProposal }
 export interface PlanAdoptionTarget { conversationId: string; candidateSetId: string; candidateSetRevision: number; variantId: string; tripId: string; baseTripRevision: number; mutationId: string }
@@ -18,7 +19,7 @@ export interface ServerTripClient {
   subscribeSessionChange?(listener: () => void): () => void;
   getRole?(tripId: string): import("@raiquora/trip/trip-sharing").TripRole | undefined;
   create(trip: Trip): Promise<Trip>;
-  startConsultation?(input: { tripId: string; title: string }): Promise<{ trip: Trip; conversationId: string }>;
+  startConsultation?(input: { tripId: string; title: string; userRequest?: string }): Promise<ConsultationStartResult>;
   branchConsultation?(input: { sourceTripId: string; sourceRevision: number; tripId: string; title: string }): Promise<{ trip: Trip; conversationId: string; sourceTripId: string }>;
   list(page?: { limit?: number; afterTripId?: string }): Promise<ServerTripPage>;
   archive(tripId: string): Promise<void>;

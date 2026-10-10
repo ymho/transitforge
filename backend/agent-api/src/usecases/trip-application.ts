@@ -19,7 +19,8 @@ export class TripApplication {
     private readonly clock: TripClock = { now: () => new Date() }, private readonly reservations?: ReservationReader,
     private readonly feasibility?: TripFeasibilityReader, private readonly authorization?: TripAuthorizer,
     private readonly intentAdoptions?: IntentProposalAdoptionPort,
-    private readonly consultations?: import("../ports/trip-consultation-repository.js").TripConsultationRepository) {}
+    private readonly consultations?: import("../ports/trip-consultation-repository.js").TripConsultationRepository,
+    private readonly consultationScope?: import("../ports/consultation-scope.js").ConsultationScope) {}
   private async ready(principal: TripPrincipal, proposed: Trip): Promise<void> {
     try {
       const reservations = await this.reservations?.facts(principal, proposed.id);
@@ -86,6 +87,8 @@ export class TripApplication {
     switch (command.operation) {
       case "start-consultation":
         if (!this.consultations) throw new TripResourceError("unavailable");
+        if (this.consultationScope && await this.consultationScope.classify(command.userRequest ?? command.title) === "out-of-scope")
+          return { version, status: "out-of-scope", message: "旅行やお出かけに関する相談をお手伝いできます。行きたい場所や、旅でやってみたいことを教えてください。" };
         return { version, ...await this.consultations.start(actor, { tripId: command.tripId, title: command.title }) };
       case "branch-consultation":
         if (!this.consultations) throw new TripResourceError("unavailable");

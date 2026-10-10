@@ -40,7 +40,7 @@ function checkBounds(value: unknown, depth = 0): void {
 }
 export type TripApiCommand =
   | { version: typeof tripApiVersion; operation: "create"; trip: Trip }
-  | { version: typeof tripApiVersion; operation: "start-consultation"; tripId: string; title: string }
+  | { version: typeof tripApiVersion; operation: "start-consultation"; tripId: string; title: string; userRequest?: string }
   | { version: typeof tripApiVersion; operation: "branch-consultation"; sourceTripId: string; sourceRevision: number; tripId: string; title: string }
   | ({ version: typeof tripApiVersion; operation: "mutate" } & TripMutation)
   | { version: typeof tripApiVersion; operation: "get" | "archive"; tripId: string }
@@ -116,7 +116,8 @@ export function parseTripCommand(value: unknown): TripApiCommand {
   let keys: string[];
   switch (v.operation) {
     case "start-consultation":
-      keys = ["tripId", "title"]; tripIdentifier(v.tripId);
+      keys = ["tripId", "title", "userRequest"]; tripIdentifier(v.tripId);
+      if (v.userRequest !== undefined && (typeof v.userRequest !== "string" || !v.userRequest.trim() || v.userRequest.length > 32000)) throw new TripResourceError("invalid-input");
       if (typeof v.title !== "string" || !v.title.trim() || v.title.length > 160) throw new TripResourceError("invalid-input");
       break;
     case "branch-consultation":

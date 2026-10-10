@@ -363,3 +363,14 @@ it("dismisses trip menus outside their own bounds and unregisters on dispose", (
   document.body.click(); expect(header.open).toBe(false);
   shell.dispose(); header.open = true; document.body.click(); expect(header.open).toBe(true);
 });
+
+it("shows an out-of-scope reply without opening a conversation or losing the original prompt", async () => {
+  const message = "旅行やお出かけの相談をお手伝いできます。";
+  const { ports } = setup({ authState: signedIn, newConsultation: vi.fn(async () => ({ message })) });
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!; input.value = "積分の公式を教えて";
+  document.querySelector(".home-prompt")!.dispatchEvent(new Event("submit", { cancelable: true }));
+  await vi.waitFor(() => expect(document.querySelector("main")!.dataset.consultationMode).toBe("landing"));
+  expect(document.querySelector("[data-consultation-error]")?.textContent).toBe(message);
+  expect(input.value).toBe("積分の公式を教えて"); expect(input.disabled).toBe(false);
+  expect(ports.openChat).not.toHaveBeenCalled(); expect(ports.openTrip).not.toHaveBeenCalled();
+});
