@@ -53,7 +53,7 @@ try {
     assert.equal(await page.locator(".trip-workspace").isVisible(), true);
     assert.equal(await page.locator(".consultation-page").isVisible(), false);
     await capture("trip");
-    await page.locator("[data-trip-consultation]").click();
+    await page.locator(".trip-workspace-card").first().getByRole("button", { name: "相談する", exact: true }).click();
     assert.equal(await page.locator(".home-hero").isVisible(), false);
     assert.equal(await page.locator(".consultation-page").isVisible(), true);
     assert.match(await page.locator(".consultation-identity").innerText(), /出雲旅行/);
