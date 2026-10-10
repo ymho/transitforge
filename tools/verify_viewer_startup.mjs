@@ -133,12 +133,15 @@ try {
     await page.locator("[data-trip]").first().waitFor(); assert.equal(await page.locator("[data-trip]").count(), 2);
     await checkLayout("trip-list");
     await page.getByRole("tab", { name: "共有中の旅", exact: true }).click();
-    await page.locator(".trip-library-card").waitFor(); await checkLayout("shared-trips");
-    await page.getByRole("tab", { name: "公式しおり", exact: true }).click();
+    await page.locator('[data-page="trips"] .trip-library-card').waitFor(); await checkLayout("shared-trips");
+    assert.equal(await page.getByRole("tab", { name: "公式しおり", exact: true }).count(), 0);
+    await page.locator('[data-primary="chat"]').click();
+    await page.locator('[data-home-official-guides]').waitFor();
     await page.getByRole("button", { name: "しおりを見る", exact: true }).waitFor(); await checkLayout("official-guides");
     await page.getByRole("button", { name: "しおりを見る", exact: true }).click();
     await page.locator(".trip-sharing-panel[open]").waitFor(); await checkLayout("official-import");
     await page.getByRole("button", { name: "閉じる", exact: true }).click();
+    await page.locator('[data-primary="trips"]').click();
     await page.getByRole("tab", { name: "あなたの旅", exact: true }).click();
     assert.equal(await page.locator('.trip-timeline-content .trip-workspace-item-icon').count(), 0);
 

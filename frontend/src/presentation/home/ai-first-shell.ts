@@ -52,9 +52,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   root.innerHTML = `<nav class="product-nav" aria-label="メインナビゲーション"><div class="product-brand">${brandLogoMarkup()}</div>${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button><button type="button" data-account>${iconMarkup("account")}<span>設定</span></button></nav>
     <section class="product-page" data-page="chat" aria-label="相談"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>KAIHO original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
     <div class="home-brand">${brandLogoMarkup()}</div><form class="home-prompt"><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="${selectedExample}"></textarea><button type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
-    <section class="home-brand-story" aria-label="KAIHOについて"><h1>あなただけの旅を、一緒に形にします。</h1><p>その昔、旅に役立つ情報をまとめ、懐に収めて持ち歩ける案内書や地図が「懐宝」と名付けられました。</p><p>旅に必要なものを、いつでも手元に。その思いを受け継ぎ、KAIHOは新しい旅のパートナーとして生まれました。</p><p>AIとともに、行きたい場所や体験したいことを一つの旅へ。旅先の発見から、移動や旅程づくりまで、あなたの旅づくりをサポートします。</p></section><p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
+    <section class="home-brand-story" aria-label="KAIHOについて"><h1>あなただけの旅を、一緒に形にします。</h1><p>その昔、旅に役立つ情報をまとめ、懐に収めて持ち歩ける案内書や地図が「懐宝」と名付けられました。</p><p>旅に必要なものを、いつでも手元に。その思いを受け継ぎ、KAIHOは新しい旅のパートナーとして生まれました。</p><p>AIとともに、行きたい場所や体験したいことを一つの旅へ。旅先の発見から、移動や旅程づくりまで、あなたの旅づくりをサポートします。</p></section><p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><section class="home-official-guides" data-home-official-guides aria-labelledby="home-official-heading"><h2 id="home-official-heading">公式しおり</h2><div data-official-own hidden></div></section><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
     <section class="trip-route-progress" data-trip-route-progress role="status" hidden></section>
-    <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("", "旅のしおり")}<p>楽しみな予定も、思い出の旅も、ここに。</p></div><div data-trip-list></div></section>
+    <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("", "旅のしおり")}</div><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="設定" hidden><div class="my-shell">${pageHeadingMarkup("", "設定")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="いつもの好み設定"></div></section>
     <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>`;
   app.prepend(root);
@@ -81,6 +81,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     wrapper.append(summary, section); settings.append(wrapper);
   }
   let libraryUi: ReturnType<typeof configureTripLibrary> | undefined;
+  let officialUi: ReturnType<typeof configureTripLibrary> | undefined;
   let current: PrimaryView = "chat", composing = false;
   let consultationMode: "landing" | "starting" | "conversation" | "unavailable" = "landing";
   let entryGeneration = 0, appliedRoute = "";
@@ -154,7 +155,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   root.querySelector("[data-notifications]")!.addEventListener("click", ports.openNotifications);
   const render = () => {
     if (!root.isConnected) return;
-    libraryUi?.refresh();
+    libraryUi?.refresh(); officialUi?.refresh();
     let input: HomeReadInput;
     try { input = ports.read(); } catch { input = { state: "unavailable", trips: [] }; }
     const view = homeReadModel(input, ports.now());
@@ -219,6 +220,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     setLoadingStatus(entryStatus, entryStatus.textContent ?? "", consultationMode === "starting");
     app.dataset.consultationMode = consultationMode;
     hero.hidden = consultationMode !== "landing";
+    root.querySelector<HTMLElement>("[data-home-official-guides]")!.hidden = consultationMode !== "landing";
     progress.hidden = consultationMode === "landing" || consultationMode === "conversation";
     entryError.hidden = !entryError.textContent;
     entryRetry.hidden = consultationMode !== "unavailable";
@@ -335,9 +337,14 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     openTrip: async id => { window.history.pushState({ tripId: id }, "", "#trip"); apply(); await tripNavigationResult; },
     authenticated: isSignedIn, session: () => ports.librarySession?.() ?? 0,
   });
+  if (ports.library) officialUi = configureTripLibrary(root.querySelector<HTMLElement>("[data-home-official-guides]")!, root.querySelector<HTMLElement>("[data-official-own]")!, ports.library, {
+    officialOnly: true, login: ports.login,
+    openTrip: async id => { window.history.pushState({ tripId: id }, "", "#trip"); apply(); await tripNavigationResult; },
+    authenticated: isSignedIn, session: () => ports.librarySession?.() ?? 0,
+  });
   const unsubscribe = ports.subscribe(() => { render(); resumePending(); }); render(); apply(); resumePending();
   return { navigate, showMap, showConversation, showTrip, refresh: render, dispose() {
-    ++entryGeneration; window.clearInterval(exampleTimer); unsubscribe(); libraryUi?.dispose();
+    ++entryGeneration; window.clearInterval(exampleTimer); unsubscribe(); libraryUi?.dispose(); officialUi?.dispose();
     document.removeEventListener("click", dismissTripMenus, true);
     window.removeEventListener("popstate", historyChanged); window.removeEventListener("hashchange", historyChanged);
     document.removeEventListener("transitforge:travel-profile-changed", render); root.remove();
