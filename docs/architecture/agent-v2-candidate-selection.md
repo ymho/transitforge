@@ -62,3 +62,7 @@ mutation IDは認証済みconversationとuser sequenceから決定し、1つの�
 初期検索は実SDKの固定modelで、Providerは合成API応答を実Http adapterと固定egressのhandler/Invoke契約へ通す。選択turnは実Bedrock/Strandsである。Tripと会話の状態はDynamoDB契約fixtureを使う。保存された宿泊先のホテル名、rakuten-travelの施設ID、楽天トラベルのサービス名、宿泊日と出所、既存Stayの置換、他所有者からの非公開、履歴receipt、再送時の重複防止・再検索なしを確認した。実ホテルAPI・実AWS保存・実画面操作のE2Eを実施したとは扱わない。
 
 ローカルでは`test:agent:v2`の340成功/1skip、全`npm test`（Frontend 1756、Backend 1459成功/15skip、stream 5、live fixture 9）、`workspace:check`、`architecture:check`、`build`を確認した。評価のためのbranch限定workflowは元に戻し、マージ差分から外す。
+
+## 宿泊比較カードの表示
+
+採用案と結合した候補は均等幅のタブで切り替える。宿泊日・人数・参考料金はラベルと値を揃え、空室・料金条件はお知らせ欄へまとめる。評価は5点満点の星と数値を併記する。Providerの画像URL・評価・サービス識別子はEvidenceから公開カードへ渡し、SSEと会話履歴で共通表示する。HTTPSの検証済み画像だけ表示し、取得失敗時は画像を外す。楽天トラベルのカードは下端へ小さい提供元クレジットを置く。これらの表示用情報を旅程の採用Snapshotへコピーしない。旧カードはsummaryから表示でき、写真や取得元を推測しない。

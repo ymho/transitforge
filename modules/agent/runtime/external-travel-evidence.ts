@@ -16,6 +16,8 @@ export function externalTravelEvidence(output: unknown, context: Pick<ToolEviden
     return [{ id: observationId,
       category: "external" as const, knowledgeKind: "deterministic_fact" as const, subject: raw.name,
       facts: { resultKind: "accommodation", name: raw.name, status: "available", freshness: "fresh", provider: raw.provider, providerItemId: raw.providerItemId, availability: raw.availability === "available" ? "available" : "unknown",
+        ...(typeof raw.imageUrl === "string" ? { imageUrl: raw.imageUrl } : {}),
+        ...(typeof raw.reviewAverage === "number" && Number.isFinite(raw.reviewAverage) && raw.reviewAverage >= 0 && raw.reviewAverage <= 5 ? { reviewAverage: raw.reviewAverage } : {}),
         ...(typeof raw.checkInDate === "string" && typeof raw.checkOutDate === "string" ? { accommodationSummary: [
           `${raw.checkInDate}〜${raw.checkOutDate}`,
           ...(Number.isSafeInteger(output.searchAdults) ? [`検索人数: 大人${output.searchAdults}名`] : []),

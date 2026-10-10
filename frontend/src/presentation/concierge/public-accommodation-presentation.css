@@ -1,0 +1,19 @@
+
+.public-accommodation-presentation .public-plan-candidate-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--product-line); margin-bottom: .65rem; }
+.public-accommodation-presentation .public-plan-candidate-tabs button { flex: 1 1 0; min-width: 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; }
+.public-accommodation-presentation .public-plan-candidate-tabs button[aria-selected="true"] { border-bottom-color: var(--tf-blue); background: transparent; }
+.public-accommodation-presentation .accommodation-photo { display: block; width: 100%; max-height: 240px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; margin-bottom: .65rem; }
+.public-accommodation-presentation h3 { margin: 0 0 .65rem; font-size: 14px; }
+.accommodation-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .3rem .8rem; margin: .6rem 0; font-size: 12px; line-height: 1.6; }
+.accommodation-facts dt { color: var(--product-muted); }
+.accommodation-facts dd { margin: 0; }
+.accommodation-stars { position: relative; display: inline-block; color: #d5d8dc; white-space: nowrap; }
+.accommodation-stars > span { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: #bc7900; }
+.accommodation-notice { padding: .5rem .65rem; margin-block: .65rem; border-radius: 6px; background: #fff8e7; color: #785923; font-size: 12px; }
+.accommodation-notice p { margin: .2rem 0 0; white-space: pre-line; }
+.accommodation-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
+.public-accommodation-presentation .accommodation-source-link { font-size: 12px; line-height: 1.5; }
+.accommodation-footer { display: flex; align-items: center; justify-content: space-between; gap: .7rem; margin-top: .75rem; color: var(--product-muted); }
+.accommodation-footer small { font-size: 10px; }
+.accommodation-credit { margin-left: auto; flex-shrink: 0; font-size: 10px; }
+.accommodation-credit img { display: block; width: 72px; height: auto; }

@@ -173,6 +173,8 @@
   & .journey-presentation-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
   & :is(.journey-presentation-tabs, .public-plan-candidate-tabs) button { padding: 6px 10px; font-size: 12px; font-weight: 400; }
   & :is(.journey-presentation-tabs, .public-plan-candidate-tabs) [aria-selected="true"] { color: var(--tf-blue); background: var(--tf-soft); border-color: var(--tf-blue); }
+  & .public-accommodation-presentation .public-plan-candidate-tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; }
+  & .public-accommodation-presentation .public-plan-candidate-tabs button[aria-selected="true"] { border-bottom-color: var(--tf-blue); background: transparent; }
   & .journey-card, & .journey-card.public-plan-candidate { border: 0; padding: 0; background: transparent; }
   & .journey-card > header { padding: 4px 0 12px; }
   & .journey-card > header > span { display: none; }
