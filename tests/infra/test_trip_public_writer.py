@@ -25,7 +25,10 @@ class TripPublicWriterContractTest(unittest.TestCase):
         ]:
             self.assertRegex(source, re.escape(required).replace(r'\ ', r'\s+'))
         role = source.split('resource "aws_iam_role_policy" "trip_api"')[1].split('resource "aws_lambda_function" "trip_api"')[0]
-        for forbidden in ['"dynamodb:Scan"', '"dynamodb:*"', 'resources = ["*"]', 'bedrock:', 'vpc_config']:
+        self.assertIn('Action = ["bedrock:InvokeModel"]', role)
+        self.assertIn('local.bedrock_foundation_model_ids', role)
+        self.assertNotIn('"bedrock:*"', role)
+        for forbidden in ['"dynamodb:Scan"', '"dynamodb:*"', 'resources = ["*"]', 'vpc_config']:
             self.assertNotIn(forbidden, role)
 
     def test_public_entrypoint_exposes_authenticated_sharing_without_internal_features(self):

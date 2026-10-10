@@ -217,3 +217,22 @@
     & .home-official-guides h2 { font-size: 21px; margin-bottom: 20px; }
   }
 }
+
+/* Title actions keep their own space even when the name wraps or is truncated. */
+#app[data-primary-view]:is([data-primary-view]) {
+  & .trip-list-cover { width: 100%; padding: 0; border: 0; }
+  & .trip-list-title-row, & .trip-header-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  & .trip-list-title-open { flex: 1; min-width: 0; min-height: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+  & .trip-list-title-open strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; overflow-wrap: anywhere; }
+  & .trip-list-title-row { margin-bottom: 10px; }
+  & .trip-header-title-row h1 { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  & .trip-title-regenerate { flex: 0 0 28px; display: grid; place-items: center; width: 28px; min-width: 28px; height: 28px; min-height: 28px; padding: 0; border: 0; background: transparent; color: var(--tf-muted); border-radius: 0; box-shadow: none; }
+  & .trip-title-regenerate .ds-icon { width: 16px; height: 16px; }
+  & .trip-title-regenerate:disabled { opacity: .45; cursor: default; }
+  & .trip-title-regenerate[aria-busy="true"] .ds-icon { animation: trip-title-spin 1s linear infinite; }
+  & .trip-header-title-row .trip-title-regenerate { color: #fff; }
+  & .trip-list-open { background: transparent; border: 0; width: 100%; }
+  & .trip-title-status { font-size: 12px; }
+}
+@keyframes trip-title-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #app .trip-title-regenerate[aria-busy="true"] .ds-icon { animation: none; } }

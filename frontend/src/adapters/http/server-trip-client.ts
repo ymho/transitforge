@@ -38,6 +38,11 @@ export class HttpServerTripClient implements ServerTripClient {
     if (!value || typeof value !== "object" || Array.isArray(value) || (value as { version?: unknown }).version !== "trip-api-v1") throw new Error("Invalid Trip API response");
     return value as Record<string, unknown>;
   }
+  async generateTitle(tripId: string, baseRevision: number): Promise<string> {
+    const result = await this.execute({ operation: "generate-title", tripId, baseRevision });
+    if (result?.baseRevision !== baseRevision || typeof result.title !== "string" || !result.title.trim() || [...result.title].length > 32) throw new Error("Invalid generated title");
+    return result.title;
+  }
   async get(tripId: string): Promise<Trip | undefined> {
     const epoch = this.sessionVersion();
     this.getRole(tripId);

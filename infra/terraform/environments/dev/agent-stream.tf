@@ -94,6 +94,11 @@ resource "aws_iam_role_policy" "trip_api" {
   for_each = local.agent_stream_instances
   role     = aws_iam_role.trip_api[each.key].id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = concat(
+      [for id in local.bedrock_foundation_model_ids : "arn:aws:bedrock:${var.aws_region}::foundation-model/${id}"],
+      [for id in local.bedrock_inference_profile_ids : "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/${id}"],
+      [for id in local.bedrock_inference_profile_model_ids : "arn:aws:bedrock:*::foundation-model/${id}"]
+    ) },
     { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.trip_api[each.key].arn}:*" },
     { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:ConditionCheckItem", "dynamodb:TransactWriteItems"], Resource = [aws_dynamodb_table.trips.arn, "${aws_dynamodb_table.trips.arn}/index/trip-sharing"] },
     { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:TransactWriteItems"], Resource = aws_dynamodb_table.server_state.arn }
@@ -113,6 +118,7 @@ resource "aws_lambda_function" "trip_api" {
   environment { variables = {
     OFFICIAL_PUBLISHER_SUBJECTS = join(",", var.official_publisher_subjects)
     TRIP_API_ENABLED            = "true"
+    TRIP_TITLE_MODEL_ID         = var.bedrock_model_id
     TRIP_TABLE_NAME             = aws_dynamodb_table.trips.name
     SERVER_STATE_TABLE_NAME     = aws_dynamodb_table.server_state.name
     COGNITO_USER_POOL_ID        = aws_cognito_user_pool.users.id
