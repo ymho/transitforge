@@ -128,7 +128,7 @@ function datedBookingUrl(value: string, request: TravelProviderSearch): string {
     return url.toString();
   }
   if (!["travel.rakuten.co.jp", "hotel.travel.rakuten.co.jp"].includes(url.hostname)) return value;
-  const facility = url.pathname.match(/^\/HOTEL\/(\d+)\/\1\.html$/u);
+  const facility = url.pathname.match(/^\/HOTEL\/(\d+)\/\1\.html$/u) ?? url.pathname.match(/^\/hinfo\/(\d+)\/?$/u);
   if (facility) { url.hostname = "hotel.travel.rakuten.co.jp"; url.pathname = `/hotelinfo/plan/${facility[1]}`; }
   for (const [suffix, date] of [["1", request.checkInDate], ["2", request.checkOutDate]] as const) {
     const [year, month, day] = date.split("-");
@@ -156,10 +156,10 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function providerExcerpt(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const clean = value.replace(/<[^>]*>/gu, " ").replace(/&nbsp;/gu, " ").replace(/&amp;/gu, "&")
-    .replace(/[\u0000-\u001f\u007f]/gu, " ").replace(/\s+/gu, " ").trim();
+    .replace(/(?:続きを読む|続きはこちら)[\s\S]*$/u, "").replace(/[\u0000-\u001f\u007f]/gu, " ").replace(/\s+/gu, " ").trim();
   if (!clean) return undefined;
-  if (clean.length <= 160) return clean;
-  const excerpt = clean.slice(0, 159);
+  if (clean.length <= 300) return clean;
+  const excerpt = clean.slice(0, 299);
   const sentenceEnd = Math.max(excerpt.lastIndexOf("。"), excerpt.lastIndexOf("！"), excerpt.lastIndexOf("？"));
   return sentenceEnd >= 30 ? excerpt.slice(0, sentenceEnd + 1) : `${excerpt}…`;
 }

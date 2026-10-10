@@ -60,7 +60,7 @@ export function parseProviderResponse(value: unknown, request: TravelProviderSea
         if (item[field] !== undefined && (typeof item[field] !== "string" || (item[field] as string).length > 2_048)) throw new Error();
       }
       for (const field of ["description", "reviewExcerpt"]) {
-        if (item[field] !== undefined && (typeof item[field] !== "string" || (item[field] as string).length > 160 || /[\u0000-\u001f\u007f]/u.test(item[field] as string))) throw new Error();
+        if (item[field] !== undefined && (typeof item[field] !== "string" || (item[field] as string).length > 300 || /[\u0000-\u001f\u007f]/u.test(item[field] as string))) throw new Error();
       }
       for (const field of ["bookingUrl", "imageUrl"]) if (item[field] !== undefined) {
         const url = new URL(item[field] as string);

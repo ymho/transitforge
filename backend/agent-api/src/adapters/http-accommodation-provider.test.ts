@@ -124,13 +124,15 @@ it("keeps short provider features and a review example without per-hotel request
     calls++;
     return { ok: true, async json() { return { hotels: [[{ hotelBasicInfo: {
       hotelNo: 42, hotelName: "宿",
-      ...(url.includes("/vacant") ? {} : { hotelSpecial: "駅から徒歩5分。<br>温泉付きの宿です。", userReview: "接客が丁寧でした。" + "また利用したいです。".repeat(40) }),
+      ...(url.includes("/vacant") ? {} : { hotelSpecial: "駅から徒歩5分。<br>温泉付きの宿です。", userReview: "接客が丁寧でした。" + "また利用したいです。".repeat(40) + "続きはこちら" }),
     } }]] }; } };
   } }, { async load() { return { applicationId: "fixture", accessKey: "fixture", hotelSearchUrl: "https://example.com/search", vacantHotelSearchUrl: "https://example.com/vacant" }; } });
   const result = await provider.search({ destination: "京都", checkInDate: "2026-11-01", checkOutDate: "2026-11-02", adults: 2, limit: 10 });
   expect(calls).toBe(2);
   expect(result[0]).toMatchObject({ description: "駅から徒歩5分。 温泉付きの宿です。", availability: "available" });
-  expect(result[0]!.reviewExcerpt!.length).toBeLessThanOrEqual(160);
+  expect(result[0]!.reviewExcerpt!.length).toBeLessThanOrEqual(300);
   expect(result[0]!.reviewExcerpt).toMatch(/^接客が丁寧でした。/u);
   expect(result[0]!.reviewExcerpt).toMatch(/。$/u);
+  expect(result[0]!.reviewExcerpt!.length).toBeGreaterThan(160);
+  expect(result[0]!.reviewExcerpt).not.toContain("続きはこちら");
 });

@@ -1,4 +1,5 @@
 import "./public-accommodation-presentation.css";
+import { rakutenAccommodationLink } from "../shared/rakuten-accommodation-link";
 import { parsePublicAccommodationPresentation, type PublicAccommodationPresentation } from "@raiquora/agent/public-accommodation-presentation";
 import type { PublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 import { renderPublicPlanPresentation } from "./public-plan-presentation-view";
@@ -35,7 +36,7 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
     for (const line of hotel.summary.split("\n").filter(Boolean)) {
       if (commonLines.includes(line) || /^評価[:：]/u.test(line)) continue;
       const introduction = line.match(/^(特徴|口コミ（投稿例）)[:：]\s*(.*)$/u);
-      if (introduction) { introductions.push(introduction[1] === "特徴" ? introduction[2]! : `口コミの一例：${introduction[2]}`); continue; }
+      if (introduction) { const excerpt = introduction[2]!.replace(/(?:続きを読む|続きはこちら)[\s\S]*$/u, "").trim(); if (excerpt) introductions.push(introduction[1] === "特徴" ? excerpt : `口コミの一例：${excerpt}`); continue; }
       if (line === "料金は未確認") { addFact("参考最安値", "未確認"); continue; }
       if (/^空室あり/u.test(line)) { addFact("空室", "あり（検索時の条件）"); continue; }
       if (/^空室は未確認/u.test(line)) { addFact("空室", "未確認"); continue; }
@@ -72,7 +73,7 @@ export function renderPublicAccommodationPresentation(input: PublicAccommodation
       notice.className = "accommodation-notice"; title.textContent = "お知らせ"; content.textContent = notices.join("。\n"); notice.append(title, content); card.append(notice);
     }
     const controls = document.createElement("div"); controls.className = "accommodation-actions"; card.append(controls);
-    if (hotel.sourceUrl) { const source = document.createElement("a"); source.className = "accommodation-source-link"; source.href = hotel.sourceUrl; source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = "宿の詳細・最新料金を確認 ↗"; controls.append(source); }
+    if (hotel.sourceUrl) { const source = document.createElement("a"); source.className = "accommodation-source-link"; const dates = hotel.summary.match(/^(\d{4}-\d{2}-\d{2})〜(\d{4}-\d{2}-\d{2})/mu); const adults = hotel.summary.match(/^検索人数[:：]\s*大人(\d+)名/mu); source.href = dates ? rakutenAccommodationLink(hotel.sourceUrl, { checkInDate: dates[1]!, checkOutDate: dates[2]!, ...(adults ? { adults: Number(adults[1]) } : {}) }) : hotel.sourceUrl; source.target = "_blank"; source.rel = "noopener noreferrer"; source.textContent = "宿の詳細・最新料金を確認 ↗"; controls.append(source); }
     const footer = document.createElement("footer"); footer.className = "accommodation-footer";
     const observed = document.createElement("small"); observed.textContent = `取得: ${new Date(hotel.retrievedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}（日本時間）`; footer.append(observed);
     if (hotel.provider === "rakuten-travel") {
