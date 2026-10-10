@@ -5,6 +5,7 @@ import { element, control, option } from "./trip-workspace-elements";
 
 export function renderWorkspaceCandidates(controller: TripWorkspaceController, report: (message: string) => void): HTMLElement {
   const section = element("section", "trip-workspace-candidates");
+  if (!controller.candidates().length) { section.hidden = true; return section; }
   section.append(element("h2", "", "比較中の候補（旅程には未採用）"));
   for (const entry of controller.candidates()) {
     const card = element("article", "trip-workspace-candidate");

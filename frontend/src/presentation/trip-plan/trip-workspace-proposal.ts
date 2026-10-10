@@ -7,13 +7,14 @@ import { reservationChangeKey } from "@raiquora/trip/reservation";
 import { applyTripProposal } from "@raiquora/trip/trip";
 import { requestsReady, hasReadyBlockers, TripNotFeasible } from "@raiquora/trip/trip-ready";
 import { renderTripFeasibility } from "./trip-feasibility-view";
+import { renderTripWarnings } from "./trip-warning-view";
 
 export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal, controller: TripWorkspaceController,
   report: (text: string) => void): HTMLElement {
   const view = tripProposalProjection(trip, proposal);
   const section = element("section", "trip-workspace-proposal");
   section.setAttribute("aria-label", "未確認の変更案");
-  section.append(element("h2", "", "変更案（まだ反映していません）"), element("p", "", view.summary));
+  section.append(element("h2", "", "変更内容を確認"));
   const compare = (before: string, after: string) => {
     const row = element("div", "trip-workspace-diff");
     for (const [label, text] of [["現在", before], ["変更後", after]]) {
@@ -21,7 +22,26 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
     }
     section.append(row);
   };
-  for (const change of view.changes) compare(change.before, change.after);
+  const afterTrip = applyTripProposal(trip, proposal);
+  const moveOnly = proposal.patches.every(p => p.type === "move");
+  if (moveOnly) {
+    const list = element("ol", "trip-order-preview");
+    for (const item of afterTrip.items) list.append(element("li", "", item.title));
+    section.append(element("p", "", "この順番に変更します。"), list);
+  } else for (const change of view.changes) {
+    const oldItem = trip.items.find(item => item.id === change.id), nextItem = afterTrip.items.find(item => item.id === change.id);
+    if (change.before === change.after) continue;
+    section.append(element("h3", "", nextItem?.title ?? oldItem?.title ?? "予定"));
+    const before = [...new Set(change.before.split("\n"))].filter(line => !line.startsWith("行程順:") && line !== oldItem?.title);
+    const after = [...new Set(change.after.split("\n"))].filter(line => !line.startsWith("行程順:") && line !== nextItem?.title);
+    const beforeChanged = before.filter(line => !after.includes(line)), afterChanged = after.filter(line => !before.includes(line));
+    if (oldItem?.title !== nextItem?.title && oldItem && nextItem) compare(oldItem.title, nextItem.title);
+    if (beforeChanged.length || afterChanged.length) compare(beforeChanged.join("\n") || "—", afterChanged.join("\n") || "—");
+    if (proposal.patches.some(p => p.type === "move" && p.itemId === change.id)) {
+      const index = afterTrip.items.findIndex(item => item.id === change.id);
+      section.append(element("p", "", index > 0 ? `「${afterTrip.items[index - 1]!.title}」の後に移動` : "先頭に移動"));
+    }
+  }
   if (view.requestChanged) {
     compare(view.beforeConditions, view.afterConditions);
     if (proposal.patches.every(p => p.type === "request")) section.append(element("p", "", "旅行条件だけの変更案です。採用済みの予定や予約は変更しません。仮置きの値は、保存後も確認・修正できます。"));
@@ -33,12 +53,10 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
       if (beforeCost !== afterCost) compare(`${item.title}\n概算費用: ${beforeCost}`, `${item.title}\n概算費用: ${afterCost}`);
     }
   }
-  if (view.beforeState !== view.afterState) compare(view.beforeState, view.afterState);
   const warnings = controller.reservationWarnings();
   const replan = controller.replan();
   if (replan) {
     section.append(element("p", "", `変更しない予定: ${replan.keptItemIds.map((id) => trip.items.find((i) => i.id === id)?.title).join("、") || "なし"}`));
-    section.append(element("p", "", "予定上の過去・今回の対象外は保護しています。実際の現在地や乗車は推測していません。"));
     for (const change of replan.protectedChanges) section.append(element("p", "", `${trip.items.find((i) => i.id === change.itemId)?.title}: ${change.codes.map((code) => ({ booked: "予約済み", fixed: "固定時刻", "hard-constraint": "必須条件", past: "予定上の過去", "outside-scope": "対象外", "reservation-unconfirmed": "予約未確認" })[code]).join("・")}`));
   }
   const feasibility = controller.feasibility(applyTripProposal(trip, proposal));
@@ -52,11 +70,13 @@ export function renderWorkspaceProposal(trip: Trip, proposal: TripUpdateProposal
   const consent = element("input"); consent.type = "checkbox";
   const key = reservationChangeKey(proposal, controller.reservations() ?? []);
   const needsConsent = warnings.length > 0 || !!replan?.confirmationKey;
+  const caution = renderTripWarnings(warnings.length ? ["予約済みの予定が変わります。予約の変更・取消は別途必要です。"] : []);
+  if (caution) section.append(caution);
   if (needsConsent) {
     const label = element("label", "trip-workspace-assumption");
     label.append(consent, document.createTextNode("予約・固定時刻・必須条件への変更の影響を確認しました。予約の変更・取消は別操作であり、この操作では行いません。"));
     section.append(label);
-  } else if (controller.reservations() === undefined) section.append(element("p", "", "予約記録は未取得です。予約がないことを意味しません。保存時にサーバで再確認します。"));
+  }
   if (controller.canConfirm()) {
     const server = controller.source()?.confirmationPersistence === "server";
     const confirm = control(server ? "確認して旅程を保存" : "確認して、この画面内に反映", () => {
