@@ -1,6 +1,6 @@
 import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
-import type { DayEntry } from "@raiquora/trip/daily-itinerary";
+import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itinerary";
 import { renderTripTimeEditor } from "./trip-time-editor";
 import { transportModeLabel } from "../../usecases/trip-plan/transport-preview";
 import { renderTripRouteTimeline } from "./trip-route-timeline";
