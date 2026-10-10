@@ -357,7 +357,7 @@ aiGuideController = configureAiGuidePanel(
       void serverTripList.refresh().catch(() => undefined);
       void tripWorkspaceController.source()?.retry?.().then(() => {
         if (activeConversationSession.id !== conversationId || activeConversationSession.tripId !== value.target?.tripId) return;
-        try { tripWorkspaceController.presentPlan(value); if (open) tripWorkspace.showPlan(); } catch { /* Ignore stale retained history. */ }
+        try { tripWorkspaceController.presentPlan(value); } catch { /* Ignore stale retained history. */ }
       }).catch(() => { if (open) aiGuideController.notify("旅程案は相談に表示しました。旅程を再読み込みして確認してください。"); });
     },
     onTripConditionsSaved: () => {
