@@ -2,6 +2,7 @@ import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
 import type { DayEntry } from "@raiquora/trip/daily-itinerary";
 import { renderTripTimeEditor } from "./trip-time-editor";
+import { transportModeLabel } from "../../usecases/trip-plan/transport-preview";
 import { renderTripRouteTimeline } from "./trip-route-timeline";
 import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
@@ -24,7 +25,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const icon = element("span", "trip-workspace-item-icon");
   icon.innerHTML = travelIcon(item.type === "transport" ? "transport" : item.type === "stay" ? "stay" : "activity");
   icon.setAttribute("aria-hidden", "true");
-  const displayTitle = item.type === "transport" ? item.title.replace(/^経路\s*[0-9０-９]+\s*[:：]\s*/u, "") || item.title : item.title;
+  const displayTitle = item.type === "transport" ? item.title.replace(/^経路\s*[0-9０-９]+\s*[:：]\s*/u, "").replace(/\s*[（(]経路\s*[0-9０-９]+[）)]\s*$/u, "") || item.title : item.title;
   const focus = control(displayTitle, () => { controller.focus(item.id); body.hidden = false; updateDisclosure(); options.collapse(false); });
   focus.className = "trip-workspace-item-focus";
   focus.setAttribute("aria-label", `${displayTitle}を相談対象にする`);
@@ -58,7 +59,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   if (warning) body.append(warning);
   const information = element("details", "trip-item-information"); information.append(element("summary", "", "予約情報"));
   for (const r of controller.reservations()?.filter(r => r.itineraryItemId === item.id) ?? []) information.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
-  if (item.type === "transport") body.append(renderTripRouteTimeline(item));
+  if (item.type === "transport" && item.detail.status === "selected") body.append(renderTripRouteTimeline(item));
   if (information.childElementCount > 1) body.append(information);
   if (item.type === "stay" && item.selection.status === "selected") {
     const detail = renderStayDetails(item.selection.accommodation); if (detail) body.append(detail);
@@ -117,13 +118,14 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   }
   if (item.type === "transport" && item.detail.status === "unresolved") {
     const form = element("form", "trip-workspace-manual-transport");
-    const modeLabel = element("label", "", "手入力の交通手段 "), mode = element("select");
-    for (const value of nonRailTransportModes) mode.append(option(({ bus: "バス", car: "車", walk: "徒歩", taxi: "タクシー" } as Record<string, string>)[value] ?? value, value));
+    const modeLabel = element("label", "", "交通手段"), mode = element("select");
+    for (const value of nonRailTransportModes) mode.append(option(transportModeLabel(value), value));
     modeLabel.append(mode);
-    const fromLabel = element("label", "", "出発地 "), from = element("input"); from.required = true; from.maxLength = 200; fromLabel.append(from);
-    const toLabel = element("label", "", "到着地 "), to = element("input"); to.required = true; to.maxLength = 200; toLabel.append(to);
+    const fromLabel = element("label", "", "出発地"), from = element("input"); from.required = true; from.maxLength = 200; fromLabel.append(from);
+    const toLabel = element("label", "", "到着地"), to = element("input"); to.required = true; to.maxLength = 200; toLabel.append(to);
     const submit = element("button", "", "手入力の移動案を確認"); submit.type = "submit";
-    form.append(modeLabel, fromLabel, toLabel, element("p", "trip-workspace-copy", "便・時刻・所要時間と予約は未確認です。"), submit);
+    const fields = element("div", "trip-manual-transport-fields"); fields.append(modeLabel, fromLabel, toLabel);
+    form.append(element("h3", "trip-manual-transport-title", "手入力"), fields, element("p", "trip-workspace-copy", "便・時刻・所要時間と予約は未確認です。"), submit);
     form.addEventListener("submit", event => { event.preventDefault(); safe(() => controller.preview(proposeTripItemChange(controller.current()!,
       { action: "select-manual-transport", itemId: item.id, title: item.title, mode: mode.value as typeof nonRailTransportModes[number], origin: from.value, destination: to.value }))); });
     body.append(form);

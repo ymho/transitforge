@@ -242,3 +242,16 @@ dialog.trip-order-editor :focus-visible { outline: 2px solid #37675f; outline-of
 #app[data-primary-view] .trip-pending-plan-link { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 4px 0; font-size: 12px; color: var(--tf-blue); text-decoration: none; }
 
 #app[data-primary-view] .trip-timeline-content > header > .trip-workspace-item-decision { margin: 0; padding: 0; border: 0; background: transparent; color: var(--tf-muted); font-size: 10px; line-height: 1.4; white-space: nowrap; }
+#app[data-primary-view]:not([data-primary-view="map"]) .trip-workspace-manual-transport {
+  margin-top: 8px;
+  & .trip-manual-transport-title { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
+  & .trip-manual-transport-fields { display: grid; grid-template-columns: minmax(90px, .7fr) repeat(2, minmax(0, 1fr)); gap: 8px; }
+  & .trip-manual-transport-fields label { display: grid; gap: 4px; margin: 0; min-width: 0; color: var(--tf-muted); font-size: 11px; }
+  & .trip-manual-transport-fields :is(input, select) { box-sizing: border-box; width: 100%; min-width: 0; height: 32px; min-height: 32px; padding: 4px 8px; border-radius: 6px; font-size: 12px; }
+  & .trip-workspace-copy { margin: 8px 0; font-size: 11px; }
+  & button[type="submit"] { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+}
+@media (max-width: 30rem) {
+  #app[data-primary-view]:not([data-primary-view="map"]) .trip-workspace-manual-transport .trip-manual-transport-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #app[data-primary-view]:not([data-primary-view="map"]) .trip-workspace-manual-transport .trip-manual-transport-fields label:first-child { grid-column: 1 / -1; }
+}
