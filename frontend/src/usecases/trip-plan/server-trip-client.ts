@@ -14,6 +14,7 @@ export class TripWriteRejected extends Error {}
 /** Transport operation port, not a second Domain Repository. Owner is resolved server-side. */
 export interface ServerTripPage { trips: Trip[]; nextAfterTripId?: string }
 export interface ServerTripClient {
+  generateTitle?(tripId: string, baseRevision: number): Promise<string>;
   get(tripId: string): Promise<Trip | undefined>;
   sessionVersion?(): number;
   subscribeSessionChange?(listener: () => void): () => void;

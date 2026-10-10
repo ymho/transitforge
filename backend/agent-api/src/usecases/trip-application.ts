@@ -20,6 +20,7 @@ export class TripApplication {
     private readonly feasibility?: TripFeasibilityReader, private readonly authorization?: TripAuthorizer,
     private readonly intentAdoptions?: IntentProposalAdoptionPort,
     private readonly consultations?: import("../ports/trip-consultation-repository.js").TripConsultationRepository,
+    private readonly titleGenerator?: import("../ports/trip-title-generator.js").TripTitleGenerator,
     private readonly consultationScope?: import("../ports/consultation-scope.js").ConsultationScope) {}
   private async ready(principal: TripPrincipal, proposed: Trip): Promise<void> {
     try {
@@ -79,8 +80,8 @@ export class TripApplication {
     requireTripPrincipal(principal);
     const actor = principal;
     const command = parseTripCommand(value);
-    const access = this.authorization && ["get", "mutate", "archive"].includes(command.operation) && "tripId" in command
-      ? await this.authorization.authorize(principal, command.tripId, command.operation === "get" ? "read" : command.operation === "mutate" ? "write" : "owner") : undefined;
+    const access = this.authorization && ["get", "mutate", "archive", "generate-title"].includes(command.operation) && "tripId" in command
+      ? await this.authorization.authorize(principal, command.tripId, command.operation === "get" ? "read" : ["mutate", "generate-title"].includes(command.operation) ? "write" : "owner") : undefined;
     // Only this trusted result may resolve an owner namespace. Conversation operations stay personal.
     if (access) principal = access.owner;
     const version = tripApiVersion;
@@ -93,6 +94,16 @@ export class TripApplication {
       case "branch-consultation":
         if (!this.consultations) throw new TripResourceError("unavailable");
         return { version, ...await this.consultations.branch(actor, command) };
+      case "generate-title": {
+        if (!this.titleGenerator) throw new TripResourceError("unavailable");
+        const current = await this.trips.get(principal, command.tripId);
+        if (!current) throw new TripResourceError("not-found");
+        if (current.revision !== command.baseRevision) throw new TripResourceError("conflict");
+        if (!current.items.length) throw new TripResourceError("invalid-input");
+        const title = await this.titleGenerator.generate(current.items.map(item => ({ type: item.type, title: item.title.slice(0, 200) })));
+        if (!title.trim() || [...title].length > 32 || /[\r\n\u0000-\u001f]/u.test(title)) throw new TripResourceError("unavailable");
+        return { version, title, baseRevision: current.revision };
+      }
       case "create": {
         if (command.trip.officialOrigin !== undefined) throw new TripResourceError("invalid-input");
         if (command.trip.adoption !== undefined || command.trip.items.some(item => item.decision !== undefined)) throw new TripResourceError("confirmation-required");

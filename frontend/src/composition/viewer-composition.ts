@@ -1,3 +1,4 @@
+import { regenerateTripTitle } from "../usecases/trip-plan/regenerate-trip-title";
 import { prioritizeStartupPaths } from "../domain/route-startup-priority";
 import { TrainHitUpdateSchedule } from "../domain/train-hit-update";
 import { startTripConsultation } from "../usecases/trip-plan/start-trip-consultation";
@@ -413,6 +414,11 @@ const tripWorkspace = configureTripWorkspace({
   showMap: focusTripMap, loadInTripContext: (tripId) => inTripContextClient.read(tripId),
   ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
   openSharing: () => tripSharing.open(),
+  regenerateTitle: async (trip) => {
+    const source = tripWorkspaceController.source();
+    await regenerateTripTitle(serverTripClient, trip.id);
+    await source?.retry?.(); await serverTripList.refresh();
+  },
   changeAdoption: async (trip, action) => {
     if (!serverTripClient.previewTripAdoption || !serverTripClient.confirmTripAdoption) throw new Error("Trip adoption unavailable");
     const target = { tripId: trip.id, baseTripRevision: trip.revision, mutationId: crypto.randomUUID(), action };
@@ -624,6 +630,11 @@ primaryShell = configureAiFirstShell(document, app, {
   openTrip: (id) => tripNavigation.open(id, "trip"),
   openTravelMode: (id) => { void tripNavigation.open(id, "trip").then(() => tripWorkspace.openTravelMode()).catch(() => aiGuideController.notify("旅行モードを開けませんでした。")); },
   consultTrip: (id) => tripNavigation.open(id, "chat"),
+  regenerateTripTitle: async (id) => {
+    await regenerateTripTitle(serverTripClient, id);
+    await serverTripList.refresh();
+    if (tripWorkspaceController.current()?.id === id) await tripWorkspaceController.source()?.retry?.();
+  },
   renameTrip: async (id, title) => {
     const current = await serverTripClient.get(id); if (!current) throw new Error("Trip unavailable");
     await serverTripClient.mutate({ tripId: id, baseRevision: current.revision, mutationId: crypto.randomUUID(),

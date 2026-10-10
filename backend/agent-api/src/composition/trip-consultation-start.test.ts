@@ -33,7 +33,7 @@ it("classifies before any atomic write and never creates a Trip for a maths requ
   const repository = new DynamoDbTripRepository("test-trips", f.client, f.clock);
   const start = new DynamoDbTripConsultationRepository("test-trips", "test-state", f.client, f.clock);
   const scope = { classify: vi.fn(async () => "out-of-scope" as const) };
-  const app = new TripApplication(repository, repository, f.clock, undefined, undefined, undefined, undefined, start, scope);
+  const app = new TripApplication(repository, repository, f.clock, undefined, undefined, undefined, undefined, start, undefined, scope);
   const principal = { subject: "test-user" };
   const command = { version: "trip-api-v1", operation: "start-consultation", tripId, title: "数学の質問", userRequest: "積分の公式を教えて" };
   expect(await app.execute(principal, command)).toMatchObject({ status: "out-of-scope" });
@@ -46,7 +46,7 @@ it("allows a travel request to create its Trip and conversation after admission"
   const repository = new DynamoDbTripRepository("test-trips", f.client, f.clock);
   const start = new DynamoDbTripConsultationRepository("test-trips", "test-state", f.client, f.clock);
   const scope = { classify: vi.fn(async () => "travel" as const) };
-  const app = new TripApplication(repository, repository, f.clock, undefined, undefined, undefined, undefined, start, scope);
+  const app = new TripApplication(repository, repository, f.clock, undefined, undefined, undefined, undefined, start, undefined, scope);
   expect(await app.execute({ subject: "test-user" }, { version: "trip-api-v1", operation: "start-consultation", tripId, title: "京都へ行きたい" })).toMatchObject({ trip: { id: tripId }, conversationId: tripId });
   expect(scope.classify).toHaveBeenCalledWith("京都へ行きたい"); expect(f.rows.size).toBeGreaterThan(0);
 });
