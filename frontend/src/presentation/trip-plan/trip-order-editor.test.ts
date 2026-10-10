@@ -43,6 +43,6 @@ it("rejects an editor after the Trip revision or session changes", () => {
 it("groups and deduplicates warnings with a visible summary", () => {
   const warning = renderTripWarnings(["時刻を確認してください", "時刻を確認してください", "営業日を確認してください"])!;
   expect(warning.querySelectorAll("li")).toHaveLength(2);
-  expect(warning.querySelector("summary")?.textContent).toContain("2件");
+  expect(warning.querySelector("summary")?.textContent).toBe("⚠確認");
   expect(renderTripWarnings([])).toBeUndefined();
 });
