@@ -178,7 +178,12 @@ try {
     await page.emulateMedia({ colorScheme: "dark" });
     await page.screenshot({ path: `.artifacts/product-design/timeline-dark-${viewport.width}.png` });
     await page.emulateMedia({ colorScheme: "light" });
-    await page.locator('[data-item-id="visit"] button').filter({ hasText: "＋ この後に追加" }).click();
+    assert.equal(await page.getByRole("button", { name: "＋ この後に追加", exact: true }).count(), 0);
+    const addition = page.locator('.trip-workspace-day:not([hidden]) .trip-timeline-add[data-after-id="visit"]');
+    await addition.click();
+    assert.equal(await page.locator('.trip-workspace-add select').count(), 0);
+    await page.locator('.trip-workspace-add').getByLabel("どんな予定を追加したい？").fill("地元のものを食べたい");
+    await page.locator('.trip-workspace-add').getByLabel("場所名（任意）").fill("駅前");
     assert.equal(await page.locator(".trip-workspace-add").isVisible(), true);
     await checkLayout("spot-add");
     await page.locator('.trip-workspace-add button').filter({ hasText: "取消" }).click();
