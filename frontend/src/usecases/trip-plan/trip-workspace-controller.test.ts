@@ -76,3 +76,14 @@ it("saves conditions directly through the host without creating a preview and re
   c.attach("one", { getCurrentTrip: () => trip, getRole: () => "viewer", confirmProposal: async () => { throw new Error("must not write"); } });
   await expect(c.saveConditions({ ...proposal, baseRevision: trip.revision })).rejects.toThrow("閲覧専用");
 });
+
+it("announces only successful persisted changes and supports unsubscribing", async () => {
+  const trip = multiCityTrip(), c = createTripWorkspaceController("one");
+  let fail = true, saved = 0;
+  c.attach("one", { getCurrentTrip: () => trip, confirmProposal: async () => { if (fail) throw new Error("offline"); } });
+  const unsubscribe = c.subscribeSaved(() => { saved++; });
+  c.propose("変更", [{ type: "move", itemId: "activity" }]); expect(saved).toBe(0);
+  await expect(c.confirm()).rejects.toThrow("offline"); expect(saved).toBe(0);
+  fail = false; await c.confirm(); expect(saved).toBe(1);
+  unsubscribe(); c.propose("変更", [{ type: "move", itemId: "activity" }]); await c.confirm(); expect(saved).toBe(1);
+});

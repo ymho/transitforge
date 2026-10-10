@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import { confirmAction } from "../shared/app-dialog";
 import { brandLogoMarkup } from "../shared/brand";
 import { configureTripLibrary } from "./trip-library-panel";
@@ -195,7 +196,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     root.querySelectorAll<HTMLButtonElement>("[data-trip-archive]").forEach((button) => button.addEventListener("click", async () => {
       const current = view.trips.find((row) => row.trip.id === button.dataset.tripArchive)?.trip;
       if (!current || !ports.archiveTrip || !await confirmAction(document, `「${current.title}」を削除しますか？\n画面から元に戻すことはできません。宿泊や列車の予約は取り消されません。`)) return;
-      void ports.archiveTrip(current.id).then(render, () => { void ports.retry().then(render, render); });
+      void ports.archiveTrip(current.id).then(() => { notifySaved(document, "旅程を削除しました。"); render(); }, () => { void ports.retry().then(render, render); });
     }));
     if (!signedIn && (window.location.hash !== "#chat" || consultationMode !== "landing")) {
       window.history.replaceState({ consultation: "new" }, "", "#chat"); apply(true);

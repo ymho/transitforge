@@ -1,3 +1,4 @@
+import { notifySaved } from "../shared/save-notification";
 import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/reservation";
 import { confirmAction } from "../shared/app-dialog";
 
@@ -85,7 +86,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") return;
 
       decision.disabled = true;
-      void options.changeItemDecision!(trip, item, action).catch(() => options.report("予定の状態を変更できませんでした。最新の旅程を確認してください。"))
+      void options.changeItemDecision!(trip, item, action).then(() => notifySaved(document, action === "confirm" ? "予定を確定しました。" : "予定を下書きに戻しました。")).catch(() => options.report("予定の状態を変更できませんでした。最新の旅程を確認してください。"))
         .finally(() => { decision.disabled = false; });
     });
     decision.disabled = item.type === "stay" && item.selection.status !== "selected" || item.type === "transport" && item.detail.status !== "selected" ||
@@ -95,7 +96,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   if (options.refreshWeather && tripWeatherTargets(trip, item).length) {
     const updateWeather = control("天気を更新", () => {
       updateWeather.disabled = true;
-      void options.refreshWeather!(trip, item.id).catch(() => options.report("天気を更新できませんでした。旅程を再読み込みしてお試しください。"))
+      void options.refreshWeather!(trip, item.id).then(() => notifySaved(document, "天気を更新しました。")).catch(() => options.report("天気を更新できませんでした。旅程を再読み込みしてお試しください。"))
         .finally(() => { updateWeather.disabled = false; });
     });
     updateWeather.classList.add("trip-weather-update");
