@@ -94,6 +94,7 @@ resource "aws_iam_role_policy" "trip_api" {
   for_each = local.agent_stream_instances
   role     = aws_iam_role.trip_api[each.key].id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["s3:GetObject"], Resource = "${aws_s3_bucket.website.arn}/viewer-input/train_index.json" },
     { Effect = "Allow", Action = ["bedrock:InvokeModel"], Resource = concat(
       [for id in local.bedrock_foundation_model_ids : "arn:aws:bedrock:${var.aws_region}::foundation-model/${id}"],
       [for id in local.bedrock_inference_profile_ids : "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:inference-profile/${id}"],
@@ -121,6 +122,7 @@ resource "aws_lambda_function" "trip_api" {
   memory_size      = 256
   timeout          = 15
   environment { variables = {
+    TRAFFIC_SNAPSHOT_BUCKET     = aws_s3_bucket.website.id
     OFFICIAL_PUBLISHER_SUBJECTS = join(",", var.official_publisher_subjects)
     CONSULTATION_SCOPE_MODEL_ID = var.bedrock_lightweight_model_id != "" ? var.bedrock_lightweight_model_id : var.bedrock_model_id
     TRIP_API_ENABLED            = "true"

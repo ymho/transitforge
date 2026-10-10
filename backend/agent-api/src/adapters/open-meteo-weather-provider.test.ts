@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { OpenMeteoWeatherProvider } from "./open-meteo-weather-provider.js";
 
 describe("OpenMeteoWeatherProvider", () => {
+  it("uses retained coordinates directly and lets the provider resolve timezone for undated-zone places", async () => {
+    const fetch = vi.fn(async (_input: string) => new Response(JSON.stringify({ timezone: "Asia/Tokyo", hourly: { time: ["2026-09-09T10:00"], temperature_2m: [26], precipitation_probability: [10], precipitation: [0], weather_code: [1] },
+      daily: { time: ["2026-09-09"], temperature_2m_min: [23], temperature_2m_max: [27], precipitation_probability_max: [10], precipitation_sum: [0], weather_code: [1] } })));
+    const provider = new OpenMeteoWeatherProvider({ fetch }, () => new Date("2026-09-08T15:10:00Z"));
+    const result = await provider.search({ location: "公園", coordinate: { latitude: 35, longitude: 135 }, startDate: "2026-09-09", endDate: "2026-09-09" });
+    expect(result.status).toBe("available"); expect(fetch).toHaveBeenCalledOnce();
+    expect(new URL(fetch.mock.calls[0]![0]!).searchParams.get("timezone")).toBe("auto");
+  });
   it.each([
     [{}, { forecast_days: "7" }],
     [{ startDate: "2026-09-09", endDate: "2026-09-10" }, { start_date: "2026-09-09", end_date: "2026-09-10" }],

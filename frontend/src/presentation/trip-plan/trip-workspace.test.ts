@@ -1,3 +1,4 @@
+import { tripWeatherFixture } from "../../../../modules/trip/domain/trip-weather.fixture";
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyTripProposal, createTrip } from "@raiquora/trip/trip";
@@ -11,7 +12,7 @@ import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 
 function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string) => Promise<InTripContextSnapshot | undefined>,
-  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "renameTitle" | "changeAdoption" | "changeItemDecision" | "branchTrip" | "conversationId" | "onPlanAdoption">> = {}) {
+  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "refreshWeather" | "renameTitle" | "changeAdoption" | "changeItemDecision" | "branchTrip" | "conversationId" | "onPlanAdoption">> = {}) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
   const chat = document.createElement("section"); chat.id = "chat";
   const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
@@ -115,6 +116,16 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const source = item.querySelector<HTMLAnchorElement>(".trip-workspace-research-source")!;
     expect(source.href).toBe("https://example.org/garden");
     expect(source.rel).toBe("noopener noreferrer");
+  });
+  it("shows retained forecasts and only refreshes on explicit action; viewer cannot refresh", async () => {
+    const fixture = tripWeatherFixture(), refreshWeather = vi.fn(async () => {});
+    const f = setup({ getCurrentTrip: () => fixture.trip }, undefined, { refreshWeather }); f.ui.showPlan();
+    expect(f.ui.panel.textContent).toContain("雨 15〜22℃"); expect(refreshWeather).not.toHaveBeenCalled();
+    const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="visit"]')!;
+    button(card, "天気を更新").click(); expect(refreshWeather).toHaveBeenCalledWith(fixture.trip, "visit");
+    await vi.waitFor(() => expect(button(card, "天気を更新").disabled).toBe(false));
+    const viewer = setup({ getCurrentTrip: () => fixture.trip, getRole: () => "viewer" }, undefined, { refreshWeather }); viewer.ui.showPlan();
+    expect(viewer.ui.panel.textContent).toContain("雨 15〜22℃"); expect(button(viewer.ui.panel, "天気を更新")).toBeUndefined();
   });
   it("starts a weather discussion for one Trip activity without changing the confirmed itinerary", () => {
     const trip = createTrip(placesTripId, "出雲の旅", placesAt, [{ id: "shrine", title: "出雲大社", type: "activity",

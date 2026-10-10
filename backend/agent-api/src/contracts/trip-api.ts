@@ -39,6 +39,7 @@ function checkBounds(value: unknown, depth = 0): void {
   } else if (typeof value === "number" && !Number.isFinite(value)) throw new TripResourceError("invalid-input");
 }
 export type TripApiCommand =
+  | { version: typeof tripApiVersion; operation: "refresh-weather"; tripId: string; itemId: string; baseRevision: number; mutationId: string }
   | { version: typeof tripApiVersion; operation: "generate-title"; tripId: string; baseRevision: number }
   | { version: typeof tripApiVersion; operation: "create"; trip: Trip }
   | { version: typeof tripApiVersion; operation: "start-consultation"; tripId: string; title: string; userRequest?: string }
@@ -125,6 +126,10 @@ export function parseTripCommand(value: unknown): TripApiCommand {
       keys = ["sourceTripId", "sourceRevision", "tripId", "title"]; tripIdentifier(v.sourceTripId); tripIdentifier(v.tripId);
       if (v.sourceTripId === v.tripId || !Number.isSafeInteger(v.sourceRevision) || Number(v.sourceRevision) < 0 ||
           typeof v.title !== "string" || !v.title.trim() || v.title.length > 160) throw new TripResourceError("invalid-input");
+      break;
+    case "refresh-weather":
+      keys = ["tripId", "itemId", "baseRevision", "mutationId"]; tripIdentifier(v.tripId); tripIdentifier(v.mutationId);
+      if (typeof v.itemId !== "string" || !v.itemId.trim() || v.itemId.length > 160 || !Number.isSafeInteger(v.baseRevision) || Number(v.baseRevision) < 0) throw new TripResourceError("invalid-input");
       break;
     case "generate-title":
       keys = ["tripId", "baseRevision"]; tripIdentifier(v.tripId);

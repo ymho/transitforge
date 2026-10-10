@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 
+import { tripWeatherTargets, tripWeatherBasis } from "../modules/trip/domain/trip-weather.ts";
 import { consultationDesignFixture } from "../frontend/src/presentation/concierge/consultation-design.fixture.ts";
 import { officialGuideSnapshot } from "../modules/trip/domain/official-guide.ts";
 import { createTrip } from "../modules/trip/domain/trip.ts";
@@ -18,6 +19,11 @@ const trips = [createTrip("11111111-1111-4111-8111-111111111111", "乗換のあ�
   { id: "stay", title: "町の宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14" } }
 ], { constraints: [], assumptions: [], party: { adults: 2, children: [{ age: 7 }], source: "user" } }),
 createTrip("22222222-2222-4222-8222-222222222222", "別の旅", fixture.selectedAt)];
+const weatherItem = trips[0].items[0];
+trips[0] = { ...trips[0], weather: [{ itemId: weatherItem.id, basis: tripWeatherBasis(trips[0], weatherItem), fetchedAt: fixture.selectedAt,
+  validUntil: new Date(Date.parse(fixture.selectedAt) + 3_600_000).toISOString(), provider: "open-meteo", sourceUrl: "https://open-meteo.com/",
+  forecasts: tripWeatherTargets(trips[0], weatherItem).map(target => ({ target, status: "available", locationName: target.place.name,
+    timeZone: target.at.timeZone, rows: [{ date: target.startDate, hour: target.at.at.slice(11, 13) + ":00", weatherCode: 61, temperatureCelsius: 20, precipitationProbabilityPercent: 70 }] })) }] };
 const guide = { id: trips[0].id, version: 1, publishedAt: new Date(trips[0].createdAt).toISOString(), trip: officialGuideSnapshot(trips[0]) };
 const conversation = trip => ({ conversationId: trip.id, tripId: trip.id, title: trip.title, scope: "trip", summary: "", resolvedTopics: [], pendingTopics: [], createdAt: trip.createdAt, updatedAt: trip.updatedAt, revision: 0, messageCount: 2 });
 await mkdir(".artifacts/product-design", { recursive: true });
@@ -172,6 +178,13 @@ try {
     assert.match(await page.locator(".trip-route-transfer").textContent(), /乗換10分/);
     assert.match(await page.locator(".trip-itinerary-dates").textContent(), /9月13日ー9月14日・1泊2日/);
     await checkLayout("timeline");
+    const weatherCard = page.locator('.trip-workspace-day:not([hidden]) [data-item-id="rail"]');
+    if (await weatherCard.locator('.trip-item-toggle').getAttribute('aria-expanded') === 'false') await weatherCard.locator('.trip-item-toggle').click();
+    assert.equal(await weatherCard.locator('.trip-item-weather p').count(), 2);
+    assert.match(await weatherCard.locator('.trip-item-weather').textContent(), /出発.*雨.*到着.*雨/s);
+    assert.equal(await weatherCard.getByRole("button", { name: "天気を更新", exact: true }).isVisible(), true);
+    await checkLayout("trip-weather");
+    await weatherCard.locator('.trip-item-toggle').click();
     await page.getByRole("button", { name: "共有", exact: true }).click();
     await page.locator(".trip-sharing-panel[open]").waitFor();
     const sharing = page.locator(".trip-sharing-panel[open]");

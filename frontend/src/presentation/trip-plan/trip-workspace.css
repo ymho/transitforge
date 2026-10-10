@@ -135,3 +135,9 @@
 .trip-travel-item, .trip-travel-facts { padding: 1rem; margin-block: .75rem; border: 1px solid #dfe4e8; border-radius: 1rem; background: #fff; overflow-wrap: anywhere; }
 .trip-travel-item h3, .trip-travel-facts h2 { margin-top: 0; }
 .trip-travel-item p { white-space: pre-wrap; line-height: 1.6; }
+
+.trip-item-weather { margin: 8px 0; font-size: 12px; color: #52635c; }
+.trip-item-weather p { margin: 3px 0; font-size: inherit; }
+.trip-item-weather small, .trip-item-weather a { font-size: 10px; color: #748077; }
+
+.trip-workspace .trip-weather-update { display: inline-block; margin: 4px 0 0 8px; padding: 2px 6px; min-height: 28px; font-size: 11px; border: 0; background: transparent; color: #68796e; }

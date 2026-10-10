@@ -1,3 +1,4 @@
+import { validateTripWeather, retainTripWeather, type TripItemWeather } from "./trip-weather";
 import { validateStayPlannedTiming, type StayPlannedTiming } from "./planned-itinerary-time";
 import { validateTripCosts, validateCostForecast, costCategories, type TripCosts, type TripCostForecast, type CostCategory } from "./trip-costs";
 import { validateMoney, type Money } from "./money";
@@ -26,6 +27,7 @@ export interface Trip {
   readonly officialOrigin?: { readonly guideId: string; readonly version: number };
   readonly request: TripRequest;
   readonly costs?: TripCosts;
+  readonly weather?: readonly TripItemWeather[];
   readonly planningState: PlanningState;
   readonly lifecycleState: LifecycleState;
   readonly adoption?: TripAdoption;
@@ -104,7 +106,8 @@ export function validateSummaryDestination(value: string): void {
 }
 
 export function validateTrip(trip: Trip): void {
-  exactKeys(trip, ["id", "title", "summaryDestination", "officialOrigin", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "timeline", "structureIntent", "request", "planningState", "lifecycleState", "adoption", "costs"]);
+  exactKeys(trip, ["id", "title", "summaryDestination", "officialOrigin", "schemaVersion", "revision", "createdAt", "updatedAt", "items", "timeline", "structureIntent", "request", "planningState", "lifecycleState", "adoption", "costs", "weather"]);
+  if (trip.weather !== undefined) validateTripWeather(trip.weather, trip);
   if (trip.costs !== undefined) validateTripCosts(trip.costs, trip.id, trip.revision);
   if (trip.adoption !== undefined) validateTripAdoption(trip.adoption);
   if (trip.summaryDestination !== undefined) validateSummaryDestination(trip.summaryDestination);
@@ -359,6 +362,8 @@ export function applyTripProposal(trip: Trip, proposal: TripUpdateProposal,
     result = { ...result, adoption: { ...trip.adoption,
       ...(adoptionNeedsReview(trip, result) ? { needsReconfirmation: true as const } : {}) } };
   }
+  const weather = retainTripWeather(result, trip.weather);
+  if (weather) result = { ...result, weather };
   validateTrip(result);
   validatePartyAssumptionTransition(trip.request, result.request);
   // Confirmation is supplied separately by Application, never trusted from a model's patch body.

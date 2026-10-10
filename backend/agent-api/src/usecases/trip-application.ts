@@ -1,3 +1,5 @@
+import { refreshTripWeather } from "./refresh-trip-weather.js";
+import { currentTripWeather, tripWeatherTargets, validateTripWeather } from "@raiquora/trip/trip-weather";
 import { parseTripCommand, TripResourceError, tripApiVersion } from "../contracts/trip-api.js";
 import { requireTripPrincipal, type TripPrincipal, type TripRepository, type TripConversationReferences } from "../ports/trip-repository.js";
 import { applyTripProposal, TripRevisionConflict } from "@raiquora/trip/trip";
@@ -21,7 +23,9 @@ export class TripApplication {
     private readonly intentAdoptions?: IntentProposalAdoptionPort,
     private readonly consultations?: import("../ports/trip-consultation-repository.js").TripConsultationRepository,
     private readonly titleGenerator?: import("../ports/trip-title-generator.js").TripTitleGenerator,
-    private readonly consultationScope?: import("../ports/consultation-scope.js").ConsultationScope) {}
+    private readonly consultationScope?: import("../ports/consultation-scope.js").ConsultationScope,
+    private readonly weatherProvider?: import("../ports/weather-provider.js").WeatherForecastProvider,
+    private readonly stationCatalog?: import("../ports/station-catalog-repository.js").StationCatalogRepository) {}
   private async ready(principal: TripPrincipal, proposed: Trip): Promise<void> {
     try {
       const reservations = await this.reservations?.facts(principal, proposed.id);
@@ -80,8 +84,8 @@ export class TripApplication {
     requireTripPrincipal(principal);
     const actor = principal;
     const command = parseTripCommand(value);
-    const access = this.authorization && ["get", "mutate", "archive", "generate-title"].includes(command.operation) && "tripId" in command
-      ? await this.authorization.authorize(principal, command.tripId, command.operation === "get" ? "read" : ["mutate", "generate-title"].includes(command.operation) ? "write" : "owner") : undefined;
+    const access = this.authorization && ["get", "mutate", "archive", "generate-title", "refresh-weather"].includes(command.operation) && "tripId" in command
+      ? await this.authorization.authorize(principal, command.tripId, command.operation === "get" ? "read" : ["mutate", "generate-title", "refresh-weather"].includes(command.operation) ? "write" : "owner") : undefined;
     // Only this trusted result may resolve an owner namespace. Conversation operations stay personal.
     if (access) principal = access.owner;
     const version = tripApiVersion;
@@ -94,6 +98,20 @@ export class TripApplication {
       case "branch-consultation":
         if (!this.consultations) throw new TripResourceError("unavailable");
         return { version, ...await this.consultations.branch(actor, command) };
+      case "refresh-weather": {
+        if (!this.weatherProvider) throw new TripResourceError("unavailable");
+        const proposal = { tripId: command.tripId, baseRevision: command.baseRevision, summary: `天気を更新:${command.itemId}`, patches: [] };
+        const trip = await this.trips.applyMutation(principal, { tripId: command.tripId, baseRevision: command.baseRevision, mutationId: command.mutationId, proposal }, async current => {
+          const item = current.items.find(item => item.id === command.itemId);
+          if (!item || !tripWeatherTargets(current, item).length) throw new TripResourceError("invalid-input");
+          const existing = currentTripWeather(current, item), now = this.clock.now();
+          const weather = existing && Date.parse(existing.validUntil) > now.getTime() && existing.forecasts.every(f => f.status !== "unavailable") ? existing : await refreshTripWeather(current, item, this.weatherProvider!, now, this.stationCatalog);
+          const values = [...(current.weather ?? []).filter(value => value.itemId !== item.id), weather];
+          try { validateTripWeather(values, current); } catch { throw new TripResourceError("unavailable"); }
+          return { ...current, weather: values };
+        }, access?.guard);
+        return { version, trip };
+      }
       case "generate-title": {
         if (!this.titleGenerator) throw new TripResourceError("unavailable");
         const current = await this.trips.get(principal, command.tripId);
@@ -105,6 +123,7 @@ export class TripApplication {
         return { version, title, baseRevision: current.revision };
       }
       case "create": {
+        if (command.trip.weather !== undefined) throw new TripResourceError("invalid-input");
         if (command.trip.officialOrigin !== undefined) throw new TripResourceError("invalid-input");
         if (command.trip.adoption !== undefined || command.trip.items.some(item => item.decision !== undefined)) throw new TripResourceError("confirmation-required");
         if (command.trip.planningState === "ready") await this.ready(principal, command.trip);
