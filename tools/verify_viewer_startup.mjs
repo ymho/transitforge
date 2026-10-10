@@ -213,10 +213,13 @@ try {
     await page.screenshot({ path: `.artifacts/product-design/settings-dark-${viewport.width}.png` });
     await page.emulateMedia({ colorScheme: "light" });
 
+    // CI bundles a dummy Mapbox token; force a deterministic adapter load failure.
+    await page.route("**/mapbox-*.js", route => route.abort());
     await page.locator('[data-map-navigation]').click();
     await page.waitForSelector('#app[data-primary-view="map"]');
-    await page.getByText('現在、運行マップを表示できません。旅程や相談は引き続きご利用いただけます。').first().waitFor();
+    await page.getByText('地図を起動できませんでした。もう一度開くと再試行できます。相談は引き続き利用できます。').first().waitFor();
     await checkLayout("operation-unavailable");
+    await page.unroute("**/mapbox-*.js");
     await page.locator('[data-account]').click();
 
     // Resume a suspended tab after its absolute deadline: no refresh or protected data.
