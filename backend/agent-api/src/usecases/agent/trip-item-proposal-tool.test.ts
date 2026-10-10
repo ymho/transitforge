@@ -1,5 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { AgentToolRegistry } from "@raiquora/agent/tool-registry";
+import { selectedTripItemSnapshot } from "@raiquora/agent/agent-context-snapshot";
 import { createTrip, applyTripProposal } from "@raiquora/trip/trip";
 import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 import { registerTripItemProposalTool } from "./trip-item-proposal-tool.js";
@@ -32,4 +33,17 @@ it("rejects stale, foreign, forged and unavailable provider selections", async (
   expect(await invoke({ action: "add-activity", dayKey: "unscheduled", title: "店", category: "food", sourceId: "fake" })).toMatchObject({ ok: false });
   expect(await invoke({ action: "select-manual-transport", itemId: "shrine", title: "列車", mode: "rail", origin: "A", destination: "B" })).toMatchObject({ ok: false });
   expect(publish).not.toHaveBeenCalled();
+});
+
+it("allows AI memo proposals for the authenticated item and rejects invalid text", async () => {
+  const registry = new AgentToolRegistry(), publish = vi.fn(); registerTripItemProposalTool(registry, trip, publish);
+  const invoke = (input: object) => registry.execute("propose_trip_item_change", input, { executionId: "memo" });
+  expect(await invoke({ action: "set-memo", itemId: "hotel", memo: "荷物を預ける\n朝食あり", expectedRevision: 0 })).toMatchObject({ ok: true });
+  const updated = applyTripProposal(trip, publish.mock.calls[0]![0]);
+  expect(selectedTripItemSnapshot(updated.items[1]!)).toMatchObject({ memo: "荷物を預ける\n朝食あり" });
+  expect(updated.items[1]).toMatchObject({ memo: "荷物を預ける\n朝食あり" });
+  expect(await invoke({ action: "set-memo", itemId: "hotel", memo: 123 })).toMatchObject({ ok: false });
+  expect(await invoke({ action: "set-memo", itemId: "hotel", memo: "a".repeat(4001) })).toMatchObject({ ok: false });
+  expect(await invoke({ action: "set-memo", itemId: "foreign", memo: "text" })).toMatchObject({ ok: false });
+  expect(publish).toHaveBeenCalledOnce();
 });

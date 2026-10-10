@@ -29,6 +29,8 @@ it("reviews, saves and rereads item estimates without an AI forecast, leaving ra
   const row = () => panel.querySelector('[data-item-id="food"]')!;
   button(row(), "金額を入力").click();
   const form = row().querySelector<HTMLFormElement>(".trip-cost-editor")!;
+  expect(form.querySelector("input")!.parentElement).toBe(form.querySelector("select")!.parentElement);
+  expect(form.querySelector("select")!.parentElement?.className).toBe("trip-cost-input-group");
   form.querySelector("input")!.value = "-100"; form.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(f.controller.proposal()).toBeUndefined(); expect(f.mutate).not.toHaveBeenCalled();
   form.querySelector("input")!.value = "0"; form.dispatchEvent(new Event("submit", { cancelable: true }));

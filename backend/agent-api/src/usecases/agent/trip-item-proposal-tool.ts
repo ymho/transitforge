@@ -10,11 +10,12 @@ export function registerTripItemProposalTool(tools: AgentToolRegistry, trip: Tri
   const snapshot = structuredClone(trip);
   tools.register({
     name: "propose_trip_item_change", effect: "proposal", prerequisite: ["trusted_trip_scope"], requiredCapabilities: ["trip.read"],
-    description: "Tripの予定を追加・変更・削除・移動する未保存の変更案。利用者が明示した操作にだけ使う。dayKey/itemId/afterIdは現在のTripから選ぶ。観光・食事・イベントはadd-activityで分類し、placeNameは利用者が入力した未検証の名称だけ。交通・宿泊はまず未選択の枠を作り、手入力の交通は列車・時刻表・予約を選択済みにしない。候補検索結果や店名を勝手に採用せず、確認後に画面から反映する。Trip ID/予約/購入/検証済み状態は入力できない。",
+    description: "Tripの予定を追加・変更・削除・移動する未保存の変更案。利用者が明示した操作にだけ使う。set-memoは各予定のプレーンテキストのメモを更新する。Markdownは使わず、空文字で削除する。dayKey/itemId/afterIdは現在のTripから選ぶ。観光・食事・イベントはadd-activityで分類し、placeNameは利用者が入力した未検証の名称だけ。交通・宿泊はまず未選択の枠を作り、手入力の交通は列車・時刻表・予約を選択済みにしない。候補検索結果や店名を勝手に採用せず、確認後に画面から反映する。Trip ID/予約/購入/検証済み状態は入力できない。",
     inputSchema: { type: "object", additionalProperties: false, required: ["action"], properties: {
-      action: { type: "string", enum: ["add-activity", "add-transport", "add-stay", "rename", "remove", "move", "change-day", "select-manual-transport", "set-manual-activity-place", "set-manual-stay-place"] },
+      action: { type: "string", enum: ["add-activity", "add-transport", "add-stay", "set-memo", "rename", "remove", "move", "change-day", "select-manual-transport", "set-manual-activity-place", "set-manual-stay-place"] },
       expectedRevision: { type: "integer", minimum: 0 }, itemId: { type: "string", minLength: 1, maxLength: 200 },
       dayKey: { type: "string", minLength: 1, maxLength: 200 }, afterId: { type: "string", minLength: 1, maxLength: 200 },
+      memo: { type: "string", maxLength: 4000 },
       title: { type: "string", minLength: 1, maxLength: 200 }, category: { type: "string", enum: ["sightseeing", "food", "experience", "event", "shopping", "relaxation", "free-time", "other"] },
       placeName: { type: "string", minLength: 1, maxLength: 200 }, mode: { type: "string", enum: ["air", "bus", "ferry", "car", "rental-car", "taxi", "ride-hail", "walk", "bicycle", "other"] },
       origin: { type: "string", minLength: 1, maxLength: 200 }, destination: { type: "string", minLength: 1, maxLength: 200 },
@@ -22,7 +23,7 @@ export function registerTripItemProposalTool(tools: AgentToolRegistry, trip: Tri
     parseInput(value) {
       if (!value || typeof value !== "object" || Array.isArray(value)) return invalidAgentToolInput("Invalid Trip item change");
       const input = value as Record<string, unknown>;
-      if (Object.keys(input).some(key => !["action", "expectedRevision", "itemId", "dayKey", "afterId", "title", "category", "placeName", "mode", "origin", "destination"].includes(key)) ||
+      if (Object.keys(input).some(key => !["action", "memo", "expectedRevision", "itemId", "dayKey", "afterId", "title", "category", "placeName", "mode", "origin", "destination"].includes(key)) ||
           typeof input.action !== "string" || input.expectedRevision !== undefined && (!Number.isSafeInteger(input.expectedRevision) || Number(input.expectedRevision) < 0))
         return invalidAgentToolInput("Invalid Trip item change");
       return validAgentToolInput(input);

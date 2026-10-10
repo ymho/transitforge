@@ -15,6 +15,7 @@ export type TripItemChange =
   | { readonly action: "add-transport" | "add-stay"; readonly itemId: string; readonly dayKey: string; readonly afterId?: string; readonly title: string }
   | { readonly action: "set-planned-time"; readonly itemId: string; readonly startAt: ZonedInstant; readonly endAt?: ZonedInstant }
   | { readonly action: "set-stay-planned-time"; readonly itemId: string; readonly plannedTiming: StayPlannedTiming }
+  | { readonly action: "set-memo"; readonly itemId: string; readonly memo: string }
   | { readonly action: "rename"; readonly itemId: string; readonly title: string }
   | { readonly action: "remove"; readonly itemId: string }
   | { readonly action: "move"; readonly itemId: string; readonly afterId?: string }
@@ -32,6 +33,7 @@ export function proposeTripItemChange(trip: Trip, change: TripItemChange): TripU
     "add-stay": ["action", "itemId", "dayKey", "afterId", "title"],
     "set-planned-time": ["action", "itemId", "startAt", "endAt"],
     "set-stay-planned-time": ["action", "itemId", "plannedTiming"],
+    "set-memo": ["action", "itemId", "memo"],
     rename: ["action", "itemId", "title"], remove: ["action", "itemId"], move: ["action", "itemId", "afterId"],
     "change-day": ["action", "itemId", "dayKey"],
     "select-manual-transport": ["action", "itemId", "title", "mode", "origin", "destination"],
@@ -72,6 +74,7 @@ export function proposeTripItemChange(trip: Trip, change: TripItemChange): TripU
       case "set-stay-planned-time":
         if (existing.type !== "stay") throw new Error("Stay item required");
         patch = { type: "replace", itemId, item: { ...existing, plannedTiming: change.plannedTiming } }; break;
+      case "set-memo": patch = { type: "item_memo", itemId, memo: change.memo }; break;
       case "rename": patch = { type: "replace", itemId, item: { ...existing, title: label(change.title) } }; break;
       case "remove": patch = { type: "remove", itemId }; break;
       case "move": patch = { type: "move", itemId, ...(change.afterId === undefined ? {} : { afterId: identifier(change.afterId) }) }; break;

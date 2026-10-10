@@ -84,7 +84,7 @@ it("shares one date tab for rail and an unknown-zone stay, retaining the correct
   expect([...first.querySelectorAll<HTMLElement>('[data-item-id]')].map(c => c.dataset.itemId)).toEqual(["rail", "hotel"]);
   expect(first.querySelectorAll(".trip-route-leg")).toHaveLength(2);
   const checkIn = first.querySelector<HTMLElement>('[data-item-id="hotel"]')!;
-  expect(checkIn.textContent).toContain("チェックイン");
+  expect([...checkIn.querySelectorAll(".trip-item-meta")].map(node => node.textContent)).not.toContain("チェックイン");
   const time = checkIn.querySelector<HTMLButtonElement>('.trip-time-control button')!;
   expect(time.textContent).toBe("未定"); time.click();
   const timeForm = checkIn.querySelector<HTMLFormElement>('.trip-time-editor')!;
@@ -101,7 +101,7 @@ it("shares one date tab for rail and an unknown-zone stay, retaining the correct
   expect(app.querySelectorAll('.trip-workspace-day:not([hidden]) [data-item-id]')).toHaveLength(2);
   tabs()[1]!.click();
   const checkout = app.querySelector<HTMLElement>('.trip-workspace-day:not([hidden]) [data-item-id="hotel"]')!;
-  expect(checkout.textContent).toContain("チェックアウト");
+  expect([...checkout.querySelectorAll(".trip-item-meta")].map(node => node.textContent)).not.toContain("チェックアウト");
   (checkout.nextElementSibling as HTMLButtonElement).click();
   add.querySelector("textarea")!.value = "朝食"; add.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(ask).toHaveBeenLastCalledWith(expect.stringContaining("2026-09-14の「宿泊」のチェックアウトの後"));
