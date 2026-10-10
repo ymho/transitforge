@@ -59,7 +59,24 @@ Engineの既定は推論設定を追加しない。小さい独立fixtureと本�
 
 `answer`/`candidates`の`nextQuestion`で、情報提供と次の確認を同じターンに含められる。
 モデルは既知条件・利用者の関心から質問を1つ選ぶ。固定の質問順や未設定項目の一括聴取は行わない。
-見出し・本文・質問中のHTML/Markdownはエスケープし、見出しの構造だけをApplicationが付ける。
+本文・質問・短い会話文は、既存の`marked`で解析してから許可したMarkdownだけを再出力する。
+太字・強調・見出し・箇条書き／番号付きリスト・コードは保持し、エスケープ済みの通常記号を再解釈しない。
+モデルが書いたリンク（自動リンク・参照リンクを含む）・画像・HTMLは文字列として表示し、URLを有効化しない。
+節の見出しと資料の直接引用は従来どおりliteralとして扱う。クリック可能な出典は検証済みEvidenceから
+Applicationが別途生成する。FrontendはHTMLへ変換せず既存の安全な表示モデル／DOMを使う。
+
+## 宿泊検索の条件不足（#813）
+
+意味preconditionの拒否は、閉じたcodeと`recovery={kind:resolve_conditions,target,inputField,reason}`を
+SDKへ返す。利用者の入力値・生のエラー本文・Provider本文は含めない。条件不足／未受理／未定／精度不足／
+古い値を検索障害や待ち時間として案内しない。目的地が未受理で今回の実際の行き先が明示されている場合は、
+既存の`update_current_destination`による受理後に検索する。既知の目的地は検索地域の指定だけで上書きせず、
+過去発言をwriterのquoteへ流用しない。登録できなければ不足項目と旅行条件または会話からの登録方法を案内する。
+人数登録後や日付登録後でも目的地の条件検証を省略しない。Provider障害はこのrecoveryへ変換しない。
+
+`strands-accommodation-preconditions.test.ts`はnative SDKと本番Tool組成を使い、鉄道照会→人数登録→
+宿検索拒否→日付だけ登録しても拒否→行き先受理後の宿検索・カード・履歴・replayを確認する。
+モデル／Provider／DynamoDBは合成fixtureで、実モデルの意味理解品質や本番画面の確認とは区別する。
 
 Frontendはcurrentな回答を表示した後、actualな条件の受理receiptがあればTripをServerから再取得する。
 回答の表示前やSSE受信中にrevisionを更新して、自分の応答をstaleとして破棄しない。receiptの値をBrowserで

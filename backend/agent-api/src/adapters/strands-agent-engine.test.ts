@@ -168,6 +168,16 @@ describe("StrandsAgentEngine", () => {
       .run({ ...input, effectiveIntent: effectiveDestination("神戸") });
     expect(execute).not.toHaveBeenCalled();
   });
+  it("does not relabel a Provider failure as a missing-condition recovery", async () => {
+    const { execute, input } = setup();
+    execute.mockRejectedValueOnce(new Error("private Provider failure details"));
+    const model = new ScriptedModel([lookup, submitted]);
+    await new StrandsAgentEngine(options, { model }).run(input);
+    const toolResult = JSON.parse(model.observedMessages[1]!).at(-1).content[0].toolResult.content[0].json;
+    expect(toolResult).toMatchObject({ ok: false, error: { code: "execution_failed" } });
+    expect(toolResult).not.toHaveProperty("recovery");
+    expect(JSON.stringify(toolResult)).not.toContain("private Provider");
+  });
   it("does not expose proposal Tools in the initial Strands slice", async () => {
     const { execute, input } = setup("proposal");
     let captured: AgentConfig | undefined;

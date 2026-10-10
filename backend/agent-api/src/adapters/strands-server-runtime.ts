@@ -1,3 +1,4 @@
+import { publicCommentaryMarkdown } from "./public-commentary-markdown.js";
 import { conditionDisplayLines } from "@raiquora/agent/agent-v2-condition-display";
 import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
 import { mergeEvidenceObservations, validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
@@ -61,6 +62,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
     if (merged.collisions.length || merged.conflictingObservationIds.length) return denied("evidence_collision");
     try {
       const reply = admitAgentV2Reply(run.replyProposal, {
+        renderCommentary: publicCommentaryMarkdown,
         executionId: input.executionId, evidence: merged.evidence, effectiveIntent: run.effectiveIntent,
         // Only Application-owned selection receipts authorize success.
         receipts: run.operationReceipts ?? [], navigation: run.navigation, availableOperations: input.candidateController?.context.canSave ? ["save"] : [],
