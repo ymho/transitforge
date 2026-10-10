@@ -102,8 +102,9 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     tripButton.disabled = !trip;
     tripButton.setAttribute("aria-label", trip ? `${trip.title}の旅程に戻る` : name.textContent!);
     tripButton.querySelector("svg")!.toggleAttribute("hidden", !trip);
-    help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : "条件を編集し、変更案を確認して保存できます。列車・宿・予約は自動で変更されません。"
+    help.textContent = trip ? state.viewer ? "閲覧専用の旅程です。条件の変更はできません。" : ""
       : "条件は会話で追加できます。普段の好みより、今回の希望を優先します。";
+    help.hidden = !help.textContent;
     const row = (label: string, value: string, edit?: () => void, _source?: string) => {
       const item = node("div", "consultation-condition-row"); item.append(node("span", "", label), node("strong", "", value));
       const actions = node("div", "consultation-condition-actions");
@@ -213,7 +214,6 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
               trip.request.party?.assumptionId === assumption.id ? { type: "remove" } : undefined)));
         }
       }
-      if (trip.items.length) rows.append(node("p", "consultation-help", "日程は今回の希望です。採用済みの予定・旅行履歴の分類は変わりません。条件と異なる予定は、旅程の変更案で別途確認してください。"));
     } else {
       const origin = ports.profile()?.usualOrigin;
       if (origin) row("普段の出発地", origin);
