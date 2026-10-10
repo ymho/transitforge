@@ -219,3 +219,11 @@
   padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
   color: var(--tf-muted); font: 400 11px/1.5 var(--product-font); text-decoration: none;
 }
+
+/* The trigger remains outside the compact menu. */
+#app[data-primary-view]:is([data-primary-view]) {
+  & .home-trip-manage[open] { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  & .home-trip-manage .home-trip-menu { position: absolute; top: 40px; right: 0; min-width: 108px; padding: 5px; border: 1px solid var(--tf-line); border-radius: 10px; background: var(--tf-bg); box-shadow: 0 5px 18px #24304318; }
+  & .home-trip-manage .home-trip-menu button { display: block; width: 100%; min-height: 30px; margin: 0; padding: 6px 9px; border: 0; font-size: 12px; text-align: left; }
+  & .trip-list-copy strong { font-size: 16px; }
+}
