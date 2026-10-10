@@ -5,15 +5,17 @@ import { loadingMarkup } from "../shared/primitives";
 import { element, control } from "../trip-plan/trip-workspace-elements";
 export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client: TripLibraryClient, options: {
   openTrip(id: string): Promise<void> | void; session(): number; authenticated(): boolean;
+  officialOnly?: boolean; login?(): void;
 }) {
-  let selected = "own", epoch = options.session(), disposed = false;
+  const initialCategory = options.officialOnly ? "official" : "own";
+  let selected = initialCategory, epoch = options.session(), disposed = false;
   const dialogs = new Set<HTMLDialogElement>();
   const closeDialogs = () => { for (const dialog of dialogs) { dialog.close(); dialog.remove(); } dialogs.clear(); };
   const tabs = element("div", "trip-library-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "旅程の種類");
   const panel = element("section"), status = element("p"), entries = element("div", "trip-library-entries"), more = element("div", "trip-library-more"); status.setAttribute("role", "status");
-  panel.setAttribute("role", "tabpanel"); panel.id = "trip-library-catalog";
-  own.setAttribute("role", "tabpanel"); own.id ||= "trip-library-own";
-  panel.append(status, entries, more); root.insertBefore(tabs, own); root.append(panel);
+  if (!options.officialOnly) panel.setAttribute("role", "tabpanel"); panel.id = options.officialOnly ? "home-official-catalog" : "trip-library-catalog";
+  if (!options.officialOnly) own.setAttribute("role", "tabpanel"); own.id ||= options.officialOnly ? "home-official-unused" : "trip-library-own";
+  panel.append(status, entries, more); if (!options.officialOnly) root.insertBefore(tabs, own); root.append(panel);
   type State = { entries: HTMLElement[]; busy: boolean; loaded: boolean; error: boolean; ownedAfter?: string; joinedAfter?: string; officialAfter?: string; ownedDone?: boolean; joinedDone?: boolean; seen: Set<string> };
   const states = new Map<string, State>();
   const state = () => { let s = states.get(selected); if (!s) { s = { entries: [], busy: false, loaded: false, error: false, seen: new Set() }; states.set(selected, s); } return s; };
@@ -22,9 +24,14 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
     own.hidden = selected !== "own"; panel.hidden = selected === "own";
     for (const [key, button] of buttons) { button.setAttribute("aria-selected", String(key === selected)); button.tabIndex = key === selected ? 0 : -1; }
     if (selected === "own") return;
-    panel.setAttribute("aria-labelledby", `trip-library-tab-${selected}`);
+    if (!options.officialOnly) panel.setAttribute("aria-labelledby", `trip-library-tab-${selected}`);
     const s = state(); entries.replaceChildren(...s.entries); more.replaceChildren();
     status.setAttribute("aria-busy", String(s.busy));
+    if (!options.authenticated()) {
+      status.textContent = "ログインすると公式しおりを選べます。";
+      if (options.login) more.append(control("ログイン", options.login));
+      return;
+    }
     if (s.busy) status.innerHTML = loadingMarkup("しおりを読み込んでいます。");
     else status.textContent = s.error ? "読み込めませんでした。もう一度お試しください。" : s.entries.length ? "" : selected === "official" ? "公開された公式しおりはまだありません。" : "共有中の旅はまだありません。";
     if (s.loaded && !s.busy) more.append(control("再読み込み", () => { states.delete(selected); paint(); void load(); }));
@@ -84,13 +91,13 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
     dialogs.add(dialog); dialog.addEventListener("cancel", () => { dialog.remove(); dialogs.delete(dialog); });
     document.body.append(dialog); dialog.showModal(); close.focus();
   }
-  for (const [key, label] of [["own", "あなたの旅"], ["shared", "共有中の旅"], ["official", "公式しおり"]]) {
+  for (const [key, label] of options.officialOnly ? [] : [["own", "あなたの旅"], ["shared", "共有中の旅"]]) {
     const button = control(label!, () => { selected = key!; paint(); if (!state().loaded && key !== "own") void load(); }); button.setAttribute("role", "tab"); button.id = `trip-library-tab-${key}`; button.setAttribute("aria-controls", key === "own" ? own.id : panel.id); buttons.set(key!, button); tabs.append(button);
-    button.addEventListener("keydown", event => { if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const list = [...buttons.values()], i = list.indexOf(button); const n = event.key === "Home" ? 0 : event.key === "End" ? 2 : (i + (event.key === "ArrowRight" ? 1 : 2)) % 3; list[n]!.click(); list[n]!.focus(); });
+    button.addEventListener("keydown", event => { if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const list = [...buttons.values()], i = list.indexOf(button); const n = event.key === "Home" ? 0 : event.key === "End" ? list.length - 1 : (i + (event.key === "ArrowRight" ? 1 : list.length - 1)) % list.length; list[n]!.click(); list[n]!.focus(); });
   }
-  own.setAttribute("aria-labelledby", "trip-library-tab-own");
-  paint();
-  return { refresh() { if (epoch !== options.session() || !options.authenticated()) { epoch = options.session(); states.clear(); closeDialogs(); selected = "own"; paint(); } }, dispose() { disposed = true; closeDialogs(); tabs.remove(); panel.remove(); } };
+  if (!options.officialOnly) own.setAttribute("aria-labelledby", "trip-library-tab-own");
+  paint(); if (options.officialOnly) void load();
+  return { refresh() { if (epoch !== options.session() || !options.authenticated()) { epoch = options.session(); states.clear(); closeDialogs(); selected = initialCategory; paint(); } if (options.officialOnly && options.authenticated() && !state().loaded && !state().busy && !state().error) void load(); }, dispose() { disposed = true; closeDialogs(); tabs.remove(); panel.remove(); } };
 }
 
 function catalogueCard(id: string): HTMLElement {

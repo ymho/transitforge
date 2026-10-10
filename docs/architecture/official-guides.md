@@ -16,7 +16,7 @@ Terraform変数`official_publisher_subjects`は既定で空。運用者が公式
 日付・固定時刻・人数・制約・会話・採用/実施状態・価格・出典/Provider選択・予約情報をコピーしない。
 宿は未選択の「宿泊先を選ぶ」、移動は「移動を検索する」とし、過去の空室/列車を再利用しない。
 写真を扱わない。編集者はタイトル・活動名・場所名の公開可否と著作権を確認して公開する。
-公開版は認証された全ユーザーの「公式しおり」に表示され、閲覧専用。
+公開版はトップページの「公式しおり」に表示され、閲覧専用。認証済みの場合に一覧を自動取得する。未ログインではログインの入口を表示し、公開APIや匿名閲覧は提供しない。旅程ページには「あなたの旅」「共有中の旅」だけを残す。
 
 既存Trip DynamoDB tableの`OFFICIAL#CATALOG / GUIDE#tripId`に`guide{id,version,publishedAt,trip}`と
 内部publisher/activeを保存する。publisher subjectはレスポンスへ返さない。
@@ -25,7 +25,7 @@ Terraform変数`official_publisher_subjects`は既定で空。運用者が公式
 
 ## 自分の旅へ取り込む
 
-公式しおりのプレビューで「出発日（日本時間）」「大人」「子ども」を確認して「このしおりで旅を作る」。
+トップページの公式しおりを開き、プレビューで「出発日（日本時間）」「大人」「子ども」を確認して「このしおりで旅を作る」。
 各相対日に連続したAsia/Tokyoの日付を割り当てる。時刻/交通/宿/子どもの年齢は未確定で、あとから相談して具体化する。
 新UUIDの本人所有Tripを作り、Tripに`officialOrigin{guideId,version}`を保存する。
 詳細では「公式しおりから作成」と示し、公式原本として表示しない。通常の編集でも由来を保持する。
@@ -44,3 +44,5 @@ Application/SDK transaction fixtureで公式権限、本人所有、改訂/取�
 取り込みcommit race、response lost、入力違いの再試行とoutbox一回作成を確認する。
 Presentationテストでカテゴリ/role、遅延レスポンスのaccount fence、spinner/再試行、取り込み/遷移を確認する。
 fixture検証はlive DynamoDBの代替ではない。LLM Prompt/Toolやpaid Live Evalは変更しない。
+
+公式しおり自体に具体的な日付・人数は不要。公開時に除外し、相対日順だけを保持する。ただし、現在の取り込みAPIは出発日・人数を必須とするため、自分の旅程に採用する時点で入力する。未定のまま取り込む機能は現在提供しない。
