@@ -374,23 +374,16 @@ it("shows an out-of-scope reply without opening a conversation or losing the ori
   expect(input.value).toBe("積分の公式を教えて"); expect(input.disabled).toBe(false);
   expect(ports.openChat).not.toHaveBeenCalled(); expect(ports.openTrip).not.toHaveBeenCalled();
 });
-it("regenerates a long title without opening the trip and suppresses duplicate clicks", async () => {
-  const trip = createTrip("45300000-0000-4000-8000-000000000001", "長い旅のタイトル".repeat(10), "2026-09-18T00:00:00Z", [{ id: "visit", type: "activity", title: "出雲大社", category: "sightseeing", schedule: { type: "unscheduled" } }]);
-  let finish!: () => void;
-  const regenerate = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
-  const f = setup({ authState: () => ({ status: "signed-in", displayName: "ゆうき" }), read: () => ({ state: "available", trips: [trip] }), regenerateTripTitle: regenerate });
-  const button = document.querySelector<HTMLButtonElement>("[data-trip-regenerate-title]")!;
-  expect(button.parentElement?.className).toBe("trip-list-title-row");
-  expect(button.closest("button")?.parentElement?.closest("button")).toBeNull();
-  button.click(); document.querySelector<HTMLButtonElement>("[data-trip-regenerate-title]")!.click();
-  expect(regenerate).toHaveBeenCalledExactlyOnceWith(trip.id); expect(f.ports.openTrip).not.toHaveBeenCalled();
-  expect(document.querySelector('[data-trip-regenerate-title]')?.getAttribute("aria-busy")).toBe("true");
-  finish(); await vi.waitFor(() => expect(document.querySelector<HTMLButtonElement>("[data-trip-regenerate-title]")!.disabled).toBe(false));
-});
-it("keeps the title on generation failure and reports a retryable error", async () => {
-  const trip = createTrip("45300000-0000-4000-8000-000000000001", "元のタイトル", "2026-09-18T00:00:00Z", [{ id: "visit", type: "activity", title: "出雲大社", category: "sightseeing", schedule: { type: "unscheduled" } }]);
-  setup({ read: () => ({ state: "available", trips: [trip] }), regenerateTripTitle: vi.fn(async () => { throw new Error("offline"); }) });
-  document.querySelector<HTMLButtonElement>("[data-trip-regenerate-title]")!.click();
-  await vi.waitFor(() => expect(document.querySelector(".trip-title-status")?.textContent).toContain("再生成できませんでした"));
-  expect(document.querySelector(".trip-list-title-open")?.textContent).toBe(trip.title);
+it("opens a card from its copy and keeps management separate, with a status chip and no title actions", async () => {
+  const trip = createTrip("45300000-0000-4000-8000-000000000001", "長い旅のタイトル".repeat(10), "2026-09-18T00:00:00Z", []);
+  const f = setup({ authState: () => ({ status: "signed-in", displayName: "ゆうき" }), read: () => ({ state: "available", trips: [trip] }) });
+  expect(document.querySelector("[data-trip-regenerate-title]")).toBeNull();
+  expect(document.querySelector("[data-trip-rename]")).toBeNull();
+  expect(document.querySelector(".trip-list-open")).toBeNull();
+  expect(document.querySelector(".trip-status-chip")?.textContent).toBe("計画中");
+  expect(document.querySelector(".trip-status-chip")?.getAttribute("data-trip-status")).toBe("planning");
+  document.querySelector<HTMLElement>(".home-trip-manage summary")!.click();
+  expect(f.ports.openTrip).not.toHaveBeenCalled();
+  document.querySelector<HTMLElement>(".trip-list-copy > small")!.click();
+  await vi.waitFor(() => expect(f.ports.openTrip).toHaveBeenCalledWith(trip.id));
 });
