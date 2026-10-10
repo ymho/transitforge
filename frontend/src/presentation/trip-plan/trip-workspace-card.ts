@@ -84,13 +84,18 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       item.type === "activity" && !item.place && item.category !== "free-time";
     actions.append(decision);
   }
-  const consult = control("相談", () => { controller.focus(item.id); options.chat("この予定を相談したい"); });
+  const askAboutItem = (intent: string) => {
+    controller.focus(item.id);
+    const date = options.entry?.localDate ?? projectDailyItinerary(trip, { limit: 90 }).days.find(day => day.entries.some(entry => entry.sourceItemId === item.id))?.localDate;
+    const position = trip.items.findIndex(value => value.id === item.id) + 1;
+    options.chat(`相談対象：旅程「${trip.title}」の${position}番目の予定「${item.title}」${date ? `（${date}）` : ""}。\n${intent}`);
+  };
+  const consult = control("相談", () => askAboutItem("この予定を相談したい"));
   consult.className = "trip-item-consult";
   actions.append(control("名称を変更", () => { editor.hidden = !editor.hidden; if (!editor.hidden) title.focus(); }),
     control("削除案", () => safe(() => controller.preview(proposeTripItemChange(controller.current()!, { action: "remove", itemId: item.id })))));
   if (item.type === "activity") actions.append(control("天気を踏まえて相談", () => {
-    controller.focus(item.id);
-    options.chat("この予定の日付と地域の天気を確認し、必要なら近くの候補や予定の変更案を相談したい。確定済みの予定は確認するまで変更しないでください");
+    askAboutItem("この予定の日付と地域の天気を確認し、必要なら近くの候補や予定の変更案を相談したい。確定済みの予定は確認するまで変更しないでください");
   }));
   const dayLabel = element("label", "", "移動先の日 "), day = element("select", "trip-workspace-day-target");
   day.append(option("移動先を選択", ""), option("日時未定", "unscheduled"));
@@ -98,10 +103,9 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   dayLabel.append(day);
   actions.append(dayLabel, control("日付変更案", () => safe(() => controller.preview(proposeTripItemChange(controller.current()!,
     { action: "change-day", itemId: item.id, dayKey: day.value })))));
-  if (item.type === "stay") actions.append(control("宿候補を相談", () => { controller.focus(item.id); options.chat("この宿泊予定の候補を比較したい"); }));
+  if (item.type === "stay") actions.append(control("宿候補を相談", () => { askAboutItem("この宿泊予定の候補を比較したい"); }));
   if (item.type === "transport") actions.append(control(item.detail.status === "selected" ? "経路全体を選び直す" : "交通手段を選ぶ", () => {
-    controller.focus(item.id);
-    options.chat(item.detail.status === "selected"
+    askAboutItem(item.detail.status === "selected"
       ? "この移動予定の経路全体を再検索して選び直したい。新しい経路を採用するまで元の経路を残し、変更をやめたら元の経路のままにしてください。ほかの予定は変更しないでください"
       : "この移動区間の交通手段を相談したい");
   }));

@@ -238,8 +238,14 @@ describe("Trip workspace DOM and mobile navigation", () => {
     day.value = [...day.options].find(option => option.textContent === "2026-09-22")!.value;
     button(activity, "日付変更案").click();
     expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "replace", itemId: "activity", item: { schedule: { type: "day", date: "2026-09-22" } } });
-    button(activity, "相談").click(); expect(f.ask).toHaveBeenCalledWith("この予定を相談したい"); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
+    button(activity, "相談").click(); expect(f.ask).toHaveBeenCalledWith(expect.stringContaining(`相談対象：旅程「${trip.title}」の3番目の予定「Zürich」。\nこの予定を相談したい`)); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
     expect(f.app.dataset.tripWorkspaceView).toBe("chat"); expect(trip.items).toHaveLength(3);
+    button(activity, "天気を踏まえて相談").click();
+    expect(f.ask).toHaveBeenLastCalledWith(expect.stringContaining('3番目の予定「Zürich」。\nこの予定の日付'));
+    const hotel = f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')!;
+    button(hotel, "宿候補を相談").click();
+    expect(f.ask).toHaveBeenLastCalledWith(expect.stringContaining('2番目の予定「宿泊」（2026-09-22）。\nこの宿泊予定'));
+    expect(f.controller.uiFocus()).toEqual({ itemId: "hotel" });
   });
   it("keeps candidate assessment outside adopted cards; unknown is not fine weather or zero price", () => {
     const f = setup(tripWorkspacePreviewSource()); const before = structuredClone(f.controller.current());
