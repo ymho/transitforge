@@ -211,3 +211,11 @@
 @media (max-width: 62rem) {
   #app[data-primary-view="chat"] .consultation-page { inset: 0 0 calc(66px + env(safe-area-inset-bottom)); padding: 14px 16px 10px; }
 }
+
+/* Condition actions are plain clickable text, including under the shared theme. */
+#app[data-primary-view="chat"]:not([data-primary-view="map"]) .consultation-page .consultation-condition-actions button,
+#app[data-primary-view="chat"]:not([data-primary-view="map"]) .consultation-page .consultation-condition-actions button:hover:not(:disabled) {
+  appearance: none; min-width: 0; min-height: 0; width: auto; height: auto;
+  padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  color: var(--tf-muted); font: 400 11px/1.5 var(--product-font); text-decoration: none;
+}
