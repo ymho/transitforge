@@ -174,8 +174,12 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
 
       }
       for (const fact of trip.request.partialConditions ?? []) {
+        const value = fact.value;
+        if (fact.target === "end_date" && value.kind === "local_date" && effectiveTripConstraints(trip.request).some(({ requirement }) =>
+          requirement.type === "dates" && requirement.end?.earliest === value.date && requirement.end?.latest === value.date)) continue;
         const display = fact.target === "party_size" && fact.value.kind === "quantity" && fact.value.unit === "people"
           ? ["同行者", `${fact.value.amount}人（内訳未定）`]
+          : fact.target === "party_size" && fact.value.kind === "party" ? ["同行者", party ?? "人数は未設定"]
           : fact.target === "budget" && fact.value.kind === "money"
             ? ["予算", `${fact.value.amount}${fact.value.currency ? ` ${fact.value.currency}` : "（通貨未定）"}${fact.value.basis === "per_person" ? " / 1人" : fact.value.basis === "trip" ? " / 旅行全体" : "（対象未定）"}`]
             : fact.target === "end_date" && fact.value.kind === "local_date" ? ["日程", `終了 ${fact.value.date}（開始日未定）`]

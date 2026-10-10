@@ -112,3 +112,16 @@ it("shows an unknown end honestly and displays the explicit end when received", 
   f.setTrip({ ...f.trip, request: { ...f.trip.request, constraints: [f.trip.request.constraints[0]!, { ...dates, requirement: { ...dates.requirement, end: { earliest: "2026-10-25", latest: "2026-10-25" } } }] } });
   expect(f.panel.textContent).toContain("2026-10-24〜2026-10-25");
 });
+
+it("displays accepted composition and does not repeat an end already present in dates", () => {
+  const f = setup();
+  const provenance = { kind: "user_turn" as const, turnId: "33333333-3333-4333-8333-333333333333", quote: "大人2人、10月24日から25日" };
+  const base = { scope: { type: "conversation" as const }, modality: "preferred" as const, precision: "exact" as const, frame: "actual" as const, provenance };
+  f.setTrip({ ...f.trip, request: { constraints: [{ id: "dates", source: "user", strength: "hard", scope: { type: "trip" }, requirement: { type: "dates", start: { earliest: "2026-10-24", latest: "2026-10-24" }, end: { earliest: "2026-10-25", latest: "2026-10-25" } } }], assumptions: [], partialConditions: [
+    { ...base, factId: "party", sourceOperationId: "party", target: "party_size", value: { kind: "party", adults: 2, children: [] } },
+    { ...base, factId: "end", sourceOperationId: "end", target: "end_date", value: { kind: "local_date", date: "2026-10-25" } },
+  ] } });
+  expect(f.panel.textContent).toContain("大人2人");
+  expect(f.panel.textContent).toContain("2026-10-24〜2026-10-25");
+  expect(f.panel.textContent).not.toContain("開始日未定");
+});

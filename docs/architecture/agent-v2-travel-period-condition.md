@@ -81,3 +81,5 @@ Nova 2 Lite final travel-period live run 36280727426を3回独立実行し、3/3
 各actual更新は2 model calls（writer→structured output）、what-ifも2 calls、更新不要turnは1 callだった。固定test repositoryでの結果であり、実Provider・実ブラウザとは区別する。
 
 条件欄では終了日未設定を開始日で埋めず「終了日未定」と表示する。startのearliest/latestは出発日の許容幅であり旅行期間ではない。
+
+終了日のpartialConditionsは同じ確定日程と一致する場合のみ重複表示を省く。会話で受理済みの人数内訳は旅程ヘッダ・相談条件の読み取り表示でも利用する。

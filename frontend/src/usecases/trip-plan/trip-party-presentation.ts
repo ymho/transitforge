@@ -17,6 +17,12 @@ export function tripPartyLabel(party: TripParty): string {
 export function tripPartyView(trip: Pick<Trip, "request" | "items">) {
   validateTripRequest(trip.request, trip.items);
   const request: TripRequest = trip.request;
+  const accepted = request.partialConditions?.find(({ target, scope }) => target === "party_size" &&
+    (scope.type === "conversation" || scope.type === "trip"));
+  if (accepted?.value.kind === "party") {
+    const { kind: _kind, ...fields } = accepted.value;
+    return { text: tripPartyLabel({ ...fields, source: "user" }), source: "user" as const };
+  }
   if (!request.party) return undefined;
   const assumption = request.assumptions.find((a) => a.id === request.party!.assumptionId);
   return { text: `${assumption?.status === "unconfirmed" ? "⚠ 仮置き: " : ""}${tripPartyLabel(request.party)}`,
