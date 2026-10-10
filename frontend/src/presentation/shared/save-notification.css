@@ -6,5 +6,5 @@
   color: var(--tf-ink, #242b2c); box-shadow: 0 6px 24px #24304326; font: 400 13px/1.5 var(--product-font, sans-serif);
 }
 .app-save-notification > span { min-width: 0; overflow-wrap: anywhere; }
-.app-save-notification > button { flex: 0 0 auto; border: 0; background: transparent; color: var(--tf-muted, #738080); padding: 2px 6px; min-height: 28px; font: inherit; font-size: 20px; cursor: pointer; }
+#app[data-primary-view] .app-save-notification > button, .app-save-notification > button { flex: 0 0 auto; border: 0; background: transparent; color: var(--tf-muted, #738080); padding: 2px 6px; min-height: 28px; font: inherit; font-size: 20px; border-radius: 6px; box-shadow: none; min-width: 28px; width: auto; cursor: pointer; }
 .app-save-notification > button:focus-visible { outline: 2px solid var(--tf-blue, #37675f); outline-offset: 2px; }
