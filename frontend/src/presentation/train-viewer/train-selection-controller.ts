@@ -3,6 +3,7 @@ import type { Train } from "@raiquora/train/train";
 import {
   coupledTrainLayouts,
   type TrainLinkKind,
+  type TrainRenderLayout,
 } from "../../domain/coupled-train-layout";
 import { TrainFocusSession } from "../../domain/train-focus-session";
 import { mergeSameOperationTrains } from "../../domain/train-detail-service";
@@ -30,7 +31,7 @@ export interface TrainSelectionElements {
 
 export interface TrainSelectionController {
   focusTrain: (serviceUid: string) => boolean;
-  updateTracking: (positions: TrainPosition[]) => void;
+  updateTracking: (positions: TrainPosition[], layouts?: TrainRenderLayout[]) => void;
   updateOperations: (
     operations: ReadonlyMap<string, TrainOperation> | undefined,
     destinationChangedServiceUids?: ReadonlySet<string>,
@@ -39,6 +40,7 @@ export interface TrainSelectionController {
 
 export interface TrainSelectionLayer {
   setFocusedServiceUid(serviceUid: string | undefined): void;
+  trainServiceUidAt(point: { x: number; y: number }): string | undefined;
   congestionBarServiceUidAt(point: { x: number; y: number }): string | undefined;
 }
 
@@ -282,12 +284,6 @@ export function configureTrainSelection(
     elements.onFocus?.(train.service_uid);
   };
 
-  map.on("click", "train-hit-targets", (event) => {
-    const serviceUid = event.features?.[0]?.properties?.service_uid;
-    if (typeof serviceUid === "string") {
-      showTrainDetails(serviceUid);
-    }
-  });
   map.on("click", (event) => {
     const congestionServiceUid = trainLayer.congestionBarServiceUidAt(
       event.point,
@@ -296,12 +292,9 @@ export function configureTrainSelection(
       showTrainDetails(congestionServiceUid);
       return;
     }
-    const clickedTrains = map.queryRenderedFeatures(event.point, {
-      layers: ["train-hit-targets"],
-    });
-    if (clickedTrains.length === 0) {
-      endFocus();
-    }
+    const serviceUid = trainLayer.trainServiceUidAt(event.point);
+    if (serviceUid) showTrainDetails(serviceUid);
+    else endFocus();
   });
   map.on("mouseenter", "train-hit-targets", () => {
     map.getCanvas().style.cursor = "pointer";
@@ -333,8 +326,7 @@ export function configureTrainSelection(
       });
       return true;
     },
-    updateTracking(positions) {
-      const layouts = coupledTrainLayouts(positions, formationLinks);
+    updateTracking(positions, layouts = coupledTrainLayouts(positions, formationLinks)) {
       displayedPositions = layouts.map(({ position }) => position);
       coupledServiceUidByServiceUid.clear();
       linkKindByServiceUid.clear();

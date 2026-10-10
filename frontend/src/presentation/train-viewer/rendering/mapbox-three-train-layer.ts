@@ -4,7 +4,12 @@ import * as THREE from "three";
 import { congestionBarColor, congestionBarHeightMeters } from "./congestion-bar";
 import type { Coordinate } from "@raiquora/train/path";
 import { congestionBarsForLayouts } from "../../../domain/train-congestion-layout";
-import { coupledTrainLayouts } from "../../../domain/coupled-train-layout";
+import { nearestTrainHit } from "../../../domain/train-hit-update";
+import {
+  coupledTrainLayouts,
+  trainHitTargetsFor,
+  type TrainRenderLayout,
+} from "../../../domain/coupled-train-layout";
 import {
   destinationArcHeightMeters,
   destinationArcVertex,
@@ -70,6 +75,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
   private readonly worldOriginTranslation = new THREE.Matrix4();
   private readonly displayedBearingByServiceUid = new Map<string, number>();
   private positions: TrainPosition[] = [];
+  private layouts: TrainRenderLayout[] = [];
   private focusedServiceUid?: string;
   private congestionByTrainNumber: ReadonlyMap<string, number> = new Map();
   private delayByTrainNumber: ReadonlyMap<string, number> = new Map();
@@ -213,9 +219,26 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
     map.on("move", this.recenterWorldOrigin);
   }
 
-  setPositions(positions: TrainPosition[]): void {
+  setPositions(
+    positions: TrainPosition[],
+    layouts = coupledTrainLayouts(positions, this.formationLinks),
+  ): void {
     this.positions = positions;
+    this.layouts = positions.length > maximumTrainInstances
+      ? coupledTrainLayouts(positions.slice(0, maximumTrainInstances), this.formationLinks)
+      : layouts;
     this.updateInstances();
+  }
+
+  trainServiceUidAt(point: { x: number; y: number }): string | undefined {
+    const map = this.map;
+    if (!map) return undefined;
+    return nearestTrainHit(
+      trainHitTargetsFor(this.layouts.slice(0, maximumTrainInstances)).map((target) => ({
+        serviceUid: target.serviceUid, point: map.project(target.coordinate),
+      })),
+      point,
+    );
   }
 
   setFocusedServiceUid(serviceUid: string | undefined): void {
@@ -299,11 +322,7 @@ export class MapboxThreeTrainLayer implements mapboxgl.CustomLayerInterface {
       return;
     }
 
-    const visiblePositions = this.positions.slice(0, maximumTrainInstances);
-    const visibleLayouts = coupledTrainLayouts(
-      visiblePositions,
-      this.formationLinks,
-    ).slice(0, maximumTrainInstances);
+    const visibleLayouts = this.layouts.slice(0, maximumTrainInstances);
     const congestionBars = congestionBarsForLayouts(visibleLayouts, this.congestionByTrainNumber);
     const visibleBearingTrackingKeys = new Set(
       visibleLayouts.map(({ bearingTrackingKey }) => bearingTrackingKey),

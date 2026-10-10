@@ -70,3 +70,8 @@ function browserRuntimeMonitorEnvironment(): RuntimeMonitorEnvironment {
     debug: (message, value) => console.debug(message, value),
   };
 }
+
+/** Let the browser paint before continuing CPU-heavy startup work. */
+export function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}

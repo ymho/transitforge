@@ -15,19 +15,28 @@ export interface TrainPosition {
 
 export class PathGeometryIndex {
   private readonly geometryByPathId = new Map<string, PathGeometry>();
+  private readonly pathsById: ReadonlyMap<string, Path>;
 
   constructor(paths: Path[]) {
-    for (const path of paths) {
-      this.geometryByPathId.set(path.path_id, new PathGeometry(path));
-    }
+    this.pathsById = new Map(paths.map((path) => [path.path_id, path]));
   }
 
   positionAt(pathId: string, routeMeter: number): PositionedCoordinate | undefined {
-    return this.geometryByPathId.get(pathId)?.positionAt(routeMeter);
+    return this.geometryFor(pathId)?.positionAt(routeMeter);
   }
 
   coordinatesBetween(pathId: string, fromRouteMeter: number, toRouteMeter: number): Coordinate[] | undefined {
-    return this.geometryByPathId.get(pathId)?.coordinatesBetween(fromRouteMeter, toRouteMeter);
+    return this.geometryFor(pathId)?.coordinatesBetween(fromRouteMeter, toRouteMeter);
+  }
+
+  private geometryFor(pathId: string): PathGeometry | undefined {
+    const cached = this.geometryByPathId.get(pathId);
+    if (cached) return cached;
+    const path = this.pathsById.get(pathId);
+    if (!path) return undefined;
+    const geometry = new PathGeometry(path);
+    this.geometryByPathId.set(pathId, geometry);
+    return geometry;
   }
 }
 

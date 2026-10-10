@@ -1,3 +1,5 @@
+import { prioritizeStartupPaths } from "../domain/route-startup-priority";
+import { TrainHitUpdateSchedule } from "../domain/train-hit-update";
 import { startTripConsultation } from "../usecases/trip-plan/start-trip-consultation";
 import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
 import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
@@ -8,7 +10,7 @@ import { createConversationStreamSession } from "../adapters/http/agent-stream/s
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
 import { browserPollingEnvironment } from "../adapters/browser/polling-controller";
-import { createRuntimeMonitor, nextBrowserFrame } from "../adapters/browser/runtime-monitor";
+import { createRuntimeMonitor, nextBrowserFrame, yieldToBrowser } from "../adapters/browser/runtime-monitor";
 import { applyWeather } from "../adapters/mapbox/map-weather";
 import { createLocalWeatherLayer } from "../adapters/mapbox/local-weather-layer";
 import { createGroundAccessLayer, type GroundAccessLayerController } from "../adapters/mapbox/ground-access-layer";
@@ -24,7 +26,7 @@ import {
 } from "../adapters/http/traffic/train-delay";
 import {
   loadPathCatalog,
-  toRouteFeatureCollections,
+  toRouteFeatureCollection,
 } from "../adapters/http/viewer-input/path-catalog";
 import { emptyStationLineCatalog } from "../adapters/http/viewer-input/station-line-catalog";
 import { searchWeatherGrid } from "../adapters/http/agent-api/bedrock-agent";
@@ -716,8 +718,10 @@ if (!token) {
     "top-right",
   );
 
+  let styleLoadGeneration = 0;
   let disposeDataUpdates = () => undefined;
   map.on("style.load", async () => {
+    const generation = ++styleLoadGeneration;
     disposeDataUpdates();
     disposeDataUpdates = () => undefined;
     status.hidden = false;
@@ -742,7 +746,16 @@ if (!token) {
       loadingScreen.setStep("routes", "loading");
       loadingScreen.setMessage("鉄道路線を読み込んでいます。");
       const routeLoadStartedAt = performance.now();
-      const catalog = await loadPathCatalog();
+      // Let Mapbox start its tile requests and paint before fetching bulk inputs.
+      await yieldToBrowser();
+      if (generation !== styleLoadGeneration) return;
+      // Start both requests together; give the base map a paint before preparation.
+      const [[catalog, trainIndex]] = await Promise.all([
+        Promise.all([loadPathCatalog(), loadTrainIndex()]),
+        yieldToBrowser(),
+      ]);
+      if (generation !== styleLoadGeneration) return;
+      await yieldToBrowser();
       metrics.recordRouteLoad(performance.now() - routeLoadStartedAt);
       runtimeMonitor.log();
       loadingScreen.setStep("routes", "complete");
@@ -751,7 +764,7 @@ if (!token) {
       loadingScreen.setStep("trains", "loading");
       loadingScreen.setMessage("列車と時刻表を読み込んでいます。");
       const trainLoadStartedAt = performance.now();
-      const trainIndex = await loadTrainIndex();
+
       loadingScreen.setStep("trains", "complete");
       const stationLineCatalog =
         trainIndex.station_line_catalog ?? emptyStationLineCatalog();
@@ -770,27 +783,28 @@ if (!token) {
         }
       }
       const lineColorIndex = new TrainLineColorIndex(stationLineCatalog);
-      const colorsByServiceUid = new Map(
-        trainIndex.trains.map((train) => [
-          train.service_uid,
-          lineColorIndex.colorFor(train).color,
-        ]),
-      );
-      const destinationCoordinatesByServiceUid = new Map(
-        trainIndex.trains.flatMap((train) => {
-          const coordinate = destinationCoordinateForTrain(train, geometry);
-          return coordinate ? [[train.service_uid, coordinate] as const] : [];
-        }),
-      );
+      const colorsByServiceUid = new Map<string, string>();
+      const destinationCoordinatesByServiceUid = new Map<string, [number, number]>();
+      let preparationYieldAt = performance.now() + 8;
+      for (const train of trainIndex.trains) {
+        colorsByServiceUid.set(train.service_uid, lineColorIndex.colorFor(train).color);
+        const coordinate = destinationCoordinateForTrain(train, geometry);
+        if (coordinate) destinationCoordinatesByServiceUid.set(train.service_uid, coordinate);
+        if (performance.now() >= preparationYieldAt) {
+          await yieldToBrowser();
+          if (generation !== styleLoadGeneration) return;
+          preparationYieldAt = performance.now() + 8;
+        }
+      }
       const lineColorsByPathId = dominantLineColorsByPathId(
         trainIndex.trains,
         colorsByServiceUid,
       );
-      const routeCollections = toRouteFeatureCollections(
-        catalog,
-        64,
-        lineColorsByPathId,
-      );
+      const bounds = map.getBounds()!;
+      const orderedPaths = prioritizeStartupPaths(catalog.paths, [
+        bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth(),
+      ]);
+      const routeChunkCount = Math.ceil(orderedPaths.length / 64);
       metrics.recordTrainLoad(performance.now() - trainLoadStartedAt);
       runtimeMonitor.log();
       console.debug("[Raiquora] viewer catalog", {
@@ -798,7 +812,10 @@ if (!token) {
         trains: trainIndex.trains.length,
       });
       loadingScreen.setStep("draw", "loading");
-      for (const [index, routes] of routeCollections.entries()) {
+      const addRouteChunk = (index: number) => {
+        const routes = toRouteFeatureCollection({
+          ...catalog, paths: orderedPaths.slice(index * 64, (index + 1) * 64),
+        }, lineColorsByPathId);
         const sourceId = `routes-${index}`;
         map.addSource(sourceId, { type: "geojson", data: routes });
         map.addLayer({
@@ -816,14 +833,10 @@ if (!token) {
             "line-opacity": 0.48,
           },
         });
-
-        status.textContent = `全経路を読み込んでいます (${index + 1}/${routeCollections.length})。`;
-        loadingScreen.setMessage(
-          `鉄道路線を描画しています (${index + 1}/${routeCollections.length})。`,
-        );
-        await nextBrowserFrame();
-      }
-      loadingScreen.setStep("draw", "complete");
+      };
+      if (routeChunkCount > 0) addRouteChunk(0);
+      await yieldToBrowser();
+      if (generation !== styleLoadGeneration) return;
 
       const formationLinks = trainFormationLinks(trainIndex.trains);
 
@@ -921,6 +934,7 @@ if (!token) {
         let displayDestinationChanges: ReadonlySet<string> = new Set();
         let displayStoppingTrains: ReadonlyMap<string, StoppingTrainState> = new Map();
         const stoppingPositionTracker = new LongTimeStoppingPositionTracker();
+        const hitUpdates = new TrainHitUpdateSchedule();
 
         const applyOperationMode = (displayedAt: Date) => {
           const now = new Date();
@@ -1024,11 +1038,11 @@ if (!token) {
             calculatedPositions,
             displayStoppingTrains,
           );
-          threeTrainLayer.setPositions(positions);
-          selection.updateTracking(positions);
-          const hitSource = map.getSource("train-hit-targets") as import("mapbox-gl").GeoJSONSource;
           const trainLayouts = coupledTrainLayouts(positions, formationLinks);
-          hitSource.setData({
+          threeTrainLayer.setPositions(positions, trainLayouts);
+          selection.updateTracking(positions, trainLayouts);
+          const hitSource = map.getSource("train-hit-targets") as import("mapbox-gl").GeoJSONSource;
+          if (hitUpdates.shouldUpdate(performance.now())) hitSource.setData({
             type: "FeatureCollection",
             features: trainHitTargetsFor(trainLayouts).map((target) => ({
               type: "Feature" as const,
@@ -1086,8 +1100,15 @@ if (!token) {
         updateTrains();
         await nextBrowserFrame();
         resolveAiGuidePromptHandler(handleAiGuidePrompt);
+        loadingScreen.setStep("draw", "complete");
         loadingScreen.complete();
+        for (let index = 1; index < routeChunkCount; index += 1) {
+          await yieldToBrowser();
+          if (generation !== styleLoadGeneration) return;
+          addRouteChunk(index);
+        }
     } catch (error) {
+      if (generation !== styleLoadGeneration) return;
       const message = error instanceof Error ? error.message : "不明なエラーです。";
       status.hidden = false;
       status.textContent = `入力を読み込めませんでした: ${message}`;
