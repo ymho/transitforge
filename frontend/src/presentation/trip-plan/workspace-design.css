@@ -3,7 +3,7 @@
   & .trip-workspace { background: var(--workspace-canvas); padding: 28px 24px 56px; }
   & .trip-detail-view { max-width: 1100px; margin-inline: auto; }
   & .trip-workspace-heading { position: relative; display: block; padding: 0; margin: 0 0 32px; border: 0; }
-  & .trip-workspace-heading > button { padding: 0 8px; margin-bottom: 16px; background: transparent; color: var(--tf-muted); }
+  & .trip-detail-top-row > button { padding: 0 8px; margin: 0; border: 0; box-shadow: none; background: transparent; color: var(--tf-muted); }
   & .trip-header-hero { position: relative; }
   & .trip-header-cover { position: absolute; inset: 0; overflow: hidden; border-radius: 24px; background: #315c54; }
   & .trip-header-cover > img { width: 100%; height: 100%; object-fit: cover; object-position: center 55%; }
@@ -187,7 +187,7 @@
 #app[data-primary-view]:not([data-primary-view="map"]) .trip-editor-dialog > form {
   position: static; width: 100%; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none;
 }
-/* Keep newly merged confirmation and sharing actions within the folio header. */
+/* Keep confirmation and consultation beside each other within the folio header. */
 #app[data-primary-view]:not([data-primary-view="map"]) {
   & .trip-header-actions { display: grid; grid-template-columns: auto auto; gap: 8px; align-items: center; }
   & .trip-header-actions > button { min-height: 40px; padding: 10px 16px; border-radius: 24px; border: 1px solid #ffffff60; background: #ffffff18; color: #fff; font-size: 12px; font-weight: 500; }
@@ -203,7 +203,7 @@
 #app .trip-workspace-add { grid-template-columns: minmax(0,1fr); gap: 12px; padding: 16px; }
 #app .trip-workspace-add textarea { width: 100%; min-width: 0; resize: vertical; border: 1px solid var(--tf-line); border-radius: 10px; background: var(--tf-bg); color: var(--tf-ink); padding: 10px; font: inherit; font-size: 16px; }
 
-/* The card's main action is consultation; details use a quiet disclosure control. */
+/* Details use a quiet disclosure control before the title. */
 #app[data-primary-view]:not([data-primary-view="map"]) {
   & .trip-timeline-content > header { align-items: center; flex-wrap: nowrap; gap: 8px; }
   & .trip-workspace-item-focus { flex: 1; min-width: 0; }

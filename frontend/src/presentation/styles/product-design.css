@@ -47,7 +47,7 @@
   & .trip-workspace { border: 0; box-shadow: none; padding: 22px 20px 28px; overflow-x: hidden; }
   & .trip-workspace-heading { display: block; padding: 0 0 12px; margin: 0; border: 0; background: transparent; }
   & .trip-workspace-heading h1 { margin: 0 0 3px; }
-  & .trip-workspace-heading > button { border: 0; padding: 0; color: var(--tf-muted); font-size: 12px; }
+  & .trip-detail-top-row > button { border: 0; padding: 0; color: var(--tf-muted); font-size: 12px; }
   & .trip-workspace-emblem { display: none; }
   & .trip-workspace-heading > .trip-workspace-copy { margin: 0; font-size: 12px; }
   & .trip-party-control > button { border: 0; padding: 0; }
