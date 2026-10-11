@@ -69,6 +69,16 @@ override_resource {
 }
 run "current_topology" {
   command = plan
+  override_resource {
+    target          = aws_api_gateway_resource.personal_state_conversations["stream"]
+    override_during = plan
+    values          = { id = "conversations-resource" }
+  }
+  override_resource {
+    target          = aws_lambda_function.personal_state["stream"]
+    override_during = plan
+    values          = { invoke_arn = "arn:aws:apigateway:ap-northeast-1:lambda:path/2015-03-31/functions/arn:aws:lambda:ap-northeast-1:123456789012:function:personal-state/invocations" }
+  }
   assert {
     condition = (
       aws_api_gateway_resource.browser_diagnostics["stream"].parent_id == aws_api_gateway_resource.personal_state_conversations["stream"].id &&
