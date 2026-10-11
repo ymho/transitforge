@@ -32,6 +32,13 @@ Schemaの通過は事実の正しさや保存の権限を証明しない。Evide
 各項目は`{ reference: { evidenceId, field }, value }`とし、モデルは`reference`をそのまま選択する。
 概要・アクセスなどの見出しからfieldを作らせず、資料値と参照の組を明示する。
 未検証の検索snippetを回答用根拠として提示しない。公開時の再検証は省略しない。
+初期入力・Tool提示・SDK admission・最終公開は共通の`mergeAgentV2Evidence`で同じ上限を適用する。
+回答・カードに使える観測を取得順で先に保持し、残りの枠へ調査用観測を入れる。後続のreadが未検証snippetを
+押し出しても、先に提示した有効な参照は押し出さない。公開用観測だけで上限に達した場合も上限は増やさず、
+保持できないIDを`evidenceIds` / `candidateReferences` / `replyReferences`へ提示しない。省略数は`evidenceCoverage`へ示す。
+元の調査EvidenceはApplicationに保持する。条件変更による失効、実際のID衝突・内容矛盾、架空参照は引き続き拒否する。
+適用条件の内容比較は対象・scope・有効期間・値を含み、取得元・取得時刻・観測ID・抽出方法・引用位置は来歴として
+保持する。同じ内容を別の来歴で取得しただけでは矛盾としない。同一IDへの異なる観測は従来どおり衝突として拒否する。
 `explore_destination` / `discover_destinations`のモデル向け結果はoutcome（部分失敗の範囲を含む）と
 回答・カード用参照へ絞る。内部のdiscovery batch、取得ページ、地点照合、assessmentは重複して渡さず、
 元のTool結果とEvidenceはApplicationに保持する。他のToolの出力は変更しない。

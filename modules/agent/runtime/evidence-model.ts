@@ -298,8 +298,18 @@ export function assessDerivedCurrentness(
 function observationsConflict(left: Evidence, right: Evidence): boolean {
   const a = left.observation, b = right.observation;
   return Boolean(a && b && a.subjectKey === b.subjectKey && a.scopeKey === b.scopeKey && a.predicate === b.predicate &&
-    canonicalEvidence({ facts: left.facts, applicabilityFacts: left.applicabilityFacts }) !==
-      canonicalEvidence({ facts: right.facts, applicabilityFacts: right.applicabilityFacts }));
+    canonicalEvidence(observedContent(left)) !== canonicalEvidence(observedContent(right)));
+}
+
+function observedContent(item: Evidence): unknown {
+  return { facts: item.facts, applicabilityFacts: item.applicabilityFacts?.map((fact) => {
+    // Provenance differs between acquisitions; keep subject, scope, validity and
+    // applicability values in the semantic comparison. The complete lineage is
+    // still retained and same-ID collision comparison remains unchanged.
+    const { observationId: _id, sourceRef: _source, sourceSpan: _span,
+      retrievedAt: _at, extractionKind: _extraction, ...content } = fact;
+    return content;
+  }) };
 }
 
 function boundField(item: Evidence, path: string): boolean {

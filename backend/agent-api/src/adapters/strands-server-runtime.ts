@@ -1,7 +1,8 @@
 import { publicCommentaryMarkdown } from "./public-commentary-markdown.js";
 import { conditionDisplayLines } from "@raiquora/agent/agent-v2-condition-display";
 import type { PublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
-import { mergeEvidenceObservations, validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
+import { validateEvidenceAndClaims } from "@raiquora/agent/evidence-model";
+import { mergeAgentV2Evidence } from "@raiquora/agent/agent-v2-evidence";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { AgentV2ReplyError, type AgentV2ReplyProof } from "@raiquora/agent/agent-v2-reply";
 import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
@@ -18,7 +19,12 @@ export type StrandsRuntimeResult = AgentRuntimeResult & { publicReply?: AgentV2R
 export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
   return async (input: ServerAgentRuntimeInput): Promise<StrandsRuntimeResult> => {
     let conversationInput: ReturnType<typeof strandsConversationInput>;
-    try { conversationInput = strandsConversationInput(input); }
+    try {
+      // Application selects the admissible Evidence view before the transport-only
+      // serializer. Preserve the full acquisition set for final collision checks.
+      conversationInput = strandsConversationInput({ ...input, initialEvidence:
+        mergeAgentV2Evidence(input.initialEvidence ?? [], input.limits.maxEvidence, input.context?.effectiveIntent).evidence });
+    }
     catch (error) {
       if (error instanceof StrandsTurnInputError) throw new ServerAgentRuntimeExecutionError("turn_input", error.code);
       throw error;
@@ -58,7 +64,7 @@ export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
     if (status !== "completed") return denied("incomplete_execution");
     if (!run.replyProposal) return denied("missing_structured_output");
     // Merge rather than silently choosing the first of colliding evidence IDs.
-    const merged = mergeEvidenceObservations([], [...(input.initialEvidence ?? []), ...run.evidence], input.limits.maxEvidence);
+    const merged = mergeAgentV2Evidence([...(input.initialEvidence ?? []), ...run.evidence], input.limits.maxEvidence, run.effectiveIntent);
     if (merged.collisions.length || merged.conflictingObservationIds.length) return denied("evidence_collision");
     try {
       const reply = admitAgentV2Reply(run.replyProposal, {

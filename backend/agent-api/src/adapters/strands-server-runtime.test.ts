@@ -34,6 +34,19 @@ function fake(overrides: Record<string, unknown> = {}) {
   })) };
 }
 describe("createStrandsServerRuntime", () => {
+  it("uses the same budgeted initial evidence for model input and final publication", async () => {
+    const input = runtimeInput(), engine = fake({ replyProposal: answer });
+    const initialEvidence = [...Array.from({ length: 20 }, (_, index): Evidence => ({ ...evidence,
+      id: `discovery-${index}`, knowledgeKind: "unverified_information" })), evidence];
+    const result = await createStrandsServerRuntime(engine as unknown as StrandsAgentEngine)({ ...input, initialEvidence });
+    expect(result.status).toBe("completed");
+    const transport = engine.run.mock.calls[0]![0];
+    const payload = JSON.parse(transport.applicationReference!.match(/<application_reference>\n([\s\S]+?)\n<\/application_reference>/u)![1]!);
+    expect(payload.application.evidence).toHaveLength(20);
+    expect(payload.application.evidence[0].id).toBe(evidence.id);
+    expect(result.publicReply?.references).toEqual(answer.references);
+    expect(initialEvidence).toHaveLength(21);
+  });
   it("classifies rejected Application input before invoking the model without exposing its contents", async () => {
     for (const [code, context] of [
       ["context_budget", { conversation: { messages: [{ role: "user", text: "private-message".repeat(6000) }] } }],

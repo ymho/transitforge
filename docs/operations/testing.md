@@ -207,3 +207,5 @@ Strandsのモデル呼び出しごとに、成功・失敗、呼び出しの連�
 各呼び出しには入力・出力トークン数、本文・推論・Toolブロック数、登録済みTool名だけを追加する。`MaxTokensError.partialMessage`も同じ射影を使い、途中の本文は記録しない。`agent_tool_call`はSDKのTool完了直後に記録し、SDK成功でもApplicationの`ok:false`は拒否として区別する。`agent_reply_validation`はApplicationの回答検証結果を閉じたコードとreply kindで記録する。例外で実行全体が戻らなくてもこれらの観測は残る。集計は例外失敗と通常returnした上限停止を合わせた直近4件を各80行まで表示する。Evidence ID衝突と観測競合は件数だけを表示し、会話・実行IDを表示しない。
 
 `Agent Eval / Strands v2 Live`の`case_id=model-loop`は明日の日帰り希望を、検証済み資料あり／候補なしの固定Providerで各1回再現する。モデルは本番同様のSonnet 4.6を選び、`repetitions=1`なら最大20モデル呼び出し、各150秒、単回4096／累積8192出力トークンに限定する。条件・Conversation・Trip保存はメモリfixtureで、実ユーザーの状態も外部旅行Providerも使わない。`AGENT_V2_LIVE=true MODEL_ID=jp.anthropic.claude-sonnet-4-6 npm run test:agent:v2:model-loop-live`は同じ有料ケースを実行する。通常のtestでは合成モデルによるSDK経路だけを検証し、実Bedrock成功とはみなさない。
+検証済み資料ありのfixtureは12検索hit・4読了ページ・4地点照合を組成し、Evidenceが標準上限20件を超える条件を含む。
+`strands-evidence-reference-budget.test.ts`は天気を含む25件からToolが実際に提示した参照を合成モデルが選び、SDK admissionと最終公開まで一致することを確認する。来歴だけが違う同内容の観測と、本当に異なる適用条件を区別する。

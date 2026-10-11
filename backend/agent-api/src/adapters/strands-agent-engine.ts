@@ -7,7 +7,8 @@ import {
 import { AgentTraceRecorder, type AgentTrace } from "@raiquora/agent/agent-trace";
 import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
-import { mergeEvidenceObservations, type Evidence } from "@raiquora/agent/evidence-model";
+import type { Evidence } from "@raiquora/agent/evidence-model";
+import { mergeAgentV2Evidence } from "@raiquora/agent/agent-v2-evidence";
 import type { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { AgentV2ReplyError, agentV2StructuredOutputSchema, type AgentV2OperationReceipt, type AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
@@ -126,7 +127,8 @@ export class StrandsAgentEngine {
     const tools = createStrandsReadTools({
       registry: input.tools, executor: input.toolExecutor, executionId: input.executionId,
       getEffectiveIntent: () => currentEffectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
-      trace, evidence, budgetState, maxToolCalls: input.limits?.maxToolCalls,
+      trace, evidence, initialEvidence: input.initialEvidence, maxEvidence: input.maxEvidence,
+      budgetState, maxToolCalls: input.limits?.maxToolCalls,
       reserveToolCall: input.reserveToolCall, canExecute: () => !intentUnavailable,
     });
     const controller = input.conditionController;
@@ -236,7 +238,7 @@ export class StrandsAgentEngine {
     // does not repair a reply, start another invoke, or bypass final publication.
     const validatedOutputSchema = agentV2StructuredOutputSchema.superRefine(({ reply }, context) => {
       const allEvidence = [...(input.initialEvidence ?? []), ...evidence];
-      const merged = mergeEvidenceObservations([], allEvidence, input.maxEvidence);
+      const merged = mergeAgentV2Evidence(allEvidence, input.maxEvidence, currentEffectiveIntent);
       const referenceDiagnostic = strandsReplyReferenceDiagnostic(reply, allEvidence, merged.evidence, merged.omittedCount);
       if (merged.collisions.length || merged.conflictingObservationIds.length) {
         log("agent_reply_validation", { ...referenceDiagnostic, outcome: "rejected", code: "evidence_collision", replyKind: reply.kind,
@@ -330,7 +332,7 @@ export class StrandsAgentEngine {
 }
 function createStrandsReadTools(input: {
   registry: AgentToolRegistry; executor: AgentToolExecutor; executionId: string; getEffectiveIntent?: () => EffectiveIntent | undefined;
-  toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[];
+  toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[]; initialEvidence?: readonly Evidence[]; maxEvidence?: number;
   budgetState?: { toolCalls: number; toolLimitReached: boolean }; maxToolCalls?: number;
   reserveToolCall?: () => boolean; canExecute?: () => boolean;
 }): InvokableTool<unknown, JSONValue>[] {
@@ -376,9 +378,13 @@ function createStrandsReadTools(input: {
       const output = ["explore_destination", "discover_destinations"].includes(descriptor.name)
         ? { outcome: jsonObject(execution.result.output)?.outcome }
         : execution.result.output;
-      return jsonValue({ ok: true, output, evidenceIds: execution.evidence.map(({ id }) => id),
-        candidateReferences: agentV2CandidateReferences(execution.evidence, effectiveIntent),
-        replyReferences: agentV2ReplyReferences(execution.evidence, effectiveIntent) });
+      const merged = mergeAgentV2Evidence([...(input.initialEvidence ?? []), ...input.evidence], input.maxEvidence, effectiveIntent);
+      const acquiredIds = new Set(execution.evidence.map(({ id }) => id));
+      const retained = merged.evidence.filter(({ id }) => acquiredIds.has(id));
+      return jsonValue({ ok: true, output, evidenceIds: retained.map(({ id }) => id),
+        candidateReferences: agentV2CandidateReferences(retained, effectiveIntent),
+        replyReferences: agentV2ReplyReferences(retained, effectiveIntent),
+        ...(merged.omittedCount ? { evidenceCoverage: { reason: "evidence_budget", omittedCount: merged.omittedCount } } : {}) });
     },
   }));
 }
