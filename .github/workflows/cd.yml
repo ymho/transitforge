@@ -215,6 +215,9 @@ jobs:
             --function-name "$AGENT_STREAM_FUNCTION" \
             --query '{state:State,updateStatus:LastUpdateStatus,runtime:Environment.Variables.AGENT_RUNTIME,legacyV2:Environment.Variables.AGENT_RUNTIME_V2_ENABLED,legacySemantic:Environment.Variables.SEMANTIC_INTENT_ENABLED,modelId:Environment.Variables.MODEL_ID}' \
             --output json | node tools/deployment/verify-agent-runtime.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$(aws lambda get-function-concurrency --function-name "$AGENT_STREAM_FUNCTION" \
+            --query ReservedConcurrentExecutions --output text)" = 2
+          echo "Agent concurrency verified: reserved=2." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify deployed OTP route service
         if: env.CD_MODE == 'deploy'

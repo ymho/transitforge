@@ -199,6 +199,10 @@ run "enabled_contract" {
     error_message = "Keep the Agent out of VPC and use the route contract in its composition."
   }
   assert {
+    condition     = aws_lambda_function.agent_stream["stream"].reserved_concurrent_executions == 2
+    error_message = "A trip switch must permit one bounded previous stream and the next independent consultation without unbounded paid execution."
+  }
+  assert {
     condition     = alltrue([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : !b.compress && length(b.function_association) == 0 && b.cache_policy_id == data.aws_cloudfront_cache_policy.caching_disabled.id && b.origin_request_policy_id == data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id if b.path_pattern == "/api/agent-stream"])
     error_message = "Streaming must not buffer compression or run a viewer-request function on the Bearer header."
   }

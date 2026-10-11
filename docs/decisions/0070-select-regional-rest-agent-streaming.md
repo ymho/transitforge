@@ -78,3 +78,11 @@ ADR 0019のfixed-IPはTool Portの先へ維持し、専用Provider配置は#480�
 
 実AWSで逐次受信しない、認証搬送が成立しない、実アカウントquota/timeoutが不足する、RESTの費用や
 運用負担が許容できない場合はAへ再評価する。接続を越えた継続/再取得が要件化した場合はCを評価する。
+
+2026-10-11の運用修正では、旅程切替時のGateway 500と同じ分のLambda Throttles=3を実測した。
+予約同時実行数1の全体直列化では、受信を中止した旧streamと次の相談の重なりを扱えないため2へ変更する。
+同じConversationの状態更新は既存のowner-scoped lease/CASで直列化し、HTTP接続やLambda全体に委ねない。
+Gatewayのrate/burst、業務期限、Lambda期限は増やさず、並行課金も最大2件に制限する。
+REPORT後の枠の保持理由は未確定のため、容量対策をランタイムの根因解明として扱わない。
+AWSの[response streaming仕様](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html)は
+client切断が実行停止を保証しないことを示す。保存済みTurnの読み取り復旧とBrowserの世代gateは独立に維持する。

@@ -15,7 +15,7 @@ export interface LambdaStreamingApi {
 export function lambdaStreamHandler(api: LambdaStreamingApi, handle: (request: StreamRequest, writer: StreamWriter) => Promise<void>) {
   return api.streamifyResponse(async (event, raw, context) => {
     // Node 22 streaming waits for idle handles by default. SDK keepalive handles
-    // must not retain the single reserved invocation after all work was awaited.
+    // must not retain invocation capacity after all work was awaited.
     if (context) context.callbackWaitsForEmptyEventLoop = false;
     const controller = new AbortController();
     let output = raw;

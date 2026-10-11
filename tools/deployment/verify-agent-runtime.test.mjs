@@ -54,7 +54,7 @@ test("CD explicitly selects V2 without enabling old semantic interpretation", ()
   assert.match(shell, /set -euo pipefail/u);
   assert.match(shell, /--query '\{state:State,updateStatus:LastUpdateStatus,runtime:Environment\.Variables\.AGENT_RUNTIME,legacyV2:Environment\.Variables\.AGENT_RUNTIME_V2_ENABLED,legacySemantic:Environment\.Variables\.SEMANTIC_INTENT_ENABLED,modelId:Environment\.Variables\.MODEL_ID\}'/u);
 });
-for (const mode of ["success", "read-failure", "wrong-config", "wrong-model"]) {
+for (const mode of ["success", "read-failure", "wrong-config", "wrong-model", "wrong-concurrency", "concurrency-read-failure"]) {
   test(`executes the actual CD verification shell: ${mode}`, () => {
     const directory = mkdtempSync(join(tmpdir(), "agent-runtime-706-"));
     try {
@@ -65,6 +65,10 @@ const args = process.argv.slice(2);
 fs.appendFileSync(process.env.MOCK_AWS_LOG, JSON.stringify(args) + "\\n");
 if (args[0] !== "lambda") process.exit(20);
 if (args[1] === "wait" && args[2] === "function-updated-v2") process.exit(0);
+if (args[1] === "get-function-concurrency") {
+  if (process.env.MOCK_AWS_MODE === "concurrency-read-failure") process.exit(17);
+  process.stdout.write(process.env.MOCK_AWS_MODE === "wrong-concurrency" ? "1" : "2"); process.exit(0);
+}
 if (args[1] !== "get-function-configuration") process.exit(21);
 if (process.env.MOCK_AWS_MODE === "read-failure") process.exit(17);
 process.stdout.write(JSON.stringify({state:"Active",updateStatus:"Successful",runtime:process.env.MOCK_AWS_MODE === "wrong-config" ? "v1" : "strands-v2",legacyV2:null,legacySemantic:null,modelId:process.env.MOCK_AWS_MODE === "wrong-model" ? "jp.amazon.nova-2-lite-v1:0" : process.env.TF_VAR_bedrock_model_id}));
@@ -77,15 +81,17 @@ process.stdout.write(JSON.stringify({state:"Active",updateStatus:"Successful",ru
       } });
       if (mode === "success") {
         assert.equal(result.status, 0, result.stderr);
-        assert.equal(readFileSync(summary, "utf8"), verifyAgentRuntime(active, environment));
+        assert.equal(readFileSync(summary, "utf8"), verifyAgentRuntime(active, environment) + "Agent concurrency verified: reserved=2.\n");
       } else {
         assert.notEqual(result.status, 0);
-        assert.ok(!result.stdout.includes("Agent runtime verified"));
+        if (mode.includes("concurrency")) assert.ok(!readFileSync(summary, "utf8").includes("Agent concurrency verified"));
+        else assert.ok(!result.stdout.includes("Agent runtime verified"));
       }
       const calls = readFileSync(log, "utf8").trim().split("\n").map(JSON.parse);
-      assert.equal(calls.length, 2);
+      assert.equal(calls.length, mode === "success" || mode.includes("concurrency") ? 3 : 2);
       assert.deepEqual(calls[0], ["lambda", "wait", "function-updated-v2", "--function-name", "test-agent-stream"]);
       assert.deepEqual(calls[1].slice(0, 4), ["lambda", "get-function-configuration", "--function-name", "test-agent-stream"]);
+      if (calls.length === 3) assert.deepEqual(calls[2], ["lambda", "get-function-concurrency", "--function-name", "test-agent-stream", "--query", "ReservedConcurrentExecutions", "--output", "text"]);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

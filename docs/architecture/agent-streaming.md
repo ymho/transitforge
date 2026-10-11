@@ -32,10 +32,17 @@ POST `/api/conversations/v1`の`turn`操作で読んで復旧する。Agentを�
 保存済みpublic artifactをlive SSEと同じparserで検証し、別旅程へ遅延回答を表示しない。
 
 Node 22 streamingのLambdaは、保存と送信をawaitした後にSDKのkeepalive接続だけで実行枠を保持しないよう
-`callbackWaitsForEmptyEventLoop=false`をAdapterで設定する。同時実行数1の設定は変更しない。
+`callbackWaitsForEmptyEventLoop=false`をAdapterで設定する。予約同時実行数は2に制限し、
+旅程切替時に1件の旧streamが残っても次の独立した相談を受けられる最小限の重なりを許す。
+Gatewayの1 request/sec・burst 2、Serverの150秒業務期限、Lambda240秒の期限は維持する。
+同じConversationの更新競合はApplicationの既存lease/CASで防ぎ、Lambdaの全体直列化に依存しない。
+3件以上の重なりを無制限に受けられるという保証ではなく、並行実行の課金上限は2件になる。
 診断WorkflowはGateway 5xxのstatus / integration status / response typeとLambda REPORTの最大実行時間も集計する。
 生の例外、本文、ヘッダー、利用者識別子は公開しない。実際の終了時間と500の原因は本番ログで検証する。
 LambdaのINIT_REPORT、許可したRuntimeエラー分類、60秒単位のInvocations / Errors / Throttles / ConcurrentExecutionsを
 同じ2時間窓で照合する。2026-10-11の19:12 JSTの500に対し、直前のLambdaは19:09:55にREPORTを出していたため、
 前の実行が240秒まで残ったという仮説は根因として確定していない。過去のGatewayログにintegration statusがなければ
 推定で補完せず、Lambda初期化・呼び出し制限と、新しいログの実測を分けて扱う。
+追加診断では同じ19:12の60秒窓にThrottles=3を確認し、Runtime初期化エラーは0だった。
+入口のLambda呼び出し制限を直接原因として扱う。REPORT後の実行枠解放が遅れた理由は未確定であり、
+予約同時実行数2の対策と混同しない。CDはデプロイ先の予約同時実行数を読み、2であることも検証する。
