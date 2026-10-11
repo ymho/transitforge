@@ -273,9 +273,16 @@ try {
     await checkLayout("spot-add");
     await page.locator('.trip-workspace-add button').filter({ hasText: "取消" }).click();
     await page.getByRole("button", { name: "町を歩くの時刻を登録", exact: true }).click();
-    assert.equal(await page.locator('[data-item-id="visit"] .trip-time-editor').isVisible(), true);
+    const timeEditor = page.getByRole("dialog", { name: "予定の時刻", exact: true });
+    assert.equal(await timeEditor.locator(".trip-time-editor").isVisible(), true);
     await checkLayout("time-editor");
-    await page.locator('[data-item-id="visit"] .trip-time-editor button').filter({ hasText: "取消" }).click();
+    await timeEditor.getByLabel("日付", { exact: true }).fill("2026-09-13");
+    await timeEditor.getByLabel("時刻", { exact: true }).fill("15:30");
+    await timeEditor.getByRole("button", { name: "確定", exact: true }).click();
+    await timeEditor.waitFor({ state: "detached" });
+    await page.waitForFunction(() => document.querySelector('[data-item-id="visit"] .trip-time-control')?.textContent.includes("15:30"));
+    assert.equal(await page.getByText("変更内容を確認", { exact: true }).count(), 0);
+    assert.equal(trips[0].items.find(item => item.id === "visit").schedule.startAt.at, "2026-09-13T15:30:00+09:00");
     await page.getByRole("button", { name: "人数を変更", exact: true }).click();
     assert.equal(await page.locator(".trip-party-editor").isVisible(), true); await checkLayout("party-editor");
     await page.keyboard.press("Escape");
