@@ -415,6 +415,7 @@ const tripWorkspace = configureTripWorkspace({
   showMap: focusTripMap, loadInTripContext: (tripId) => inTripContextClient.read(tripId),
   ask: (prompt) => aiGuideController.ask(prompt), nextItemId: () => crypto.randomUUID(),
   openSharing: () => tripSharing.open(),
+  archiveTrip: async (trip) => { await serverTripClient.archive(trip.id); await serverTripList.refresh(); },
   refreshWeather: async (trip, itemId) => {
     const source = tripWorkspaceController.source();
     await serverTripClient.refreshWeather(trip.id, itemId, trip.revision, crypto.randomUUID());
@@ -638,7 +639,6 @@ primaryShell = configureAiFirstShell(document, app, {
   openTrip: (id) => tripNavigation.open(id, "trip"),
   openTravelMode: (id) => { void tripNavigation.open(id, "trip").then(() => tripWorkspace.openTravelMode()).catch(() => aiGuideController.notify("旅行モードを開けませんでした。")); },
   consultTrip: (id) => tripNavigation.open(id, "chat"),
-  archiveTrip: async (id) => { await serverTripClient.archive(id); await serverTripList.refresh(); },
   openMap: () => { void startMap(); selectSidebarMapMode(); },
   journeySettings: () => ({ transferPace: journeyTransferPace.value, rankingPreference: journeyRankingPreference.value }),
   setJourneySettings: ({ transferPace, rankingPreference }) => {

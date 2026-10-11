@@ -173,15 +173,16 @@ it("opens the actual Trip as a trips subview, not a selected chat tab", async ()
   click('[data-primary="trips"]');
   expect(document.querySelector<HTMLElement>('[data-page="trips"]')!.hidden).toBe(false);
 });
-it("shows a travel-mode entry only for the current adopted Trip", () => {
+it("keeps list cards free of operation menus even for a current adopted Trip", () => {
   const base = createTrip("45300000-0000-4000-8000-000000000001", "今日の旅", "2026-09-18T00:00:00Z", [{
     id: "now", title: "現在の予定", type: "activity", category: "sightseeing",
     schedule: { type: "fixed", startAt: { at: "2026-09-17T23:00:00Z", timeZone: "UTC" }, endAt: { at: "2026-09-18T01:00:00Z", timeZone: "UTC" } },
   }]);
   const trip = { ...base, adoption: { confirmedAt: "2026-09-17T00:00:00Z" } };
   const openTravelMode = vi.fn(); const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }), read: () => ({ state: "available", trips: [trip] }), openTravelMode });
-  shell.navigate("trips"); click("[data-trip-travel]"); expect(openTravelMode).toHaveBeenCalledWith(trip.id);
-  expect(document.querySelectorAll("[data-trip-travel]")).toHaveLength(1);
+  shell.navigate("trips");
+  expect(document.querySelector("[data-trip-travel]")).toBeNull();
+  expect(openTravelMode).not.toHaveBeenCalled();
 });
 
 const signedIn = () => ({ status: "signed-in" as const, displayName: "テスト" });
@@ -356,9 +357,6 @@ it("dismisses trip menus outside their own bounds and unregisters on dispose", (
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
   const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "検証" }), read: () => ({ state: "available", trips: [trip] }) });
   shell.navigate("trips");
-  const menu = document.querySelector<HTMLDetailsElement>(".home-trip-manage")!;
-  menu.open = true; menu.querySelector("summary")!.dispatchEvent(new Event("click", { bubbles: true })); expect(menu.open).toBe(true);
-  document.body.click(); expect(menu.open).toBe(false);
   const header = document.createElement("details"); header.className = "trip-header-management";
   document.querySelector("main")!.append(header); header.open = true;
   document.body.click(); expect(header.open).toBe(false);
@@ -375,7 +373,7 @@ it("shows an out-of-scope reply without opening a conversation or losing the ori
   expect(input.value).toBe("積分の公式を教えて"); expect(input.disabled).toBe(false);
   expect(ports.openChat).not.toHaveBeenCalled(); expect(ports.openTrip).not.toHaveBeenCalled();
 });
-it("opens a card from its copy and keeps management separate, with a status chip and no title actions", async () => {
+it("opens a card from its copy with a status chip and no management or title actions", async () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "長い旅のタイトル".repeat(10), "2026-09-18T00:00:00Z", []);
   const f = setup({ authState: () => ({ status: "signed-in", displayName: "ゆうき" }), read: () => ({ state: "available", trips: [trip] }) });
   expect(document.querySelector("[data-trip-regenerate-title]")).toBeNull();
@@ -383,8 +381,8 @@ it("opens a card from its copy and keeps management separate, with a status chip
   expect(document.querySelector(".trip-list-open")).toBeNull();
   expect(document.querySelector(".trip-status-chip")?.textContent).toBe("計画中");
   expect(document.querySelector(".trip-status-chip")?.getAttribute("data-trip-status")).toBe("planning");
-  document.querySelector<HTMLElement>(".home-trip-manage summary")!.click();
-  expect(f.ports.openTrip).not.toHaveBeenCalled();
+  expect(document.querySelector(".home-trip-manage")).toBeNull();
+  expect(document.querySelector("[data-trip-archive]")).toBeNull();
   document.querySelector<HTMLElement>(".trip-list-copy > small")!.click();
   await vi.waitFor(() => expect(f.ports.openTrip).toHaveBeenCalledWith(trip.id));
 });

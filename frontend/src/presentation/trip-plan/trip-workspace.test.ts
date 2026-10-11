@@ -12,7 +12,7 @@ import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
 import { parsePublicPlanPresentation } from "@raiquora/agent/public-plan-presentation";
 
 function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string) => Promise<InTripContextSnapshot | undefined>,
-  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "refreshWeather" | "renameTitle" | "changeAdoption" | "changeItemDecision" | "branchTrip" | "conversationId" | "onPlanAdoption">> = {}) {
+  actions: Partial<Pick<Parameters<typeof configureTripWorkspace>[0], "refreshWeather" | "renameTitle" | "changeAdoption" | "changeItemDecision" | "branchTrip" | "conversationId" | "onPlanAdoption" | "archiveTrip" | "showTripList" | "openSharing">> = {}) {
   const app = document.createElement("main"); app.id = "app"; document.body.append(app);
   const chat = document.createElement("section"); chat.id = "chat";
   const messages = document.createElement("ol"), input = document.createElement("input"); chat.append(messages, input);
@@ -22,16 +22,19 @@ function setup(source?: TripWorkspaceSource, loadInTripContext?: (tripId: string
   const ui = configureTripWorkspace({ app, chat, messages, input, controller, ask, showContext, returnToConversation, showMap: vi.fn(), loadInTripContext, nextItemId: () => "new-free", ...actions });
   return { app, chat, messages, input, controller, ui, ask, showContext };
 }
-function button(root: ParentNode, text: string) { return [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === text)!; }
+function button(root: ParentNode, text: string) { return [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => (b.querySelector(":scope > span")?.textContent ?? b.textContent) === text)!; }
 afterEach(() => { document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe("Trip workspace DOM and mobile navigation", () => {
   it("starts whole-route reselection with a stable item focus and keeps the adopted itinerary unchanged", () => {
-    const trip = multiCityTrip(), before = structuredClone(trip);
+    const base = multiCityTrip();
+    const trip = { ...base, items: base.items.map(item => item.type === "transport" ? { ...item, detail: { ...item.detail, provenance: { type: "provider" as const, provider: "fixture", providerItemId: "route", selectedAt: placesAt, sources: [{ id: "route-source", provider: "fixture", sourceId: "route", kind: "web" as const, confidence: "observed" as const, retrievedAt: placesAt }] } } } : item) }, before = structuredClone(trip);
     const f = setup({ getCurrentTrip: () => trip });
     f.ui.showPlan();
     const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="movement"]')!;
-    button(card, "経路全体を選び直す").click();
+    expect(button(card, "経路全体を選び直す")).toBeUndefined();
+    button(f.ui.panel, "相談").click();
+    button(document.querySelector("dialog.trip-consultation-dialog")!, "移動：経路を選び直す").click();
     expect(f.controller.uiFocus()).toEqual({ itemId: "movement" });
     expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("経路全体を再検索"));
     expect(f.controller.current()).toEqual(before); expect(f.controller.proposal()).toBeUndefined();
@@ -211,11 +214,10 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(header.firstElementChild?.classList.contains("trip-item-toggle")).toBe(true);
     expect(header.querySelector(".trip-workspace-item-focus")?.textContent).toBe("向日町駅→出雲市駅");
     expect(header.textContent).not.toContain("経路1");
-    expect(header.querySelector(".trip-item-consult")?.textContent).toBe("相談");
+    expect(header.querySelector(".trip-item-consult")).toBeNull();
     const body = card.querySelector<HTMLElement>(".trip-workspace-item-body")!;
     expect(body.hidden).toBe(true);
     expect(header.querySelector(".trip-workspace-item-decision")?.textContent).toBe("下書き");
-    expect(header.querySelector(".trip-item-consult")?.previousElementSibling?.classList.contains("trip-workspace-item-decision")).toBe(true);
     expect(card.querySelector(".trip-warning-box")?.closest(".trip-workspace-item-body")).toBe(body);
     expect(card.querySelector(".trip-item-cost")?.closest(".trip-workspace-item-body")).toBe(body);
     expect(card.querySelector(".trip-route")?.closest(".trip-workspace-item-body")).toBe(body);
@@ -268,22 +270,20 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(f.controller.proposal()).toBeUndefined(); expect(activity.querySelector(".trip-workspace-editor")).toBeNull();
     expect(f.ui.panel.querySelector('[data-item-id="hotel"]')).toBe(oldHotel);
   });
-  it("remove/move use the shared proposal path and consultation sends intent with focus", () => {
+  it("offers saved-item topics from the Trip header and carries the precise target", () => {
     const trip = multiCityTrip(), f = setup({ getCurrentTrip: () => trip });
-    const activity = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
-    expect(activity.querySelector(".trip-workspace-move-target")).toBeNull();
-    expect(button(f.ui.panel, "並び替え")?.parentElement).toBe(f.ui.panel.querySelector(".trip-itinerary-heading"));
-    expect(f.ui.panel.querySelector(".trip-workspace-day > h2")).toBeNull();
-    expect(activity.querySelector(".trip-workspace-day-target")).toBeNull();
-    expect(button(activity, "日付変更案")).toBeUndefined();
-    button(activity, "相談").click(); expect(f.ask).toHaveBeenCalledWith(`相談対象：旅程「${trip.title}」の3番目の予定「Zürich」。\nこの予定を相談したい`); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
-    expect(f.app.dataset.tripWorkspaceView).toBe("chat"); expect(trip.items).toHaveLength(3);
-    button(activity, "相談").click();
-    expect(f.ask).toHaveBeenLastCalledWith(expect.stringContaining('3番目の予定「Zürich」。\nこの予定を相談したい'));
-    const hotel = f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')!;
-    expect(button(hotel, "宿候補を相談")).toBeUndefined();
-    button(hotel, "相談").click();
-    expect(f.ask).toHaveBeenLastCalledWith(expect.stringContaining('2番目の予定「宿泊」（2026-09-22）。\nこの予定'));
+    f.ui.showPlan();
+    expect(f.ui.panel.querySelector(".trip-item-consult")).toBeNull();
+    expect(button(f.ui.panel, "経路全体を選び直す")).toBeUndefined();
+    button(f.ui.panel, "相談").click();
+    expect(f.ask).not.toHaveBeenCalled();
+    button(document.querySelector("dialog.trip-consultation-dialog")!, "Zürich：訪問時刻を決める").click();
+    expect(f.ask).toHaveBeenCalledWith(expect.stringContaining('3番目の予定「Zürich」。\n前後の予定'));
+    expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
+    expect(f.app.dataset.tripWorkspaceView).toBe("chat");
+    f.ui.showPlan(); button(f.ui.panel, "相談").click();
+    button(document.querySelector("dialog.trip-consultation-dialog")!, "宿泊：チェックイン時刻を決める").click();
+    expect(f.ask).toHaveBeenLastCalledWith(expect.stringContaining('2番目の予定「宿泊」（2026-09-22）'));
     expect(f.controller.uiFocus()).toEqual({ itemId: "hotel" });
   });
   it("keeps candidate assessment outside adopted cards; unknown is not fine weather or zero price", () => {
@@ -309,13 +309,13 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect([...f.ui.panel.querySelectorAll<HTMLButtonElement>(".trip-day-tabs [role=tab]")].find(tab => tab.textContent === "日時未定")?.getAttribute("aria-selected")).toBe("true");
   });
 });
-it("puts Trip confirmation and sharing in the header and explains missing schedules", () => {
+it("puts Trip confirmation and consultation in the header and explains missing schedules", () => {
   const trip = createTrip(placesTripId, "計画中", placesAt, [{ id: "a", type: "activity", category: "sightseeing", title: "海", schedule: { type: "unscheduled" } }]);
   const f = setup({ getCurrentTrip: () => trip }, undefined, { changeAdoption: vi.fn(async () => {}) });
   const heading = f.ui.panel.querySelector("header")!;
   expect(button(heading, "旅程を確定").disabled).toBe(true); expect(heading.textContent).toContain("日程を設定すると確定");
-  expect([...heading.querySelectorAll(".trip-header-actions button")].map(button => button.textContent)).toEqual(["旅程を確定", "共有"]);
-  expect(heading.querySelector(".trip-header-management")).toBeNull();
+  expect([...heading.querySelectorAll(".trip-header-actions button")].map(button => button.textContent)).toEqual(["旅程を確定", "相談"]);
+  expect(heading.querySelector(".trip-header-management")).not.toBeNull();
   expect(heading.textContent).not.toContain("この旅について相談");
   expect(heading.textContent).not.toContain("旅行モード");
 });
@@ -447,4 +447,53 @@ it("serializes memo blur and booking changes using the latest saved revision", a
  updatedMemo.value = "集合場所を更新"; updatedMemo.dispatchEvent(new Event("blur"));
  await vi.waitFor(() => expect(trip.items.find(item => item.id === "activity")!.memo).toBe("集合場所を更新"));
  expect(save).toHaveBeenCalledTimes(3);
+});
+
+it("clears item focus for other consultation and closes stale dialogs on session changes", () => {
+  const trip = multiCityTrip(), f = setup({ getCurrentTrip: () => trip });
+  f.ui.showPlan(); f.controller.focus("hotel");
+  button(f.ui.panel, "相談").click();
+  button(document.querySelector("dialog.trip-consultation-dialog")!, "ほかのことを相談").click();
+  expect(f.controller.uiFocus()).toBeUndefined(); expect(f.ask).not.toHaveBeenCalled();
+  expect(f.app.dataset.tripWorkspaceView).toBe("chat");
+  f.ui.showPlan(); button(f.ui.panel, "相談").click();
+  f.controller.attach("other", { getCurrentTrip: () => createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt) });
+  f.controller.activateSession("other");
+  expect(document.querySelector("dialog.trip-consultation-dialog")).toBeNull();
+  expect(f.ask).not.toHaveBeenCalled();
+});
+
+it("moves sharing and owner-only deletion to details and returns to the list only after success", async () => {
+  const trip = multiCityTrip(), archiveTrip = vi.fn(async () => {}), showTripList = vi.fn(), openSharing = vi.fn();
+  const f = setup({ getCurrentTrip: () => trip }, undefined, { archiveTrip, showTripList, openSharing });
+  const menu = f.ui.panel.querySelector<HTMLDetailsElement>(".trip-header-management")!;
+  menu.open = true; button(menu, "共有").click(); expect(openSharing).toHaveBeenCalledOnce(); expect(menu.open).toBe(false);
+  menu.open = true; button(menu, "削除").click();
+  expect(archiveTrip).not.toHaveBeenCalled(); expect(showTripList).not.toHaveBeenCalled();
+  document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
+  await vi.waitFor(() => expect(archiveTrip).toHaveBeenCalledWith(trip));
+  await vi.waitFor(() => expect(showTripList).toHaveBeenCalledOnce());
+  f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
+  expect(button(f.ui.panel, "削除").hidden).toBe(true); expect(button(f.ui.panel, "相談").hidden).toBe(true);
+  f.controller.attach("editor", { getCurrentTrip: () => trip, getRole: () => "editor" }); f.controller.activateSession("editor");
+  expect(button(f.ui.panel, "削除").hidden).toBe(true); expect(button(f.ui.panel, "相談").hidden).toBe(false);
+});
+
+it("does not delete a different Trip after the confirmation opens", async () => {
+  const trip = multiCityTrip(), archiveTrip = vi.fn(async () => {});
+  const f = setup({ getCurrentTrip: () => trip }, undefined, { archiveTrip });
+  button(f.ui.panel, "削除").click();
+  f.controller.attach("other", { getCurrentTrip: () => createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt) });
+  f.controller.activateSession("other");
+  document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(archiveTrip).not.toHaveBeenCalled();
+});
+
+it("uses the same pencil SVG for all edit buttons", () => {
+  const trip = multiCityTrip(), f = setup({ getCurrentTrip: () => trip, confirmProposal: async () => {} }, undefined, { renameTitle: vi.fn(async () => {}) });
+  const pencils = [...f.ui.panel.querySelectorAll(".trip-pencil")];
+  expect(pencils.length).toBeGreaterThan(3);
+  expect(new Set(pencils.map(button => button.querySelector("svg")?.outerHTML)).size).toBe(1);
+  expect(pencils.every(button => button.hasAttribute("aria-label") && !button.textContent)).toBe(true);
 });

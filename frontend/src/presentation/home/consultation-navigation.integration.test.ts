@@ -31,11 +31,14 @@ it("uses the same consultation surface from Trip, returns to Trip, and makes the
   expect(app.dataset.primaryView).toBe("trip-loading");
   await vi.waitFor(() => expect(app.dataset.primaryView).toBe("trip"));
   expect(document.querySelector("[data-trip-chat]")).toBeNull();
-  expect(document.querySelector("[data-trip-consultation]")).toBeNull();
+  expect(document.querySelector("[data-trip-consultation]")).not.toBeNull();
   const item = document.querySelector<HTMLElement>('[data-item-id="shrine"]')!;
-  [...item.querySelectorAll("button")].find(button => button.textContent === "相談")!.click();
+  expect(item.querySelector(".trip-item-consult")).toBeNull();
+  document.querySelector<HTMLButtonElement>("[data-trip-consultation]")!.click();
+  expect(app.dataset.primaryView).toBe("trip"); expect(ask).not.toHaveBeenCalled();
+  document.querySelector<HTMLButtonElement>(".trip-consultation-options button")!.click();
   expect(app.dataset.primaryView).toBe("chat"); expect(app.dataset.consultationMode).toBe("conversation");
-  expect(window.history.state.tripId).toBe(trip.id); expect(ask).toHaveBeenCalledWith("相談対象：旅程「出雲旅行」の1番目の予定「出雲大社」。\nこの予定を相談したい");
+  expect(window.history.state.tripId).toBe(trip.id); expect(ask).toHaveBeenCalledWith("相談対象：旅程「出雲旅行」の1番目の予定「出雲大社」。\nこの予定の行き先を相談して決めたい");
   expect(controller.uiFocus()).toEqual({ itemId: "shrine" });
   expect(controller.sessionId()).toBe("trip-conversation");
   workspace.show("trip"); expect(app.dataset.primaryView).toBe("trip");

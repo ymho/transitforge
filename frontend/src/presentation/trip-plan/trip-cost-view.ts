@@ -1,3 +1,4 @@
+import { iconMarkup } from "../shared/primitives";
 import { saveTripEdit } from "./save-trip-edit";
 import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
 import { itemCost, editItemCost, isRailItem } from "@raiquora/trip/item-cost";
@@ -21,7 +22,7 @@ export function renderItemCost(trip: Trip, item: ItineraryItem, controller: Trip
   if (item.decision && !item.decision.needsReconfirmation || !controller.canConfirm() || controller.source()?.getRole?.() === "viewer") { return root; }
   const session = controller.sessionId();
   const current = () => controller.current()?.id === trip.id && controller.current()?.revision === trip.revision && controller.sessionId() === session && controller.canConfirm() && controller.source()?.getRole?.() !== "viewer";
-  const edit = control("✎", () => {
+  const edit = control("", () => {
     if (root.querySelector(".trip-cost-editor")) return;
     const form = element("form", "trip-cost-editor"), label = element("label", "", "概算金額（予定全体） "), input = element("input"), currency = element("select");
     const cost = itemCost(trip, item);
@@ -47,7 +48,7 @@ export function renderItemCost(trip: Trip, item: ItineraryItem, controller: Trip
     });
     root.append(form); input.focus();
   });
-  edit.className = "trip-field-pencil trip-item-cost-value";
+  edit.className = "trip-field-pencil trip-item-cost-value trip-pencil"; edit.innerHTML = iconMarkup("pencil");
   edit.setAttribute("aria-label", `${item.title}の概算費用を編集`); root.append(edit);
   return root;
 }

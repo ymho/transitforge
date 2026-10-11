@@ -1,5 +1,3 @@
-import { notifySaved } from "../shared/save-notification";
-import { confirmAction } from "../shared/app-dialog";
 import { brandLogoMarkup } from "../shared/brand";
 import { configureTripLibrary } from "./trip-library-panel";
 import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-client";
@@ -28,7 +26,6 @@ export interface AiFirstShellPorts {
   openTrip(id: string): Promise<void> | void;
   openTravelMode?(id: string): void;
   consultTrip?(id: string): Promise<void> | void;
-  archiveTrip?(id: string): Promise<void>;
   openMap(): void;
   journeySettings(): { transferPace: string; rankingPreference: string };
   setJourneySettings(settings: { transferPace: string; rankingPreference: string }): void;
@@ -62,7 +59,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const dismissTripMenus = (event: Event) => {
     const target = event.target;
     if (!(target instanceof window.Node)) return;
-    for (const menu of app.querySelectorAll<HTMLDetailsElement>(".home-trip-manage[open], .trip-header-management[open]")) {
+    for (const menu of app.querySelectorAll<HTMLDetailsElement>(".trip-header-management[open]")) {
       if (!menu.contains(target)) menu.open = false;
     }
   };
@@ -195,20 +192,11 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       const move = (allowed: boolean) => { if (!allowed || !button.isConnected) return; window.history.pushState({ tripId: (button.dataset.trip ?? button.dataset.tripOpen)! }, "", "#trip"); apply(); };
       const result = canNavigate(); if (typeof result === "boolean") move(result); else void result.then(move);
     }));
-    root.querySelectorAll<HTMLButtonElement>("[data-trip-travel]").forEach((button) => button.addEventListener("click", () => {
-      if (!view.trips.some((row) => row.trip.id === button.dataset.tripTravel)) return;
-      ports.openTravelMode?.(button.dataset.tripTravel!);
-    }));
     root.querySelectorAll<HTMLElement>("[data-trip-card]").forEach(card => card.addEventListener("click", event => {
       if ((event.target as Element).closest("button, details")) return;
       const move = (allowed: boolean) => { if (!allowed || !card.isConnected) return; window.history.pushState({ tripId: card.dataset.tripCard! }, "", "#trip"); apply(); };
       const result = canNavigate(); if (typeof result === "boolean") move(result); else void result.then(move);
 
-    }));
-    root.querySelectorAll<HTMLButtonElement>("[data-trip-archive]").forEach((button) => button.addEventListener("click", async () => {
-      const current = view.trips.find((row) => row.trip.id === button.dataset.tripArchive)?.trip;
-      if (!current || !ports.archiveTrip || !await confirmAction(document, `「${current.title}」を削除しますか？\n画面から元に戻すことはできません。宿泊や列車の予約は取り消されません。`)) return;
-      void ports.archiveTrip(current.id).then(() => { notifySaved(document, "旅程を削除しました。"); render(); }, () => { void ports.retry().then(render, render); });
     }));
     if (!signedIn && (window.location.hash !== "#chat" || consultationMode !== "landing")) {
       window.history.replaceState({ consultation: "new" }, "", "#chat"); apply(true);
@@ -382,6 +370,5 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
 }
 function esc(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 function card(trip: Trip, group: keyof typeof tripDisplayLabels): string {
-  const withTravelMode = group === "current";
-  return `<article class="home-card home-trip-card" data-trip-card="${esc(trip.id)}"><div class="trip-list-choice"><button class="trip-list-cover" type="button" data-trip-open="${esc(trip.id)}" aria-label="${esc(trip.title)}のしおりを開く"><img src="${tripCoverImage(trip.id)}" alt="" loading="lazy"><small>旅のイメージ</small></button><div class="trip-list-copy"><div class="trip-list-title-row"><button class="trip-list-title-open" type="button" data-trip="${esc(trip.id)}"><strong>${esc(trip.title)}</strong></button></div><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span><span class="trip-status-chip" data-trip-status="${group}">${esc(tripDisplayLabels[group])}</span></div></div><details class="home-trip-manage"><summary aria-label="旅程の操作">⋯</summary><div class="home-trip-menu"><button type="button" data-trip-archive="${esc(trip.id)}">削除</button>${withTravelMode ? `<button type="button" data-trip-travel="${esc(trip.id)}">旅行モードを開く</button>` : ""}</div></details></article>`;
+  return `<article class="home-card home-trip-card" data-trip-card="${esc(trip.id)}"><div class="trip-list-choice"><button class="trip-list-cover" type="button" data-trip-open="${esc(trip.id)}" aria-label="${esc(trip.title)}のしおりを開く"><img src="${tripCoverImage(trip.id)}" alt="" loading="lazy"><small>旅のイメージ</small></button><div class="trip-list-copy"><div class="trip-list-title-row"><button class="trip-list-title-open" type="button" data-trip="${esc(trip.id)}"><strong>${esc(trip.title)}</strong></button></div><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span><span class="trip-status-chip" data-trip-status="${group}">${esc(tripDisplayLabels[group])}</span></div></div></article>`;
 }
