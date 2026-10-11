@@ -83,8 +83,24 @@ resource "aws_cognito_user_pool_domain" "login" {
 resource "aws_cognito_managed_login_branding" "spa" {
   user_pool_id                = aws_cognito_user_pool.users.id
   client_id                   = aws_cognito_user_pool_client.spa.id
-  use_cognito_provided_values = true
-  depends_on                  = [aws_cognito_user_pool_domain.login]
+  use_cognito_provided_values = false
+  settings                    = file("${path.module}/branding/kaiho-login.json")
+
+  asset {
+    bytes      = filebase64("${path.module}/branding/kaiho-wordmark.svg")
+    category   = "FORM_LOGO"
+    color_mode = "LIGHT"
+    extension  = "SVG"
+  }
+
+  asset {
+    bytes      = filebase64("${path.module}/../../../../frontend/public/favicon.svg")
+    category   = "FAVICON_SVG"
+    color_mode = "LIGHT"
+    extension  = "SVG"
+  }
+
+  depends_on = [aws_cognito_user_pool_domain.login]
 }
 
 output "cognito_frontend_config" {

@@ -6,7 +6,10 @@
 
 ## 決定
 
-Cognito User PoolのEssentials、Managed Login v2、Cognito標準brandingをTerraformで管理する。
+Cognito User PoolのEssentials、Managed Login v2、KAIHOのbrandingをTerraformで管理する。
+2026-10-11に標準brandingからKAIHOのロゴ・favicon・ライト背景・赤系アクセントへ変更する。
+外観の設定は`branding/kaiho-login.json`とSVG assetを`cognito.tf`から適用する。
+認証方式・登録制限・callback・トークン期限は変更しない。
 メールをusernameとし、ログインとパスワード再設定はManaged Loginへ委ねる。
 2026-09-29に一時再開した自己登録は、同日の利用者要望で再び停止する。User Poolの
 `allow_admin_create_user_only`をtrueに戻し、新しい利用者は管理者だけが作成する。
