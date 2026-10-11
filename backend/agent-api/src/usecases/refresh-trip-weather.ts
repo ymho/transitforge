@@ -5,7 +5,7 @@ import { tripWeatherTargets, tripWeatherBasis, weatherDate, type TripItemWeather
 import type { WeatherForecastProvider } from "../ports/weather-provider.js";
 
 /** Server-owned provider observations, bounded to two endpoint requests and 16 daily rows. */
-export async function refreshTripWeather(trip: Trip, item: ItineraryItem, provider: WeatherForecastProvider, now: Date, stations?: StationCatalogRepository): Promise<TripItemWeather> {
+export async function refreshTripWeather(trip: Trip, item: ItineraryItem, provider: WeatherForecastProvider, now: Date, stations?: StationCatalogRepository, clock: () => Date = () => new Date()): Promise<TripItemWeather> {
   const targets = tripWeatherTargets(trip, item);
   if (!targets.length) throw new Error("Weather needs a place and date");
   const fetchedAt = now.toISOString(), observedTimes: string[] = [], expiryTimes: string[] = [];
@@ -31,7 +31,9 @@ export async function refreshTripWeather(trip: Trip, item: ItineraryItem, provid
         ...(coordinate ? { coordinate } : {}),
         ...(target.at?.timeZone || target.place.timeZone ? { timeZone: target.at?.timeZone ?? target.place.timeZone } : {}) });
       if (result.status !== "available" || result.freshness !== "fresh" || !result.data) return { target, status: "unavailable", rows: [] };
-      const sources = result.evidence.filter(source => source.kind === "weather" && Number.isFinite(Date.parse(source.retrievedAt)) && Date.parse(source.retrievedAt) <= now.getTime());
+      // A provider records its observation during the request, after this operation starts.
+      const receivedAt = Math.max(now.getTime(), clock().getTime());
+      const sources = result.evidence.filter(source => source.kind === "weather" && Number.isFinite(Date.parse(source.retrievedAt)) && Date.parse(source.retrievedAt) <= receivedAt);
       if (!sources.length) return { target, status: "unavailable", rows: [] };
       observedTimes.push(...sources.map(source => source.retrievedAt));
       expiryTimes.push(...sources.map(source => source.validUntil ?? new Date(Date.parse(source.retrievedAt) + 3_600_000).toISOString()));
