@@ -276,11 +276,11 @@ run "cloudfront_origin_guard" {
     error_message = "All public REST API methods must require the server-only origin key in addition to Cognito."
   }
   assert {
-    condition = one([for item in aws_cloudfront_distribution.viewer[0].origin : item if item.origin_id == local.agent_stream_name]).custom_header == toset([{ name = "x-api-key", value = aws_api_gateway_api_key.cloudfront_origin["stream"].value }])
+    condition     = one([for item in aws_cloudfront_distribution.viewer[0].origin : item if item.origin_id == local.agent_stream_name]).custom_header == toset([{ name = "x-api-key", value = aws_api_gateway_api_key.cloudfront_origin["stream"].value }])
     error_message = "CloudFront must inject the origin key server-side."
   }
   assert {
-    condition = one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].restriction_type == "whitelist" && one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].locations == toset(["JP"]) && one(aws_cloudfront_distribution.viewer[0].restrictions).geo_restriction[0].restriction_type == "none"
+    condition     = one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].restriction_type == "whitelist" && one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].locations == toset(["JP"]) && one(aws_cloudfront_distribution.viewer[0].restrictions).geo_restriction[0].restriction_type == "none"
     error_message = "Direct viewers use JP IP filtering; the Cloudflare ingress uses its trusted country header."
   }
 }
