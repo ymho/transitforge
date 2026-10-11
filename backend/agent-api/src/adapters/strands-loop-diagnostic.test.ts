@@ -1,7 +1,22 @@
 import { expect, it } from "vitest";
 import { Message, ToolResultBlock, TextBlock, ToolUseBlock } from "@strands-agents/sdk";
 import { z } from "zod";
-import { strandsModelDiagnostic, strandsToolDiagnostic } from "./strands-loop-diagnostic.js";
+import { strandsModelDiagnostic, strandsReplyReferenceDiagnostic, strandsToolDiagnostic } from "./strands-loop-diagnostic.js";
+import type { Evidence } from "@raiquora/agent/evidence-model";
+
+it("separates unknown, omitted and duplicate references without logging identities", () => {
+  const evidence = (id: string): Evidence => ({ id, category: "external", knowledgeKind: "deterministic_fact",
+    subject: "private subject", facts: { private: "private value" }, references: [] });
+  const retained = evidence("private-retained"), omitted = evidence("private-omitted");
+  const result = strandsReplyReferenceDiagnostic({ kind: "answer", references: [
+    { evidenceId: retained.id, field: "name" }, { evidenceId: retained.id, field: "description" },
+    { evidenceId: omitted.id, field: "name" }, { evidenceId: omitted.id, field: "name" },
+    { evidenceId: "private-invented", field: "name" },
+  ] }, [retained, omitted], [retained], 1);
+  expect(result).toEqual({ referenceCount: 5, evidenceCount: 2, retainedEvidenceCount: 1, omittedEvidenceCount: 1,
+    unknownReferenceCount: 1, omittedReferenceCount: 2, duplicateReferenceCount: 1 });
+  expect(JSON.stringify(result)).not.toContain("private");
+});
 
 it("keeps usage and registered Tool names without text, input, or private metadata", () => {
   const message = new Message({ role: "assistant", content: [new TextBlock("private answer"),

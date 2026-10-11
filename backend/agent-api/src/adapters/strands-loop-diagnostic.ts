@@ -1,5 +1,19 @@
 import type { Message, ToolResultBlock } from "@strands-agents/sdk";
 import { ConditionUpdateRejectedError } from "@raiquora/agent/conversation-condition";
+import type { Evidence } from "@raiquora/agent/evidence-model";
+import type { AgentV2ReplyProposal } from "@raiquora/agent/agent-v2-reply";
+
+/** Compare identity membership only; no reference values or identifiers leave this projection. */
+export function strandsReplyReferenceDiagnostic(reply: AgentV2ReplyProposal, all: readonly Evidence[], retained: readonly Evidence[], omittedCount: number) {
+  const references = reply.kind === "answer" ? reply.references : reply.kind === "candidates"
+    ? reply.evidenceIds.map(evidenceId => ({ evidenceId })) : [];
+  const allIds = new Set(all.map(item => item.id)), retainedIds = new Set(retained.map(item => item.id));
+  return { referenceCount: references.length, evidenceCount: allIds.size, retainedEvidenceCount: retainedIds.size,
+    omittedEvidenceCount: omittedCount,
+    unknownReferenceCount: references.filter(reference => !allIds.has(reference.evidenceId)).length,
+    omittedReferenceCount: references.filter(reference => allIds.has(reference.evidenceId) && !retainedIds.has(reference.evidenceId)).length,
+    duplicateReferenceCount: references.length - new Set(references.map(reference => JSON.stringify(reference))).size };
+}
 
 const errorCodes = new Set(["invalid_input", "precondition_failed", "unknown_tool", "not_found", "outside_coverage", "precondition_missing", "stale_revision", "permission_denied", "rate_limited", "unavailable", "ambiguous_entity", "execution_failed", "intent_unavailable", "tool_budget"]);
 const issueCodes = new Set(["invalid_type", "too_big", "too_small", "invalid_format", "not_multiple_of", "unrecognized_keys", "invalid_union", "invalid_key", "invalid_element", "invalid_value", "custom"]);

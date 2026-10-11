@@ -95,6 +95,14 @@ if (modelCallPath && invocationFailurePath) {
           value.event === "agent_tool_call" ? tools.has(value.tool) ? value.tool : "unknown_tool" : kinds.has(value.replyKind) ? value.replyKind : "unknown",
         codes.has(value.code) ? value.code : "-", number(value.elapsedMs), number(value.outputTokens), number(value.reasoningBlocks), number(value.collisionCount), number(value.conflictCount),
       ])));
+  console.log("\n### Reply reference membership (same failed or limited invocations)");
+  table(["Stopped (UTC)", "Call", "Outcome", "Code", "Evidence", "Retained", "Omitted", "Reply references", "Unknown references", "Omitted references", "Duplicate references"],
+    failures.flatMap(failure => steps.filter(value => value.executionId === failure.executionId && value.event === "agent_reply_validation")
+      .sort((a, b) => (a.occurredAt ?? "").localeCompare(b.occurredAt ?? "")).slice(0, 80).map(value => [
+        timestamp(failure.occurredAt) ?? "-", number(value.modelCall),
+        ["completed", "failed", "rejected"].includes(value.outcome) ? value.outcome : "not_recorded", codes.has(value.code) ? value.code : "-",
+        ...["evidenceCount", "retainedEvidenceCount", "omittedEvidenceCount", "referenceCount", "unknownReferenceCount", "omittedReferenceCount", "duplicateReferenceCount"].map(key => number(value[key])),
+      ])));
 }
 
 function messages(path) {
