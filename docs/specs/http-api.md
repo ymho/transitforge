@@ -46,7 +46,7 @@ fetch開始はServer到着の証明ではない。Serverの`runId`を受信で�
 
 ## 未公開の境界
 
-通知とin-tripのpathは公開Trip hostに接続しておらず404。独立factoryの501 gateを公開済み機能と扱わない。
+通知APIは廃止済みで、公開Trip hostと個人API hostにルートを持たず404を返す。in-tripのpathも公開Trip hostに接続しておらず404。独立factoryの501 gateを公開済み機能と扱わない。
 Reservation / Checklistは内部Application、EventBridge workerはIAM-only。これらをOpenAPIの`paths`へ追加しない。
 Viewer入力・trafficの静的データ、auth-config、CognitoのOAuth endpointも本定義の対象外。
 旧conversation / feedback / traceや未知の`/api/agent` operationは410であり、requestの選択肢に含めない。

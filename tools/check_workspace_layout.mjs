@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const expectedWorkspaces = ["frontend", "backend/*", "modules/*", "lib"];
+const expectedWorkspaces = ["frontend", "backend/*", "modules/*"];
 const errors = [];
 
 const rootPackage = readJson(resolve(repositoryRoot, "package.json"));
@@ -121,7 +121,7 @@ if (errors.length > 0) {
 
 function existingWorkspaceDirectories() {
   const directories = [];
-  for (const name of ["frontend", "lib"]) {
+  for (const name of ["frontend"]) {
     const directory = resolve(repositoryRoot, name);
     if (existsSync(directory)) directories.push(directory);
   }

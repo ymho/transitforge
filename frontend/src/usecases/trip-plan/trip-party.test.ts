@@ -4,13 +4,11 @@ import { partyRequest } from "../../../../modules/trip/domain/trip-party.fixture
 import { requestTrip } from "../../../../modules/trip/domain/trip-request.fixture";
 import { proposeAssumptionDecision, proposeTripRequestUpdate } from "./update-trip-request";
 import { tripPartyView } from "./trip-party-presentation";
-import { planAssumptionViews } from "../../presentation/trip-plan/plan-assumption-view";
 
 describe("party proposal ownership and atomic assumption decisions", () => {
   it.each(["model", "profile", "legacy"] as const)("confirms same values and retains source: %s", (source) => {
     const trip = requestTrip(partyRequest(source)), before = structuredClone(trip);
     expect(tripPartyView(trip)?.text).toBe("⚠ 仮置き: 大人2人 + 子ども1人（年齢未確認）");
-    expect(planAssumptionViews(trip)[0]?.actions.map((a) => a.status)).toEqual(["confirmed", "rejected"]);
     const confirmed = applyTripProposal(trip, proposeAssumptionDecision(trip, "party", "confirmed"));
     expect(confirmed.request.party).toEqual(trip.request.party);
     expect(tripPartyView(confirmed)?.text).not.toContain("仮置き");

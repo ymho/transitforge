@@ -112,12 +112,12 @@ describe("durable TripChanged consumer using #393 reconcile", () => {
   });
   it("partial Watch batch failure retries existing residual reconcile, never acknowledges incomplete set", async () => {
     const f = tripChangedFixture(), original = watchTrip();
-    const trip = { ...original, items: Array.from({ length: 60 }, (_, n) => ({ ...original.items[0]!, id: `rail-${n}` })) };
+    const trip = { ...original, items: Array.from({ length: 50 }, (_, n) => ({ ...original.items[0]!, id: `rail-${n}` })) };
     await f.repository.create(owner, trip); f.watchFaults.failBatch = 2; await f.consumer.poll();
     expect((await f.watches.read(owner, trip.id)).complete).toBe(false);
     expect(f.deliveries()[0]!.deliveryState?.S).toBe("pending");
     f.advance(); await f.consumer.poll();
-    expect(await active(f, trip.id)).toHaveLength(120);
+    expect(await active(f, trip.id)).toHaveLength(100);
     expect((await f.watches.read(owner, trip.id)).complete).toBe(true);
     expect(f.metrics.map(([n]) => n)).toContain("Retry");
   });

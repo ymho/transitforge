@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { hazardAlert, hazardInformation } from "../../../../modules/trip/domain/hazard-alert.fixture";
+import { hazardAlert, hazardInformation } from "../../trip/domain/hazard-alert.fixture";
 import { executeExternalTravelTool, compactExternalTravelToolObservation, externalTravelEvidence, externalTravelToolDescription,
   externalTravelToolInputSchema, externalTravelToolNames, type ExternalTravelToolState } from "@raiquora/agent/external-travel-tools";
 

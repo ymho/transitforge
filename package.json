@@ -6,15 +6,14 @@
   "workspaces": [
     "frontend",
     "backend/*",
-    "modules/*",
-    "lib"
+    "modules/*"
   ],
   "scripts": {
     "dev": "npm run dev --workspace @raiquora/frontend",
     "build": "npm run typecheck:tools && npm run build --workspace @raiquora/frontend && npm run build --workspace @raiquora/agent-api",
     "typecheck:tools": "tsc --noEmit -p tsconfig.tools.json",
     "bundle:check": "node tools/check_bundle_budget.mjs dist/assets",
-    "test": "npm run test --workspace @raiquora/frontend && npm run test --workspace @raiquora/agent-api && npm run test:tools",
+    "test": "TMPDIR=/tmp vitest run frontend/src backend/agent-api/src modules tools/agent-transport/stream-contract.test.ts tools/strands-v2-live-evaluation.test.ts",
     "test:tools": "vitest run --root . tools/agent-transport/stream-contract.test.ts tools/strands-v2-live-evaluation.test.ts",
     "test:agent-stream-contract": "vitest run tools/agent-transport/stream-contract.test.ts",
     "workspace:check": "node tools/check_workspace_layout.mjs",

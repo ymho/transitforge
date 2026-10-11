@@ -3,22 +3,18 @@ import { applyTripProposal, type ItineraryItem } from "@raiquora/trip/trip";
 import { effectiveTripConstraints, type TripRequest } from "@raiquora/trip/trip-request";
 import { proposeAssumptionDecision, proposeTripRequestUpdate } from "./update-trip-request";
 import { assumedRequest, requestTrip, requestConstraint, providerRequestPlace } from "../../../../modules/trip/domain/trip-request.fixture";
-import { planAssumptionViews } from "../../presentation/trip-plan/plan-assumption-view";
 
 describe("request proposals and assumption UI boundary", () => {
   it.each(["model", "profile", "legacy"] as const)("confirms/rejects %s through explicit proposals with source and strength intact", (source) => {
     const trip = requestTrip(assumedRequest(source));
     const before = structuredClone(trip);
-    const view = planAssumptionViews(trip)[0]!;
-    expect(view.text).toContain("⚠ 仮置き");
-    for (const action of view.actions) {
+    for (const action of ["confirmed", "rejected"].map(status => ({ assumptionId: "assumption", status: status as "confirmed" | "rejected" }))) {
       const proposal = proposeAssumptionDecision(trip, action.assumptionId, action.status);
       const updated = applyTripProposal(trip, proposal);
       expect(updated.request.assumptions[0]!.status).toBe(action.status);
       expect(updated.request.constraints).toEqual(trip.request.constraints);
       expect(updated.request.constraints[0]!.strength).toBe("hard");
       expect(effectiveTripConstraints(updated.request)).toHaveLength(action.status === "confirmed" ? 1 : 0);
-      expect(planAssumptionViews(updated)[0]!.actions).toEqual([]);
       expect(applyTripProposal(updated, proposeAssumptionDecision(updated, action.assumptionId, action.status))).toEqual(updated);
       expect(() => proposeAssumptionDecision(updated, action.assumptionId, action.status === "confirmed" ? "rejected" : "confirmed")).toThrow();
     }

@@ -41,3 +41,16 @@ Cognito Managed Login v2にもKAIHOの外観を適用する。背景は`#fafafa`
 設定の正本は`infra/terraform/environments/dev/branding/kaiho-login.json`で、`cognito.tf`から適用する。フォーム上部のロゴは同梱フォントからアウトライン化したSVGを使い、faviconはアプリと共用する。ロゴの再生成はfontToolsを使用し、リポジトリルートで`python3 infra/terraform/environments/dev/branding/generate-wordmark.py`を実行する。フォントのSIL OFLライセンスは`frontend/public/fonts`に同梱している。
 
 これは見た目だけの変更で、ログイン・パスワード再設定・PKCE・登録制限は維持する。Cognito側の文字サイズ・入力フォーカス時の拡大はこの変更の対象に含めない。
+
+## CSSの所有権
+
+`presentation/styles/viewer.css`は読み込み順だけを所有する。色・書体・共通変数は`styles/tokens.css`、
+共通の基本指定は`shared/foundation.css`、共通ダイアログは`shared/app-dialog.css`、composer入力の縮小・高さは`shared/form-controls.css`へ置く。
+機能のCSSにはその画面の現在の表示とresponsive・focus・reduced-motion状態をまとめる。
+地図操作と日時表示は`train-viewer/map-controls.css`、列車詳細は`train-viewer/train-details.css`、
+相談部品は`concierge/ai-guide.css`、相談画面は`home/consultation-screen.css`、
+Home・ナビゲーション・旅程一覧は`home/product-shell.css`、旅程詳細は`trip-plan/trip-workspace.css`が所有する。
+
+旧テーマ・移行上書き・デザイン世代別のCSSは増やさず、同じ対象の既存ルールを更新する。
+media条件や詳細度が異なる指定、shorthandとlonghand、Providerの帰属表示は一括削除しない。
+集約時はスマートフォン・PCと画面の開閉状態を比較し、カスケードの変更を確認する。

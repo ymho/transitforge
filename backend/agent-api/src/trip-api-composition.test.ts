@@ -10,6 +10,8 @@ describe("public Trip API host", () => {
     expect((await host(event("/api/trips/v1", token({ scope: "openid" })))).statusCode).toBe(403);
     expect((await host(event("/api/trips/sharing/v1"))).statusCode).toBe(401);
     expect((await host(event("/api/trips/sharing/v1", token()))).statusCode).toBe(400);
-    expect((await host(event("/internal/trips/recheck", token()))).statusCode).toBe(404);
+    for (const path of ["/api/agent", "/api/conversations", "/api/profile", "/api/trips/unknown", "/api/trips/notifications/v1", "/api/trips/in-trip/v1", "/internal/trips/recheck"]) {
+      expect((await host(event(path, token()))).statusCode).toBe(404);
+    }
   });
 });

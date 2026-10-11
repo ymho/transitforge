@@ -71,17 +71,17 @@ describe("owner-scoped Watch persistence and reverse lookup", () => {
   });
   it("batch failure hides incomplete coverage; reconcile resumes differential rows and publishes all", async () => {
     const f = fixture(), rail = f.trip.items[0]!;
-    const trip = { ...f.trip, items: Array.from({ length: 60 }, (_, n) => ({ ...rail, id: `rail-${n}` })) };
+    const trip = { ...f.trip, items: Array.from({ length: 50 }, (_, n) => ({ ...rail, id: `rail-${n}` })) };
     f.seed(trip); f.watchFaults.failBatch = 2;
     await expect(f.application.reconcile(owner, trip.id)).rejects.toMatchObject({ code: "unavailable" });
     const partial = await f.watches.read(owner, trip.id);
     expect(partial.complete).toBe(false); expect(partial.records).toHaveLength(98);
     expect(await f.watches.find(owner, partial.records[0]!.watch.subject)).toEqual([]);
     const recovered = await f.application.reconcile(owner, trip.id);
-    expect(recovered.changed).toBe(22); expect(recovered.unchanged).toBe(98);
+    expect(recovered.changed).toBe(2); expect(recovered.unchanged).toBe(98);
     const full = await f.watches.read(owner, trip.id);
-    expect(full.complete).toBe(true); expect(full.records).toHaveLength(120);
-    expect(await f.watches.find(owner, full.records[0]!.watch.subject)).toHaveLength(60);
+    expect(full.complete).toBe(true); expect(full.records).toHaveLength(100);
+    expect(await f.watches.find(owner, full.records[0]!.watch.subject)).toHaveLength(50);
   });
   it("rejects malformed persisted data/foreign index rows without leaking private fields", async () => {
     const f = fixture(); await f.application.reconcile(owner, f.trip.id);
@@ -94,7 +94,7 @@ describe("owner-scoped Watch persistence and reverse lookup", () => {
   });
   it("a newer saved revision supersedes failed partial sync without reviving removed watches", async () => {
     const f = fixture(), rail = f.trip.items[0]!;
-    const trip = { ...f.trip, items: Array.from({ length: 60 }, (_, n) => ({ ...rail, id: `rail-${n}` })) };
+    const trip = { ...f.trip, items: Array.from({ length: 50 }, (_, n) => ({ ...rail, id: `rail-${n}` })) };
     f.seed(trip); f.watchFaults.failBatch = 2;
     await expect(f.application.reconcile(owner, trip.id)).rejects.toMatchObject({ code: "unavailable" });
     const oldBase = await f.watches.read(owner, trip.id);

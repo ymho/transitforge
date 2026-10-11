@@ -43,7 +43,7 @@
 - [Trip V2 Activity](specs/trip-items.md)
 - [Trip V2: 正本契約](specs/trip-model.md)
 - [TripWatch / TravelEvent / TripImpact](specs/trip-monitoring.md)
-- [Trip Notification runtime](specs/trip-notifications.md)
+- [通知の停止と観測ストレージ](specs/trip-notifications.md)
 - [Trip Server保存](specs/trip-persistence.md)
 - [Tripの訪問予定地点と表示要約](specs/trip-places.md)
 - [Trip Readinessと旅行前準備](specs/trip-preparation.md)

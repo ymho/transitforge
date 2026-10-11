@@ -28,6 +28,8 @@
 - ブラウザ HTTP Mapbox Bedrockなど外部技術への接続は`frontend/src/adapters`
 - Three.js固有の描画は`frontend/src/presentation/train-viewer/rendering`
 - Agent APIのTypeScriptコードは`backend/agent-api` インフラ定義は`infra`
+- CSSは共通token・基本部品と機能ごとの最終表示に分ける。旧テーマや末尾の上書きファイルを追加せず、同じ対象の既存ルールを更新する。整理ではmedia条件・詳細度・shorthandの順序を保持し、各画面と表示状態を比較する
+- 未使用判定は本番入口に加え、Workerのbundle入口・npm script・開発preview・評価tool・package exportを照合する。廃止コードを専用テストのために保持しない。保留する内部能力は既存仕様へ理由と削除条件を記す
 - TypeScriptテストは対象ファイルの隣へ置く
 - Pythonサービスと境界を横断するテストは`tests`へ置き fixtureは`tests/fixtures/README.md`に従う
 - 新規ファイルを慣習だけで`src`直下へ置かず 所有する責務を決めてから配置する

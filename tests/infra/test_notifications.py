@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class NotificationInfrastructureTest(unittest.TestCase):
     def test_separate_durable_table_shared_worker_and_dlq(self):
         tf = (ROOT / "infra/terraform/environments/dev/notifications.tf").read_text()
-        for token in ['"notification-due"', '"KEYS_ONLY"', 'point_in_time_recovery', 'deletion_protection_enabled = true', 'rate(1 minute)', 'maximum_retry_attempts', '1209600', 'notification_tick_dlq', 'PollSuccess']:
+        for token in ['"notification-due"', '"KEYS_ONLY"', 'point_in_time_recovery', 'deletion_protection_enabled = true', 'rate(1 minute)', 'maximum_retry_attempts', '1209600', 'notification_tick_dlq']:
             self.assertIn(token, tf)
         self.assertNotIn('aws_lambda_function_url', tf)
         self.assertNotIn('dynamodb:Scan', tf)
@@ -21,7 +21,10 @@ class NotificationInfrastructureTest(unittest.TestCase):
 
     def test_agent_cannot_trigger_or_read_notifications_without_principal(self):
         source = (ROOT / 'backend/agent-api/src/lambda.ts').read_text()
-        self.assertIn('createNotificationHandler()', source)
+        self.assertNotIn('createNotificationHandler', source)
+        self.assertIn('state               = "DISABLED"', (ROOT / 'infra/terraform/environments/dev/notifications.tf').read_text())
+        self.assertIn('NOTIFICATION_ENABLED    = "false"', (ROOT / 'infra/terraform/environments/dev/notifications.tf').read_text())
+        self.assertNotIn('notification_heartbeat', (ROOT / 'infra/terraform/environments/dev/notifications.tf').read_text())
         self.assertNotIn('NotificationWorker', source)
         app = (ROOT / 'backend/agent-api/src/usecases/notification-application.ts').read_text()
         self.assertNotIn('console.', app)

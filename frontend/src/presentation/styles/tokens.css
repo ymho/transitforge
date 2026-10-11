@@ -1,5 +1,24 @@
-/* Figma TransitForge UI Researchを正本にした最終UIレイヤー */
+/* styles owns these styles; change the existing rule rather than appending a theme override. */
+
+
 #app {
+  height: 100%;
+  margin: 0;
+  --ui-loading-bg: #f2f4f6;
+  --ui-surface: rgb(255 255 255 / 96%);
+  --ui-surface-solid: #ffffff;
+  --ui-surface-muted: #edf1f4;
+  --ui-text: #17212b;
+  --ui-muted: #66727d;
+  --ui-border: rgb(20 31 42 / 16%);
+  --ui-hover: rgb(20 31 42 / 7%);
+  --ui-shadow: rgb(31 43 55 / 18%);
+  --ui-action-bg: #17212b;
+  --ui-action-text: #ffffff;
+  --ui-user-bg: #4264fb;
+  --ui-user-text: #ffffff;
+  --ui-accent: #4264fb;
+  --ui-accent-soft: rgb(66 100 251 / 10%);
   --product-font: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --product-paper: #f7f8f6;
   --product-surface: #fff;
@@ -27,29 +46,32 @@
   --glass-delay: #a63b00;
   --glass-shadow: rgb(37 55 78 / 18%);
   --glass-backdrop: blur(28px) saturate(150%);
-}
-
-#app {
   color: var(--glass-text);
   font-family: var(--product-font);
 }
+.ds-button--primary { border-color: var(--product-accent); background: var(--product-accent); color: #fff; }
+.ds-button--ghost { border-color: transparent; background: transparent; }
+.ds-button--icon { border-color: transparent; background: transparent; width: 2.75rem; padding: .6rem; }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+@media (hover: hover) {
+  .ds-button--primary:hover:not(:disabled) { background: var(--product-accent-hover); }
 }
-
-button {
-  -webkit-tap-highlight-color: transparent;
+.consultation-heading > .ds-button--icon { width: 44px; padding: .6rem; flex: 0 0 44px; }
+.consultation-heading > .ds-button--icon .ds-icon { width: 1.35rem; height: 1.35rem; }
+@media (max-width: 44rem) {
+  .consultation-heading > .ds-button--icon { width: 40px; min-height: 40px; flex-basis: 40px; padding: .5rem; border-color: transparent; border-radius: 999px; background: transparent; }
+  .consultation-heading > .ds-button--icon .ds-icon { width: 1.25rem; height: 1.25rem; }
 }
-
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-summary:focus-visible {
-  outline: 3px solid rgb(0 150 246 / 34%);
-  outline-offset: 2px;
+#app[data-primary-view] { --map-bottom-clearance: .75rem; }
+@media (max-width: 62rem) {
+  #app[data-primary-view] { --map-bottom-clearance: calc(4rem + env(safe-area-inset-bottom)); }
+}
+#app[data-primary-view="map"] { --product-header-height: 84px; }
+@media (max-width: 62rem) {
+  #app[data-primary-view="map"] { --product-header-height: 0px; }
+}
+@media (min-width:62.001rem) {
+  #app[data-primary-view="map"]:is([data-primary-view]) {
+    --product-header-height: 84px
+  }
 }

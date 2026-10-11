@@ -1,3 +1,4 @@
+/* shared owns these styles; change the existing rule rather than appending a theme override. */
 .loading-screen {
   position: fixed;
   z-index: 1000;
@@ -6,10 +7,6 @@
   place-items: center;
   overflow: hidden;
   padding: 1.5rem;
-  color: #edf8ff;
-  background:
-    radial-gradient(circle at 50% 42%, rgb(20 105 142 / 28%), transparent 34%),
-    linear-gradient(150deg, #07111d 0%, #0a1d2d 52%, #07121f 100%);
   opacity: 1;
   transition: opacity 400ms ease;
 }
@@ -23,88 +20,8 @@
   opacity: 0;
 }
 
-.loading-screen-backdrop {
-  position: absolute;
-  inset: 0;
-  opacity: 0.36;
-}
-
-.loading-screen-backdrop span {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(86vw, 58rem);
-  aspect-ratio: 1;
-  border: 1px solid rgb(100 214 255 / 16%);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.loading-screen-backdrop span:nth-child(2) {
-  width: min(61vw, 40rem);
-}
-
-.loading-screen-backdrop span:nth-child(3) {
-  width: min(36vw, 23rem);
-}
-
 .loading-screen-content {
   position: relative;
-  width: min(24rem, 100%);
-  text-align: center;
-}
-
-.loading-screen-mark {
-  position: relative;
-  width: 5.5rem;
-  height: 5.5rem;
-  margin: 0 auto 1.35rem;
-  border: 1px solid rgb(113 220 255 / 30%);
-  border-radius: 50%;
-  background: rgb(10 32 49 / 72%);
-  box-shadow: 0 0 3rem rgb(61 190 235 / 18%);
-}
-
-.loading-screen-mark::after {
-  position: absolute;
-  inset: -0.35rem;
-  border: 1px solid transparent;
-  border-top-color: #69d9ff;
-  border-right-color: rgb(105 217 255 / 22%);
-  border-radius: 50%;
-  animation: loading-orbit 1.8s linear infinite;
-  content: "";
-}
-
-.loading-screen-train {
-  position: absolute;
-  top: 1.35rem;
-  left: 1.7rem;
-  width: 2.1rem;
-  height: 2.55rem;
-  border: 2px solid #dff8ff;
-  border-radius: 0.65rem 0.65rem 0.35rem 0.35rem;
-}
-
-.loading-screen-train::before {
-  position: absolute;
-  top: 0.45rem;
-  left: 0.35rem;
-  width: 1.15rem;
-  height: 0.55rem;
-  border-radius: 0.15rem;
-  background: #6bdcff;
-  box-shadow: -0.1rem 1.15rem 0 -0.05rem #dff8ff, 0.85rem 1.15rem 0 -0.05rem #dff8ff;
-  content: "";
-}
-
-.loading-screen-rail {
-  position: absolute;
-  right: 1.35rem;
-  bottom: 0.9rem;
-  left: 1.35rem;
-  height: 1px;
-  background: rgb(105 217 255 / 55%);
 }
 
 .loading-screen h1 {
@@ -116,49 +33,13 @@
 
 .loading-screen-message {
   min-height: 1.5em;
-  margin: 0.85rem 0 1.15rem;
-  color: #b7cbd9;
-  font-size: 0.83rem;
   line-height: 1.55;
 }
 
-.loading-screen-progress {
-  width: min(15rem, 72vw);
-  height: 2px;
-  margin: 0 auto;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 10%);
-}
-
-.loading-screen-progress span {
-  display: block;
-  width: 42%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, transparent, #76dcff, transparent);
-  animation: loading-progress 1.45s ease-in-out infinite;
-}
-
 .loading-screen-retry {
-  margin-top: 1.35rem;
-  padding: 0.65rem 1rem;
-  border: 1px solid rgb(118 220 255 / 45%);
-  border-radius: 999px;
-  color: #eafaff;
-  background: rgb(32 112 145 / 32%);
   font: inherit;
   font-size: 0.8rem;
   cursor: pointer;
-}
-
-.loading-screen-error .loading-screen-mark::after,
-.loading-screen-error .loading-screen-progress span {
-  animation: none;
-}
-
-.loading-screen-error .loading-screen-progress {
-  background: rgb(255 123 108 / 45%);
 }
 
 @keyframes loading-orbit {
@@ -171,10 +52,93 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loading-screen,
-  .loading-screen-mark::after,
-  .loading-screen-progress span {
+  .loading-screen {
     animation: none;
     transition: none;
   }
 }
+
+.loading-screen-message {
+  font-size: 0.8rem;
+}
+
+.loading-screen-retry {
+  margin-top: 1rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #4b5661;
+  box-shadow: none;
+}
+
+.loading-screen-message {
+  color: var(--ui-muted);
+}
+.loading-screen {
+  color: #173650;
+  background: #f6f6f1;
+}
+
+.loading-screen-content {
+  width: min(30rem, calc(100vw - 3rem));
+  padding: 0;
+  text-align: center;
+}
+
+.loading-screen-message {
+  margin: 0 0 1.25rem;
+  color: #536b7e;
+}
+
+.loading-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.loading-steps li {
+  display: grid;
+  justify-items: center;
+  gap: .45rem;
+  color: #718092;
+  font-size: .8rem;
+}
+
+.loading-step-indicator {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  color: #17608c;
+}
+
+.loading-steps [data-state="complete"] .loading-step-indicator::before {
+  content: "✓";
+  font-weight: 800;
+}
+
+.loading-steps [data-state="loading"] .loading-step-indicator::before {
+  width: .85rem;
+  height: .85rem;
+  border: 2px solid #cad6df;
+  border-top-color: #17608c;
+  border-radius: 50%;
+  animation: loading-orbit .8s linear infinite;
+  content: "";
+}
+
+.loading-steps [data-state="error"] .loading-step-indicator::before {
+  content: "!";
+  font-weight: 800;
+}
+
+.loading-screen-retry {
+  border-color: #cad6df;
+  border-radius: 0.85rem;
+  color: #173650;
+  background: transparent;
+}
+#app[data-primary-view]:not([data-primary-view="map"]) :is(#map, .train-details, .loading-screen, #map-tools) { display: none; }
+#app[data-primary-view] .loading-screen { z-index: 14; }
+#app[data-primary-view="map"] .loading-screen { background: var(--workspace-canvas); color: var(--tf-ink); }

@@ -1,6 +1,6 @@
 # ADR 0063: Impactから通知episodeと配信を分離する
 
-- ステータス: Accepted
+- ステータス: Superseded（通知入口・HTTP APIは撤去、定期配信は停止。最新観測ストレージは維持する。[現行の境界](../specs/trip-notifications.md)を参照）
 - 日付: 2026-09-17
 - 対象: #395、親 #382 / #415、前提 #393–#409
 

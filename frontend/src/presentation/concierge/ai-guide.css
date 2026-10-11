@@ -1,0 +1,589 @@
+/* concierge owns these styles; change the existing rule rather than appending a theme override. */
+
+
+.ai-guide-panel {
+  position: absolute;
+  z-index: 3;
+}
+
+.ai-guide-panel header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.ai-guide-panel header p {
+  margin: 0;
+  color: #f3f7fb;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.ai-guide-panel header small {
+  display: block;
+  margin-top: 0.15rem;
+  color: #91a6bc;
+  font-size: 0.67rem;
+}
+
+#close-ai-guide {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  color: #d9e3ef;
+  background: transparent;
+  font: inherit;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.ai-guide-messages {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.ai-guide-message {
+  white-space: pre-wrap;
+}
+
+.ai-guide-message-assistant {
+  grid-template-columns: 1.35rem minmax(0, 1fr);
+  column-gap: 0.45rem;
+  padding-inline: 0.15rem;
+}
+
+.ai-guide-message-assistant::before {
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: 0.02rem;
+  place-items: center;
+  border: 1px solid rgb(104 215 255 / 28%);
+  border-radius: 50%;
+  color: #dce454;
+  background: rgb(20 68 90 / 58%);
+  content: "✦";
+  font-size: 0.68rem;
+  line-height: 1;
+}
+
+.ai-guide-message-user {
+  align-self: flex-end;
+}
+
+.ai-guide-message-pending {
+  gap: 0.4rem;
+  align-items: center;
+  color: #aebdcc;
+}
+
+.ai-guide-message-pending::before {
+  margin-right: 0.05rem;
+}
+
+@keyframes ai-guide-thinking-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-0.18rem);
+  }
+}
+
+.ai-guide-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.ai-guide-form input {
+  min-height: 2.45rem;
+  border-radius: 0.55rem;
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.ai-guide-form button {
+  min-height: 2.45rem;
+  border-radius: 0.55rem;
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.ai-guide-form input {
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  outline: none;
+}
+
+.ai-guide-form button {
+  padding: 0.5rem 0.72rem;
+  cursor: pointer;
+}
+
+.ai-guide-form button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+
+.ai-guide-panel {
+  border-radius: 1.05rem;
+  box-shadow:
+    0 1.2rem 3.5rem rgb(0 0 0 / 34%),
+    0 0 0 1px rgb(255 255 255 / 4%) inset;
+  backdrop-filter: blur(18px);
+}
+
+
+.ai-guide-panel header {
+  padding: 0.9rem 0.95rem;
+}
+
+.ai-guide-panel header {
+  border-bottom-color: rgb(220 228 84 / 12%);
+}
+
+.guide-panel-heading {
+  min-width: 0;
+}
+
+.guide-panel-copy {
+  min-width: 0;
+}
+
+
+#close-ai-guide {
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 5%);
+}
+
+
+#close-ai-guide:hover {
+  color: #ffffff;
+  background: rgb(255 255 255 / 11%);
+}
+
+@media (max-width: 600px) {
+
+  .ai-guide-panel {
+    bottom: 5.25rem;
+    left: 0.65rem;
+    width: calc(100vw - 1.3rem);
+    height: min(82dvh, calc(100dvh - 6rem));
+  }
+
+  .ai-guide-form input {
+    font-size: 16px;
+  }
+}
+
+.guide-panel-copy p {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.guide-panel-copy small {
+  color: #89949f;
+  font-size: 0.65rem;
+}
+
+#close-ai-guide {
+  border: 0;
+  color: #9da8b3;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ai-guide-message-assistant::before {
+  display: none;
+}
+
+.journey-settings {
+  padding: 0 0.75rem 0.55rem;
+}
+
+.ai-guide-form {
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  border-top: 1px solid rgb(255 255 255 / 10%);
+  background: transparent;
+}
+
+.ai-guide-form input {
+  min-height: 2.25rem;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.ai-guide-form input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.ai-guide-form button {
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 5px;
+  box-shadow: none;
+}
+@media (max-width: 600px) {
+  .ai-guide-panel {
+    max-height: min(82dvh, calc(100dvh - 6rem));
+  }
+}
+
+.guide-panel-copy p {
+  color: var(--ui-text);
+}
+
+.guide-panel-copy small {
+  color: var(--ui-muted);
+}
+
+#close-ai-guide {
+  color: var(--ui-muted);
+}
+
+.ai-guide-panel header {
+  border-color: var(--ui-border);
+}
+
+.ai-guide-form {
+  border-color: var(--ui-border);
+}
+
+.ai-guide-panel {
+  border-color: var(--ui-border);
+}
+
+.ai-guide-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-guide-message-assistant {
+  display: block;
+  align-self: flex-start;
+}
+
+.ai-guide-form input {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background: var(--ui-surface-solid);
+}
+
+.ai-guide-form input::placeholder {
+  color: var(--ui-muted);
+}
+
+.ai-guide-form input:focus {
+  border-color: var(--ui-accent);
+}
+
+.ai-guide-form button {
+  color: var(--ui-action-text);
+  background: var(--ui-action-bg);
+}
+.ai-guide-panel header .guide-panel-copy p {
+  color: var(--ui-text);
+  opacity: 1;
+  text-shadow: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.ai-guide-panel header .guide-panel-copy small {
+  color: var(--ui-muted);
+  opacity: 1;
+  -webkit-text-fill-color: currentColor;
+}
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+
+.ai-guide-panel {
+  bottom: 1.25rem;
+  left: 1.25rem;
+  display: grid;
+  grid-template-rows: auto minmax(8rem, 1fr) auto auto auto;
+  width: min(40rem, calc(100vw - 2.5rem));
+  height: min(50rem, calc(100dvh - 2.5rem));
+  max-height: calc(100dvh - 2.5rem);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  color: var(--glass-text);
+  background: var(--glass-surface);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  animation: sheet-rise-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ai-guide-panel[data-sheet-state="closing"] {
+  pointer-events: none;
+  animation: sheet-drop-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.ai-guide-panel[hidden] {
+  display: none;
+}
+
+.ai-guide-panel header {
+  min-height: 4rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--glass-border-subtle);
+  background: transparent;
+}
+
+.guide-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.guide-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.guide-panel-copy p {
+  color: var(--glass-text);
+  font-size: 1.0625rem;
+  font-weight: 590;
+  letter-spacing: -0.026rem;
+}
+
+.ai-guide-panel header .guide-panel-copy p {
+  color: var(--glass-text);
+  font-size: 1.0625rem;
+  font-weight: 590;
+  letter-spacing: -0.026rem;
+}
+
+.guide-panel-copy small {
+  color: var(--glass-muted);
+  font-size: 0.68rem;
+}
+
+.ai-guide-panel header .guide-panel-copy small {
+  color: var(--glass-muted);
+  font-size: 0.68rem;
+}
+
+#close-ai-guide {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--glass-muted);
+  background: rgb(120 120 128 / 16%);
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+#close-ai-guide:hover {
+  color: var(--glass-text);
+  background: var(--glass-accent-soft);
+}
+
+
+
+.ai-guide-messages {
+  gap: 0.75rem;
+  padding: 1rem;
+  scroll-padding: 1rem;
+}
+
+.ai-guide-message {
+  max-width: 88%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--glass-border-subtle);
+  border-radius: 1.15rem;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  box-shadow: none;
+}
+
+.ai-guide-message-assistant {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.35rem 0.15rem;
+  border: 0;
+  border-radius: 0;
+  color: var(--glass-text);
+  background: transparent;
+}
+
+.ai-guide-message-user {
+  border-color: rgb(255 255 255 / 22%);
+  color: #ffffff;
+  background: var(--glass-accent);
+  box-shadow: 0 0.45rem 1.4rem rgb(0 150 246 / 18%);
+}
+
+.ai-guide-message-pending {
+  display: flex;
+  width: fit-content;
+  border-radius: 999px;
+}
+
+.ai-guide-message-assistant h2 { margin: 1rem 0 0.45rem; line-height: 1.35; }
+
+.ai-guide-message-assistant h3 { margin: 1rem 0 0.45rem; line-height: 1.35; }
+
+.ai-guide-message-assistant h4 { margin: 1rem 0 0.45rem; line-height: 1.35; }
+
+.ai-guide-message-assistant h5 { margin: 1rem 0 0.45rem; line-height: 1.35; }
+
+.ai-guide-message-assistant h6 { margin: 1rem 0 0.45rem; line-height: 1.35; }
+.ai-guide-message-assistant h2 { font-size: 1.15rem; }
+.ai-guide-message-assistant h3 { font-size: 1.05rem; }
+.ai-guide-message-assistant blockquote { margin: 0.75rem 0; padding: 0.25rem 0 0.25rem 0.8rem; border-left: 3px solid var(--glass-accent); color: var(--glass-muted); }
+.ai-guide-message-assistant code { padding: 0.1em 0.3em; border-radius: 0.35rem; background: var(--glass-surface-muted); font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.88em; }
+.ai-guide-message-assistant pre { max-width: 100%; margin: 0.75rem 0; padding: 0.8rem; overflow: auto; border: 1px solid var(--glass-border-subtle); border-radius: 0.75rem; background: var(--glass-surface-muted); }
+.ai-guide-message-assistant pre code { padding: 0; background: transparent; }
+.ai-guide-message-assistant hr { margin: 1rem 0; border: 0; border-top: 1px solid var(--glass-border-subtle); }
+.ai-guide-message-copy a[title="参考資料"] { display: inline-flex; align-items: center; width: fit-content; padding: .1rem .4rem; border: 1px solid var(--glass-border-subtle); border-radius: 999px; color: var(--glass-muted); font-size: .7rem; line-height: 1.5; text-decoration: none; vertical-align: baseline; }
+.ai-guide-message-copy a[title="写真の出典"] { display: inline-flex; align-items: center; width: fit-content; padding: .1rem .4rem; border: 1px solid var(--glass-border-subtle); border-radius: 999px; color: var(--glass-muted); font-size: .7rem; line-height: 1.5; text-decoration: none; vertical-align: baseline; }
+.ai-guide-message-copy a[title="参考資料"]:hover { color: var(--glass-text); border-color: var(--glass-accent); }
+.ai-guide-message-copy a[title="写真の出典"]:hover { color: var(--glass-text); border-color: var(--glass-accent); }
+
+@keyframes sheet-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(2.5rem) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sheet-drop-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(2.5rem) scale(0.985);
+  }
+}
+
+@media (max-width: 720px) {
+
+  .ai-guide-panel {
+    inset: auto 0 0;
+    grid-template-rows: auto auto minmax(8rem, 1fr) auto auto auto;
+    width: 100%;
+    height: min(88dvh, 52rem);
+    max-height: 88dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 2.125rem 2.125rem 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .ai-guide-panel header {
+    position: relative;
+    justify-content: flex-start;
+    min-height: 4rem;
+    padding-top: 0.25rem;
+  }
+
+  .ai-guide-panel .guide-panel-heading {
+    justify-content: flex-start;
+  }
+
+  
+  .ai-guide-panel .guide-panel-copy small {
+    display: none;
+  }
+
+  .ai-guide-panel .guide-panel-actions {
+    position: absolute;
+    right: 1rem;
+    margin: 0;
+  }
+
+  .ai-guide-messages {
+    padding: 0.85rem;
+  }
+
+  .ai-guide-message {
+    max-width: 92%;
+  }
+
+  .ai-guide-message-assistant {
+    max-width: 92%;
+  }
+
+  .ai-guide-form {
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 430px) {
+
+  .ai-guide-panel {
+    height: 92dvh;
+    max-height: 92dvh;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-guide-panel {
+    transition: none;
+    animation: none;
+  }
+
+  .ai-guide-form button[data-submitting="true"] svg {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ai-guide-panel {
+    background: var(--glass-surface-strong) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+#app[data-primary-view] #close-ai-guide { display: none; }
+@media (prefers-reduced-motion: reduce) { #app[data-primary-view] .ai-guide-panel { animation: none; transition: none; } }
+@keyframes consultation-pending-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .ai-guide-failure-actions button { display: inline-grid; place-items: center; box-sizing: border-box; width: 32px; min-width: 32px; height: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--tf-muted); }
+  & .ai-guide-failure-actions button:hover:not(:disabled) { color: var(--tf-blue); }
+  & .ai-guide-failure-actions .ds-icon { display: block; width: 16px; height: 16px; }
+  & .ai-guide-message { font-size: 14px; }
+  & .ai-guide-message-pending > span { animation: consultation-pending-pulse 1.8s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { & .ai-guide-message-pending > span { animation: none; } }
+  & .ai-guide-message-copy :is(p, li) { color: var(--tf-ink); font-size: 14px; line-height: 1.65; }
+  & .ai-guide-message-copy p { margin: 0 0 12px; }
+  & .ai-guide-message-copy :is(h2, h3, h4, h5, h6) { font-size: 15px; margin: 16px 0 8px; font-weight: 500; }
+  & .ai-guide-message-copy :is(ul, ol) { padding-left: 20px; }
+  & .ai-guide-message-copy a { color: var(--tf-blue); }
+}

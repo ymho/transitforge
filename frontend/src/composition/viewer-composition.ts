@@ -94,8 +94,6 @@ import { createTripWorkspaceController } from "../usecases/trip-plan/trip-worksp
 import { createReferencedTripSource } from "../usecases/trip-plan/server-trip-workspace-source";
 import { HttpServerTripClient } from "../adapters/http/server-trip-client";
 import { createServerTripListSource } from "../usecases/trip-plan/server-trip-list-source";
-import { HttpNotificationClient } from "../adapters/http/notification-client";
-import { configureNotificationCenter } from "../presentation/notifications/notification-center";
 import { configureTripSharing } from "../presentation/trip-plan/trip-sharing-panel";
 import "../presentation/trip-plan/trip-sharing-panel.css";
 import { HttpTripSharingClient } from "../adapters/http/trip-sharing-client";
@@ -546,20 +544,6 @@ configureApplicationSettingsPanel(document, {
   rankingPreference: journeyRankingPreference,
   accommodationProviderAttribution: accommodationProviderAttributionFromEnvironment(import.meta.env),
 });
-configureNotificationCenter({ root: document.body,
-  buttons: [document.getElementById("sidebar-notifications")!],
-  client: new HttpNotificationClient(), async navigate(tripId, itemId) {
-    const trip = await serverTripClient.get(tripId); if (!trip) throw new Error("Trip unavailable");
-    // Explicit navigation creates/reuses a reference, never a Trip or a second local Trip writer.
-    const existing = conversationUi.list().find((session) => session.tripId === tripId);
-    const session = existing ?? await conversationUi.create({ title: trip.title, tripId });
-    await activateConversation(session.id);
-    const source = tripWorkspaceController.source(); await source?.retry?.();
-    if (tripWorkspaceController.current()?.id !== tripId) throw new Error("Trip unavailable");
-    if (itemId && tripWorkspaceController.current()!.items.some((item) => item.id === itemId)) tripWorkspaceController.focus(itemId);
-    returnToConversation();
-    tripWorkspace.show("trip");
-  } });
 const sharingButton = document.createElement("button"); sharingButton.type = "button"; sharingButton.textContent = "旅程の共有";
 // Shared dialog is opened from the current Trip header.
 const tripSharing = configureTripSharing({ root: document.body, button: sharingButton, client: new HttpTripSharingClient(), official: new HttpTripSharingClient(), initialLink: initialShareLink,
@@ -646,7 +630,6 @@ primaryShell = configureAiFirstShell(document, app, {
     journeyTransferPace.value = transferPace; journeyTransferPace.dispatchEvent(new Event("change", { bubbles: true }));
     journeyRankingPreference.value = rankingPreference; journeyRankingPreference.dispatchEvent(new Event("change", { bubbles: true }));
   },
-  openNotifications: () => document.getElementById("sidebar-notifications")?.click(),
   canLeave: () => tripWorkspace.canLeave(),
   now: () => new Date(),
 });

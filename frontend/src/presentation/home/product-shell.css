@@ -1,30 +1,6 @@
-/* Primary product layout replaces application-shell.css. Secondary feature DOM is retained. */
-#app[data-primary-view] {
-  --product-paper: #f6f6f1;
-  --product-ink: #102337;
-  --product-line: #dfe4e8;
-  --product-accent: #0c2947;
-  --product-radius: 1.25rem;
-  --product-control-radius: .75rem;
-  --product-header-height: 0rem;
-  --glass-canvas: var(--product-paper);
-  --glass-surface: #fff;
-  --glass-surface-strong: #fff;
-  --glass-text: var(--product-ink);
-  --glass-muted: #53606b;
-  --glass-accent: var(--product-accent);
-  --glass-accent-strong: #24463e;
-  --glass-accent-soft: #e8efe9;
-  --glass-backdrop: none;
-  display: block;
-  position: relative;
-  height: 100dvh;
-  overflow: hidden;
-  padding: 0;
-  background: var(--product-paper);
-  color: var(--product-ink);
-  font-family: var(--product-font);
-}
+/* home owns these styles; change the existing rule rather than appending a theme override. */
+
+.ds-eyebrow { margin: 0; color: var(--product-muted); font: 750 .75rem/1.4 var(--product-font); letter-spacing: .12em; text-transform: uppercase; }
 .product-shell { position: relative; z-index: 15; height: 100%; pointer-events: none; }
 .product-shell > * { pointer-events: auto; }
 .product-nav { position: absolute; z-index: 20; top: .75rem; left: 50%; display: flex; gap: .3rem; padding: .2rem; border: 1px solid var(--product-line); border-radius: 1rem; background: #fffffffa; box-shadow: 0 5px 18px #12273f12; transform: translateX(-50%); }
@@ -39,7 +15,6 @@
 .product-page p { color: #53606b; }
 .home-hero { position: relative; isolation: isolate; min-height: 100svh; margin: 0; overflow: hidden; background: #173244; color: #fff; }
 .home-hero-copy { position: relative; z-index: 2; width: 100%; min-width: 0; padding: 6rem 1rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100svh; box-sizing: border-box; }
-.home-eyebrow { font-size: .75rem; font-weight: 800; letter-spacing: .13em; }
 .home-prompt { width: min(44rem, calc(100vw - 2rem)); }
 .home-prompt textarea { height: 48px; min-height: 48px; resize: none; padding: .75rem; font: .9rem/1.5 sans-serif; }
 .product-page button { min-height: 2.75rem; padding: .6rem 1rem; border: 1px solid var(--product-line); border-radius: var(--product-control-radius); background: white; color: var(--product-ink); cursor: pointer; font: inherit; font-size: .9rem; }
@@ -52,71 +27,27 @@
 .home-hero-scrim { position: absolute; z-index: 1; inset: 0; background: #07182766; }
 .home-card { padding: 1.4rem; margin-block: .8rem; border: 1px solid var(--product-line); border-radius: var(--product-radius); background: white; box-shadow: 0 6px 20px #12273f06; }
 .home-trip-card { display: flex; align-items: center; gap: 1.4rem; }
-.home-trip-art { flex: 0 0 7rem; height: 7rem; display: grid; place-items: center; border-radius: var(--product-control-radius); background: #e8eef0; color: #3b6378; }
-.home-trip-art svg { width: 3.25rem; height: 3.25rem; }
-.home-trip-copy { min-width: 0; flex: 1; }
-.home-trip-copy > p { font-size: .85rem; }
-.home-trip-copy h3 { font: 750 1.4rem/1.4 var(--product-font); }
 .home-card small { color: #31584f; }
-.home-tags { display: flex; gap: .4rem; flex-wrap: wrap; }
-.home-tags span { border-radius: 999px; background: #f0f3f5; padding: .3rem .5rem; color: #586675; font-size: .75rem; }
-.my-shell, .trip-list-heading { max-width: 79.25rem; margin-inline: auto; }
-.my-shell { padding: 0; }
-.my-shell h1 { font-size: 1.5rem; }
+.trip-list-heading { max-width: 79.25rem; margin-inline: auto; }
 .trip-list-heading h1 { font-size: 2rem; }
-.my-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-.account-profile-card { grid-column: 1 / -1; min-width: 0; padding: 0; overflow: clip; }
-.my-grid .home-card { margin: 0; box-shadow: none; border-radius: .875rem; }
-.my-grid p { font-size: .875rem; }
-.my-grid h2 { font-size: 1.25rem; }
-.account-journey-settings label { display: grid; gap: .35rem; margin-top: .75rem; font-size: .8rem; color: #53606b; }
-.account-journey-settings select { min-height: 2.6rem; border: 1px solid var(--product-line); border-radius: .7rem; padding: .45rem .6rem; background: #fff; color: var(--product-ink); font: 400 16px/1.5 var(--product-font); }
-.account-services ul { display: grid; gap: .4rem; margin: .75rem 0 0; padding-left: 1.1rem; color: #53606b; font-size: .78rem; }
-.my-preferences { display: flex; flex-wrap: wrap; gap: .4rem; color: var(--product-muted); }
-.my-preferences span { padding: .3rem .6rem; border-radius: 999px; background: #f0f3f5; font-size: .8rem; }
-.my-actions { display: grid; gap: .5rem; }
-.my-actions button { display: flex; justify-content: space-between; text-align: left; }
-.my-grid [data-profile] { background: var(--product-accent); color: white; }
 .product-page details { font-size: .85rem; margin-top: 1.2rem; }
 .product-page summary { cursor: pointer; min-height: 2.75rem; }
 .trip-list-heading { margin: .35rem auto 1.75rem; }
-.trip-list-heading .home-eyebrow { margin: 0; color: #4d718d; }
-.trip-list-heading h1, .my-shell h1 { margin: .2rem 0 .35rem; }
-.my-shell .home-eyebrow, .trip-list-heading .home-eyebrow { margin: .35rem 0 0; color: #4d718d; }
+.trip-list-heading h1 { margin: .2rem 0 .35rem; }
 .trip-list-heading p:last-child { max-width: 38rem; margin: 0; font-size: .95rem; }
-/* Desktop presentation pass: preserve the component system while giving the first view a clear focal point. */
 @media (min-width: 45rem) {
   .product-nav { right: auto; }
   .product-page:not([data-page="chat"]) { padding-top: 5.25rem; }
   .home-prompt button { border-radius: .875rem; font-size: 1.2rem; }
   .home-trip-card { min-height: 10.25rem; padding: 1.5rem; gap: 1.65rem; }
-  .home-trip-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; align-items: center; }
-  .home-trip-copy small, .home-trip-copy h3, .home-trip-copy .home-tags, .home-trip-copy > p { grid-column: 1; }
-  .home-trip-copy h3 { margin-block: .1rem .55rem; font-size: 1.55rem; line-height: 1.35; }
-  .home-trip-copy > p { margin: .65rem 0 0; }
-  .home-trip-copy button { align-self: end; }
-  .home-trip-copy button[data-trip] { grid-column: 2; grid-row: 1 / span 4; border-color: var(--product-accent); background: var(--product-accent); color: #fff; box-shadow: 0 7px 16px #1023371f; }
   .product-page[data-page="trips"] .home-trip-card { max-width: 56rem; margin-block: .9rem; }
   .product-page button:hover:not(:disabled) { border-color: #afc2d0; background: #f5f8fa; }
-  .home-prompt button:hover:not(:disabled), .home-trip-copy button[data-trip]:hover:not(:disabled) { border-color: #173d60; background: #173d60; transform: translateY(-1px); }
+  .home-prompt button:hover:not(:disabled) { border-color: #173d60; background: #173d60; transform: translateY(-1px); }
 }
 .product-shell :focus-visible { outline: 3px solid #426c8b; outline-offset: 3px; }
-#app[data-primary-view] #close-ai-guide, #app[data-primary-view] .context-workspace-tabs { display: none; }
-#app[data-primary-view] .hud { display: none; }
-#app[data-primary-view]:not([data-primary-view="map"]) :is(#map, .train-details, .loading-screen, #map-tools) { display: none; }
-#app[data-primary-view]:not([data-primary-view="chat"]) :is(.ai-guide-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
-#app[data-primary-view="chat"] .trip-workspace-navigation { position: absolute; z-index: 16; inset: var(--product-header-height) 0 auto; }
-#app[data-primary-view="chat"] .trip-workspace { position: absolute; z-index: 10; inset: 5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
-#app[data-primary-view="trip"] .trip-workspace:not([hidden]) { display: block; position: absolute; z-index: 10; inset: 5rem max(0px, calc((100vw - 60rem) / 2)) 0; }
-#app[data-primary-view="chat"][data-trip-workspace-view="chat"] .trip-workspace { display: none; }
-#app[data-primary-view="map"] #map { top: var(--product-header-height); bottom: 0; height: auto; }
-#app[data-primary-view] dialog { backdrop-filter: none; background: white; }
-#app[data-primary-view] .loading-screen { z-index: 14; }
-/* Below this width the centered desktop navigation and account action cannot coexist without crowding. */
 @media (max-width: 62rem) {
   .product-nav { position: fixed; z-index: 20; inset: auto .625rem env(safe-area-inset-bottom); padding: .3rem; background: #fffffffa; border: 1px solid var(--product-line); border-radius: 1.125rem; box-shadow: 0 8px 28px #12273f1a; gap: 0; transform: none; }
   .product-nav :is(a, button) { flex: 1; flex-direction: column; gap: .1rem; min-width: 0; padding: .35rem; min-height: 3.2rem; font-size: .75rem; }
-  #app[data-primary-view="map"] #map { bottom: calc(4.5rem + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 44rem) {
   .product-page { height: 100dvh; padding: calc(var(--product-header-height) + 1rem) .875rem 6rem; scroll-padding-top: calc(var(--product-header-height) + 1rem); }
@@ -130,26 +61,175 @@
   .home-prompt textarea { height: 42px; min-height: 42px; padding: .55rem .7rem; font-size: .9rem; line-height: 1.5; }
   .home-prompt button { flex-basis: 42px; width: 42px; min-width: 42px; height: 42px; min-height: 42px; padding: .55rem; border-radius: .78rem; }
   .home-trip-card { gap: .9rem; padding: 1rem; }
-  .home-trip-art { flex-basis: 4rem; height: 5rem; }
-  .home-trip-art svg { width: 2.25rem; }
-  .home-trip-copy h3 { font-size: 1.15rem; }
-  .my-grid { grid-template-columns: 1fr; }
-  .my-shell { padding: 0; }
-  .trip-list-heading, .my-shell > .ds-page-heading { display: none; }
-  #app[data-primary-view="chat"] .trip-workspace-navigation { top: var(--product-header-height); flex-wrap: wrap; }
-  #app[data-primary-view="chat"] .trip-workspace { inset: 3.5rem 0 calc(4.5rem + env(safe-area-inset-bottom)); }
-  #app[data-primary-view="trip"] .trip-workspace:not([hidden]) { inset: var(--product-header-height) 0 calc(4.5rem + env(safe-area-inset-bottom)); }
-  #app[data-primary-view="map"] #map { top: var(--product-header-height); }
+  .trip-list-heading { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .product-shell *, #app[data-primary-view] .ai-guide-panel { animation: none; transition: none; } }
+@media (prefers-reduced-motion: reduce) { .product-shell * { animation: none; transition: none; } }
+.home-hero[hidden] { display: none; }
+#app[data-primary-view]:not([data-primary-view="map"]) {
 
-/* One consultation route; the hero is its empty state, never a second menu page. */
-#app[data-primary-view="chat"]:not([data-consultation-mode="conversation"]) :is(.consultation-page, .ai-guide-panel, .trip-workspace, .trip-workspace-navigation) { display: none; }
-.consultation-entry-error { max-width: 42rem; margin: .75rem 1rem; padding: .5rem .75rem; border-radius: .5rem; background: var(--product-paper); }
-.consultation-entry-progress { min-height: 70svh; display: grid; place-content: center; justify-items: center; gap: .75rem; padding: 5rem 1rem; }
-.consultation-entry-progress[hidden], .consultation-entry-error[hidden], .home-hero[hidden] { display: none; }
+  & .product-page { background: var(--tf-bg); color: var(--tf-ink); }
+  & .product-nav { box-shadow: none; background: var(--tf-bg); border-color: var(--tf-line); border-radius: 9px; }
+  & .product-nav :is(a, button) { font-size: 12px; font-weight: 500; min-height: 44px; color: var(--tf-muted); border: 0; }
+  & .product-nav .ds-icon { width: 19px; height: 19px; }
+  & .product-nav [aria-current="page"] { background: var(--tf-soft); color: var(--tf-blue); border-radius: 7px; }
+  & .product-page:not([data-page="chat"]) { padding-inline: max(20px, calc((100vw - 720px)/2)); line-height: 1.55; }
+  & .trip-list-heading { display: block; margin: 0 0 12px; }
+  & .ds-eyebrow:empty { display: none; }
+  & .home-trip-card { min-height: 0; display: block; padding: 0; margin: 0; border: 0; border-bottom: 1px solid var(--tf-line); border-radius: 0; box-shadow: none; background: var(--tf-bg); max-width: none; }
+  & .trip-list-choice { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 90px; padding: 15px 0; text-align: left; border: 0; color: var(--tf-ink); }
+  & .trip-list-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  & .trip-list-copy :is(strong, small) { display: block; font-weight: 400; }
+  & .trip-list-copy strong { font-size: 14px; font-weight: 500; }
+  & .trip-list-copy small { font-size: 12px; color: var(--tf-muted); margin-top: 4px; }
+  & .home-trip-card { position: relative; padding-right: 44px; }
+  & .home-prompt { border: 0; box-shadow: none; }
+  & .home-prompt :is(textarea, button) { border: 0; }
+}
+@media (max-width: 62rem) {
+  #app[data-primary-view]:not([data-primary-view="map"]) .product-page:not([data-page="chat"]) { padding-top: 22px; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  #app[data-primary-view]:not([data-primary-view="map"]) .product-nav { inset: auto 10px env(safe-area-inset-bottom); padding: 4px; }
+}
+#app[data-primary-view="map"] .product-nav { background: var(--tf-bg); border-color: var(--tf-line); box-shadow: none; border-radius: 9px; }
+#app[data-primary-view="map"] .product-nav :is(a, button) { color: var(--tf-muted); border: 0; font-size: 12px; font-weight: 500; }
+#app[data-primary-view="map"] .product-nav [aria-current="page"] { background: var(--tf-soft); color: var(--tf-blue); border-radius: 7px; }
+#app[data-primary-view]:is([data-primary-view]) {
+  & .product-page { background: var(--workspace-canvas); }
+  & .product-brand { display: none; }
+  & .product-page:not([data-page="chat"]) { padding-inline: max(24px, calc((100vw - 1100px)/2)); }
+  & .trip-list-heading { margin: 0 0 32px; }
+  & .trip-list-heading h1 { font-size: 32px; font-weight: 650; letter-spacing: -.045em; margin: 8px 0 12px; }
+  & .trip-list-heading p { font-size: 14px; }
+  & .ds-eyebrow { font-size: 11px; font-weight: 500; letter-spacing: .06em; color: var(--tf-blue); }
+  & [data-trip-list] { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 24px; }
+  & .home-trip-card { padding: 0; margin: 0; border: 0; border-radius: 20px; overflow: visible; background: var(--tf-bg); box-shadow: 0 4px 20px #253d3510; transition: box-shadow .2s, transform .2s; }
+  & .home-trip-card:hover { box-shadow: 0 10px 30px #253d351a; transform: translateY(-3px); }
+  & .trip-list-choice { min-height: 0; display: block; width: 100%; padding: 0; border: 0; border-radius: 20px; background: transparent; text-align: left; color: var(--tf-ink); }
+  & .trip-list-cover { display: block; position: relative; height: 190px; overflow: hidden; border-radius: 20px 20px 0 0; background: var(--tf-soft); }
+  & .trip-list-cover img { width: 100%; height: 100%; object-fit: cover; }
+  & .trip-list-cover > small { position: absolute; right: 12px; bottom: 10px; color: #fff; text-shadow: 0 1px 5px #000; font-size: 9px; }
+  & .trip-list-copy { display: block; padding: 20px 22px 8px; }
+  & .trip-list-copy strong { font-size: 19px; line-height: 1.45; font-weight: 600; margin-bottom: 10px; }
+  & .trip-list-copy small { font-size: 12px; line-height: 1.6; }
+  & .product-nav { background: var(--tf-bg); border-color: var(--tf-line); box-shadow: 0 -2px 18px #253d3508; }
+  & .product-nav [aria-current="page"] { color: var(--tf-blue); background: var(--workspace-accent-soft); }
+  & .home-prompt { width: min(660px, calc(100vw - 48px)); border-radius: 18px; padding: 10px; background: #fff; box-shadow: 0 8px 32px #0002; }
+  & .home-prompt textarea { color: #242b2c; background: #fff; padding: 12px; }
+  & .home-prompt button { background: #b34337; color: #fff; border-radius: 12px; }
+  & .home-hero-scrim { background: linear-gradient(90deg,#163b35b0,#102f3b22); }
+  & .home-hero-copy { align-items: flex-start; padding-inline: max(24px, calc((100vw - 1100px)/2)); }
+}
+@media (min-width: 62.001rem) {
+  #app[data-primary-view]:is([data-primary-view]) {
+    & .product-nav { position: absolute; inset: 0 0 auto; height: 84px; width: 100%; box-sizing: border-box; padding: 14px max(32px, calc((100vw - 1240px)/2)); transform: none; display: flex; flex-direction: row; align-items: center; gap: 12px; border: 0; border-bottom: 1px solid var(--tf-line); border-radius: 0; box-shadow: none; }
+    & .product-brand { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 0 10px; margin-right: auto; color: var(--tf-ink); }
+    & .product-brand strong { font-size: 24px; font-weight: 650; letter-spacing: -.06em; }
+    & .product-brand small { grid-column: 2; font-size: 9px; color: var(--tf-muted); letter-spacing: .06em; }
+    & .product-nav :is(a, button) { flex-direction: row; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 20px; border: 0; border-radius: 0; background: transparent; box-shadow: none; position: relative; font-size: 13px; }
+    & .product-nav [data-account] { margin-left: 0; border: 0; }
+    & .product-nav [aria-current="page"] { background: transparent; color: var(--tf-blue); }
+    & .product-nav :is(a,button) + :is(a,button)::before { content: ""; position: absolute; left: -6px; top: 50%; width: 1px; height: 18px; transform: translateY(-50%); background: currentColor; opacity: .25; pointer-events: none; }
+    & .product-nav :is(a,button)[aria-current="page"]::after { content: ""; position: absolute; left: 20px; right: 20px; bottom: 2px; height: 2px; background: currentColor; pointer-events: none; }
+    & .product-nav :is(a,button):hover { text-decoration: underline; text-underline-offset: 5px; }
+    & .product-nav :is(a,button):focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+    & .product-page:not([data-page="chat"]) { padding: 128px max(32px, calc((100vw - 1100px)/2)) 64px; }
+    & .home-hero { margin: 0; }
+  }
+}
+@media (max-width: 62rem) {
+  #app[data-primary-view]:is([data-primary-view]) {
+    & .product-page:not([data-page="chat"]) { padding: 28px 20px calc(100px + env(safe-area-inset-bottom)); }
+    & [data-trip-list] { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+    & .product-nav { inset: auto 0 0; padding: 4px 6px calc(4px + env(safe-area-inset-bottom)); border-radius: 0; border-width: 1px 0 0; }
+    & .product-nav :is(a,button) { border-radius: 12px; }
+    & .trip-list-heading h1 { font-size: 28px; }
+  }
+}
+@media (max-width: 44rem) {
+  #app[data-primary-view]:is([data-primary-view]) {
+    & [data-trip-list] { grid-template-columns: 1fr; gap: 24px; }
+    & .trip-list-cover { height: 188px; }
+    & .trip-list-copy { padding: 18px 20px 6px; }
+    & .home-hero-copy { padding-bottom: 100px; }
+  }
+}
+@media (prefers-reduced-motion: reduce) { #app .home-trip-card { transition: none; transform: none; } }
+#app[data-primary-view]:is([data-primary-view]) {
+  & .kaiho-logo { --brand-ink: #68716e; display: block; height: auto; }
+  & .product-brand { grid-template-columns: 1fr; gap: 5px; }
+  & .product-brand small { grid-column: 1; }
+  & .home-brand { margin-bottom: 26px; }
+  & .home-brand-story { max-width: 560px; margin-top: 32px; color: #fff; text-shadow: 0 1px 8px #0003; }
+  & .home-brand-story h1 { font-size: 19px; line-height: 1.6; font-weight: 600; margin: 0 0 12px; }
+  & .home-brand-story p { color: #fff; font-size: 13px; line-height: 1.85; margin: 10px 0; }
+  & .home-brand-story summary { font-size: 12px; cursor: pointer; padding: 8px 0; }
+}
+@media (min-width:62.001rem) {
+  #app[data-primary-view]:is([data-primary-view]) .home-brand { display: none; }
+}
+@media (max-width:62rem) {
+  #app[data-primary-view]:is([data-primary-view]) .home-hero-copy { padding-top: 44px; padding-bottom: 110px; }
+}
 
-.trip-library-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin-block: 1rem; }
-.trip-library-tabs button { min-height: 44px; min-width: 0; padding: .7rem .4rem; border: 1px solid var(--product-line); border-radius: .75rem; background: white; color: inherit; font: inherit; overflow-wrap: anywhere; }
-.trip-library-tabs [aria-selected="true"] { background: #e7f0f7; border-color: #587b98; font-weight: 700; }
-.trip-library-tabs + [hidden], #trip-library-catalog[hidden] { display: none; }
+#app[data-primary-view]:is([data-primary-view]) {
+  & .kaiho-logo { width: auto; color: #68716e; font-size: 30px; line-height: 1.25; letter-spacing: .025em; }
+  & .kaiho-logo-ai { margin: 0 2px; border-radius: 6px; }
+  & .home-brand { padding: 0; background: transparent; border-radius: 0; }
+  & .home-brand .kaiho-logo { width: auto; color: #fff; font-size: 30px; }
+  & .kaiho-logo-ai { background: #68716e; color: var(--tf-bg); }
+  & .home-brand .kaiho-logo-ai { background: #fff; color: #68716e; }
+  & .home-brand-story h1 { color: #fff; }
+  & .kaiho-logo > span { display: inline-flex; align-items: center; line-height: 1; }
+  & .kaiho-logo-ai { font-size: .86em; }
+}
+@media (max-width:62rem) {
+  #app[data-primary-view]:is([data-primary-view]) {
+    & .home-hero-copy { align-items: center; }
+    & .home-brand-story { text-align: center; }
+  }
+}
+#app[data-primary-view]:is([data-primary-view]) {
+  & .kaiho-logo { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 500; }
+  & .kaiho-logo-ai { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; height: .88372em; padding: 0 .12em; line-height: 1; letter-spacing: inherit; transform: translateY(.13256em); }
+  & .kaiho-logo-ai > span { transform: translateY(-.086em); }
+}
+@media (min-width:62.001rem) {
+  #app[data-primary-view="chat"][data-consultation-mode="landing"]:is([data-primary-view]) {
+    & .product-nav { background: transparent; border: 0; box-shadow: none; }
+    & .product-nav :is(a,button) { color: #fff; border-radius: 0; background: transparent; border: 0; backdrop-filter: none; text-shadow: 0 1px 5px #102f3b80; }
+    & .product-nav [aria-current="page"] { background: transparent; color: #fff; }
+    & .product-nav [data-account] { border: 0; }
+    & .product-nav .kaiho-logo { color: #fff; }
+    & .product-nav .kaiho-logo-ai { background: #fff; color: #68716e; }
+  }
+  #app[data-primary-view="map"]:is([data-primary-view]) {
+    & .product-nav { background: #ffffffd9; border-bottom: 1px solid #dfe4e8; box-shadow: 0 2px 8px #152a3314; }
+    & .product-nav :is(a,button) { border-radius: 0; background: transparent; color: #37675f; border: 0; box-shadow: none; backdrop-filter: none; }
+    & .product-nav [aria-current="page"] { background: transparent; color: var(--tf-blue); }
+    & .product-nav .kaiho-logo { color: #68716e; filter: none; }
+    & .product-nav .kaiho-logo-ai { background: #68716e; color: #fff; }
+  }
+}
+#app[data-primary-view]:is([data-primary-view]) {
+  & .home-hero { min-height: min(700px, 78svh); }
+  & .home-hero-copy { min-height: min(700px, 78svh); padding-top: 116px; padding-bottom: 64px; }
+  & .home-official-guides { padding: 40px max(24px, calc((100vw - 1100px)/2)) 64px; background: var(--workspace-canvas); }
+  & .home-official-guides[hidden] { display: none; }
+  & .home-official-guides h2 { margin: 0 0 24px; font-size: 24px; font-weight: 600; letter-spacing: -.025em; }
+}
+@media (max-width:62rem) {
+  #app[data-primary-view]:is([data-primary-view]) {
+    & .home-hero { min-height: 0; }
+    & .home-hero-copy { min-height: 0; padding-top: 52px; padding-bottom: 48px; }
+    & .home-official-guides { padding: 28px 20px calc(92px + env(safe-area-inset-bottom)); }
+    & .home-official-guides h2 { font-size: 21px; margin-bottom: 20px; }
+  }
+}
+#app[data-primary-view]:is([data-primary-view]) {
+  & .trip-list-cover { width: 100%; padding: 0; border: 0; }
+  & .trip-list-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  & .trip-list-title-open { flex: 1; min-width: 0; min-height: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+  & .trip-list-title-open strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; overflow-wrap: anywhere; }
+  & .trip-list-title-row { margin-bottom: 10px; }
+  & .home-trip-card { cursor: pointer; }
+  & .trip-list-copy { padding-bottom: 20px; }
+}

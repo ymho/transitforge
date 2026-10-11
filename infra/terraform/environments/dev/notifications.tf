@@ -1,4 +1,4 @@
-# One shared bounded worker, durable transaction outbox and in-app channel. No Push keys/public trigger.
+# Notification delivery is suspended. The table also stores current Impact observations; retain it.
 locals {
   notification_name    = "${local.resource_prefix}-notification"
   notification_package = jsondecode(file("${path.module}/../../../packaging/notification.json"))
@@ -108,6 +108,7 @@ resource "aws_iam_role_policy" "notification" {
 resource "aws_cloudwatch_event_rule" "notification" {
   name                = local.notification_name
   schedule_expression = "rate(1 minute)"
+  state               = "DISABLED"
 }
 resource "aws_lambda_function" "notification" {
   function_name                  = local.notification_name
@@ -124,6 +125,7 @@ resource "aws_lambda_function" "notification" {
       TRIP_TABLE_NAME         = aws_dynamodb_table.trips.name
       NOTIFICATION_TABLE_NAME = aws_dynamodb_table.trip_notifications.name
       NOTIFICATION_RULE_ARN   = aws_cloudwatch_event_rule.notification.arn
+      NOTIFICATION_ENABLED    = "false"
     }
   }
   depends_on = [aws_iam_role_policy.notification, aws_cloudwatch_log_group.notification]
@@ -183,17 +185,6 @@ resource "aws_cloudwatch_metric_alarm" "notification" {
   threshold           = each.value
   comparison_operator = "GreaterThanThreshold"
   treat_missing_data  = "notBreaching"
-}
-resource "aws_cloudwatch_metric_alarm" "notification_heartbeat" {
-  alarm_name          = "${local.notification_name}-poll-stopped"
-  namespace           = "Raiquora/Notification"
-  metric_name         = "PollSuccess"
-  statistic           = "Sum"
-  period              = 300
-  evaluation_periods  = 2
-  threshold           = 1
-  comparison_operator = "LessThanThreshold"
-  treat_missing_data  = "breaching"
 }
 resource "aws_cloudwatch_metric_alarm" "notification_tick_dlq" {
   alarm_name          = "${local.notification_name}-tick-dlq"

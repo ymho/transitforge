@@ -12,7 +12,7 @@ function setup(overrides: Partial<AiFirstShellPorts> = {}) {
     read: () => ({ state: "unauthenticated", trips: [] }),
     authState: () => ({ status: "signed-out" }), login: vi.fn(), logout: vi.fn(),
     subscribe: () => () => {}, retry: vi.fn(async () => {}), newConsultation: vi.fn(async () => {}), resetConsultation: vi.fn(), openChat: vi.fn(), openTrip: vi.fn(),
-    openMap: vi.fn(), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
+    openMap: vi.fn(), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: vi.fn(), now: () => new Date("2026-09-18T00:00:00Z"), ...overrides,
   };
   return { shell: configureAiFirstShell(document, document.querySelector("main")!, ports), ports };
 }
@@ -154,10 +154,10 @@ it("reader failures do not disable the independent Home consultation form", () =
   expect(document.querySelector("[data-home-live]")).toBeNull();
   expect(document.querySelector<HTMLButtonElement>('.home-prompt button')!.disabled).toBe(false);
 });
-it("all secondary actions use existing feature ports", () => {
-  const { shell, ports } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); shell.navigate("my");
-  click("[data-notifications]");
-  expect(ports.openNotifications).toHaveBeenCalledOnce();
+it("does not expose the retired notification feature in settings", () => {
+  const { shell } = setup({ authState: () => ({ status: "signed-in", displayName: "山田 花子" }) }); shell.navigate("my");
+  expect(document.querySelector("[data-notifications]")).toBeNull();
+  expect(document.querySelector('[data-page="my"]')!.textContent).not.toContain("通知");
 });
 it("opens the actual Trip as a trips subview, not a selected chat tab", async () => {
   const trip = createTrip("45300000-0000-4000-8000-000000000001", "旅程", "2026-09-18T00:00:00Z", []);
