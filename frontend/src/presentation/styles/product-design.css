@@ -120,7 +120,7 @@
   & .profile-chips span { display: flex; align-items: center; gap: 5px; }
   & .profile-chips .ds-icon { width: 15px; height: 15px; }
   & .external-service-list { padding: 0; font-size: 12px; }
-  & .external-service-list li { padding-block: 12px; border-color: var(--tf-line); }
+  & .external-service-list li { padding-block: 8px; border-color: var(--tf-line); }
   & .account-journey-settings label { display: block; margin-bottom: 12px; }
   & .account-journey-settings select { width: 100%; }
   & :is(.journey-presentation, .public-place-presentation, .public-accommodation-presentation, .public-plan-presentation, .journey-card, .place-card, .accommodation-card) { padding: 12px; border: 1px solid var(--tf-line); border-radius: 9px; background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; font-size: 14px; }
