@@ -235,14 +235,18 @@ try {
     await memoDisclosure.locator("summary").click();
     assert.equal(await memoField.inputValue(), "自動保存メモを再編集");
     const noticeMetrics = await page.locator(".app-save-notification").evaluate(notice => {
-      const box = notice.getBoundingClientRect(), text = notice.querySelector("span").getBoundingClientRect(), close = notice.querySelector("button").getBoundingClientRect();
+      const box = notice.getBoundingClientRect(), text = notice.querySelector("span").getBoundingClientRect(), ring = notice.querySelector(".app-save-countdown").getBoundingClientRect();
       return { width: box.width, height: box.height, background: getComputedStyle(notice).backgroundColor,
-        alignment: Math.abs((text.top + text.bottom) / 2 - (close.top + close.bottom) / 2) };
+        alignment: Math.abs((text.top + text.bottom) / 2 - (ring.top + ring.bottom) / 2) };
     });
     assert.ok(noticeMetrics.width >= Math.min(560, viewport.width - 32) - 1);
     assert.ok(noticeMetrics.height <= 42, `Notice too tall: ${noticeMetrics.height}px`);
     assert.ok(noticeMetrics.background.startsWith("rgba("), "Notice should be translucent");
-    assert.ok(noticeMetrics.alignment <= 1, `Notice close alignment: ${noticeMetrics.alignment}px`);
+    assert.ok(noticeMetrics.alignment <= 1, `Notice countdown alignment: ${noticeMetrics.alignment}px`);
+    assert.equal(await page.locator(".app-save-notification button").count(), 0);
+    const ringProgress = page.locator(".app-save-countdown-progress");
+    const initialOffset = await ringProgress.evaluate(circle => Number(circle.style.strokeDashoffset));
+    await page.waitForFunction(offset => Number(document.querySelector(".app-save-countdown-progress")?.style.strokeDashoffset) < offset, initialOffset);
     const heroBalance = await page.locator(".trip-header-content").evaluate(content => {
       const box = content.getBoundingClientRect(), nodes = [...content.children].map(node => node.getBoundingClientRect());
       return Math.abs((Math.min(...nodes.map(node => node.top)) - box.top) - (box.bottom - Math.max(...nodes.map(node => node.bottom))));
