@@ -63,4 +63,21 @@ jobs:
             --filter-pattern '{ $.status = "5*" }' --query 'events[].{message:message,timestamp:timestamp}' --output json > agent-gateway-events.json
           aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
             --filter-pattern '"REPORT RequestId"' --query 'events[].{message:message,timestamp:timestamp}' --output json > agent-lambda-reports.json
-          node tools/deployment/summarize-agent-transport-diagnostics.mjs agent-gateway-events.json agent-lambda-reports.json | tee -a "$GITHUB_STEP_SUMMARY"
+          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
+            --filter-pattern '?INIT_REPORT ?ERROR ?Error ?"Task timed out" ?"signal: killed" ?"out of memory"' \
+            --query 'events[].{message:message,timestamp:timestamp}' --output json > agent-lambda-system.json
+          metric_start="$(date -u -d '2 hours ago' +%FT%TZ)"
+          metric_end="$(date -u +%FT%TZ)"
+          for metric in Invocations Errors Throttles ConcurrentExecutions; do
+            statistic=Sum
+            if [ "$metric" = ConcurrentExecutions ]; then statistic=Maximum; fi
+            aws cloudwatch get-metric-statistics --namespace AWS/Lambda --metric-name "$metric" \
+              --dimensions "Name=FunctionName,Value=${AGENT_STREAM_LOG_GROUP##*/}" \
+              --start-time "$metric_start" --end-time "$metric_end" --period 60 --statistics "$statistic" \
+              --output json > "agent-metric-${metric}.json"
+          done
+          jq -n --slurpfile invocations agent-metric-Invocations.json --slurpfile errors agent-metric-Errors.json \
+            --slurpfile throttles agent-metric-Throttles.json --slurpfile concurrency agent-metric-ConcurrentExecutions.json \
+            '{Invocations:$invocations[0],Errors:$errors[0],Throttles:$throttles[0],ConcurrentExecutions:$concurrency[0]}' > agent-lambda-metrics.json
+          node tools/deployment/summarize-agent-transport-diagnostics.mjs \
+            agent-gateway-events.json agent-lambda-reports.json agent-lambda-system.json agent-lambda-metrics.json | tee -a "$GITHUB_STEP_SUMMARY"
