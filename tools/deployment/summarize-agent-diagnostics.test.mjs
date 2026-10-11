@@ -93,3 +93,16 @@ assert.equal(timeline.status, 0, timeline.stderr);
 assert.match(timeline.stdout, /tool \| rejected \| explore_destination \| stale_revision/);
 assert.match(timeline.stdout, /reply_validation \| rejected \| answer \| invalid_field/);
 assert.doesNotMatch(timeline.stdout, /private-id|private-input|private-tool|private-outcome|private-code|private-reply/);
+
+// A native SDK output budget stop returns normally, without an invocation-failed event.
+writeFileSync(failures, encode([]));
+writeFileSync(diagnostics, encode([{ event: "agent_diagnostic", executionId: "private-id", phase: "execution",
+  reason: "output_token_budget", occurredAt: "2026-10-11T06:44:03Z" }]));
+writeFileSync(validations, encode([{ event: "agent_reply_validation", executionId: "private-id", occurredAt: "2026-10-11T06:43:30Z",
+  modelCall: 7, replyKind: "uncertainty", outcome: "rejected", code: "evidence_collision", collisionCount: 0, conflictCount: 2,
+  observations: ["private-observation"], reply: "private-reply" }]));
+const budgetTimeline = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams, modelShapes, modelCalls, failures, toolCalls, validations], { encoding: "utf8" });
+assert.equal(budgetTimeline.status, 0, budgetTimeline.stderr);
+assert.match(budgetTimeline.stdout, /Failed or limited invocation steps/);
+assert.match(budgetTimeline.stdout, /2026-10-11T06:44:03.000Z \| 2026-10-11T06:43:30.000Z \| 7 \| reply_validation \| rejected \| uncertainty \| evidence_collision \| not_recorded \| not_recorded \| not_recorded \| 0 \| 2/);
+assert.doesNotMatch(budgetTimeline.stdout, /private-id|private-observation|private-reply/);
