@@ -38,5 +38,5 @@ center = baseline - size * .35
 parts.append(f'<rect x="{x}" y="{center - height / 2}" width="{width}" height="{height}" rx="3" fill="#68716e"/>')
 letters("AI", small, x + padding, center + small * .35, "#ffffff")
 x = letters("HO", size, x + width, baseline, "#68716e")
-svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {x + 12} 68" role="img" aria-label="KAIHO"><title>KAIHO</title>' + "".join(parts) + "</svg>\n"
+svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {x + 12} 68">' + "".join(parts) + "</svg>\n"
 (directory / "kaiho-wordmark.svg").write_text(svg)
