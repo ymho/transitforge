@@ -617,6 +617,7 @@ startMap = async () => {
   catch { mapStarted = false; status.hidden = false; status.textContent = "地図を起動できませんでした。もう一度開くと再試行できます。相談は引き続き利用できます。"; loadingScreen.fail(status.textContent); }
 };
 primaryShell = configureAiFirstShell(document, app, {
+  accommodationProviderAttribution: accommodationProviderAttributionFromEnvironment(import.meta.env),
   library: new HttpTripSharingClient(), librarySession: () => serverTripClient.sessionVersion(),
   read: () => {
     const listState = serverTripList.getState();
