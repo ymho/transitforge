@@ -109,3 +109,9 @@
 .consultation-page .consultation-condition-actions button:hover:not(:disabled) { border: 0; background: transparent; }
 .consultation-page .consultation-conditions h2 { font-size: .9375rem; }
 .consultation-page .consultation-conditions > .consultation-help { font-size: .75rem; }
+
+/* Keep the return control above the composer, independent of its height. */
+.consultation-message-viewport { position: relative; display: grid; min-width: 0; min-height: 0; overflow: hidden; }
+.consultation-page .consultation-scroll-bottom { position: absolute; z-index: 3; bottom: 12px; left: 50%; transform: translateX(-50%); display: grid; place-items: center; width: 44px; height: 44px; padding: 10px; border: 1px solid var(--tf-line, #d9e2e9); border-radius: 50%; background: var(--tf-bg, #fff); color: var(--tf-text, #294963); box-shadow: 0 2px 8px #19344c18; }
+.consultation-page .consultation-scroll-bottom[hidden] { display: none; }
+.consultation-scroll-bottom .ds-icon { width: 22px; height: 22px; }

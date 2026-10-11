@@ -1,3 +1,4 @@
+import { createConversationViewport } from "./conversation-viewport";
 import { confirmAction } from "../shared/app-dialog";
 import type { Trip, TripUpdateProposal } from "@raiquora/trip/trip";
 import { proposeTripRequestUpdate } from "../../usecases/trip-plan/update-trip-request";
@@ -52,7 +53,7 @@ export function configureConsultationScreen(panel: HTMLElement, messages: HTMLOL
     adoptComposer(form, input, send); send.innerHTML = iconMarkup("send"); send.setAttribute("aria-label", "送信"); send.title = "送信";
   }
   const dock = node("div", "consultation-composer-dock");
-  context.append(head); dock.append(context, form); conversation.append(messages, dock);
+  context.append(head); dock.append(context, form); conversation.append(createConversationViewport(messages), dock);
   const aside = node("aside", "consultation-conditions"); aside.id = "consultation-conditions";
   aside.setAttribute("aria-label", "この旅の条件"); conditions.setAttribute("aria-controls", aside.id);
   const close = node("button", "consultation-conditions-close", "閉じる"); close.type = "button";
