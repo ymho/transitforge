@@ -21,6 +21,9 @@ ProfileはEffective Intentで解決したreference-only hintから投影し、�
 旅程の編集・案の採用でTrip revisionが変わった場合、以前の候補参照・Working Stateの表示履歴は再利用しない。
 ただし今回のturnで同じTripに対して受理した条件とreceiptは、最新のTripを基底としてEffective Intentへ再投影する。
 別Tripの状態や古いturnの受理条件をこの例外で復活させず、条件の採用には最新revisionのCASとintent bindingを引き続き使う。
+移動予定を相談対象にした場合、同ownerの保存済み予定の発着地・日付をitem scopeの検索条件へ自動投影する。
+未選択の移動では明確な「出発地 → 到着地」の予定名だけを暫定の検索入力として使い、曖昧な名称や出発時刻は推測しない。
+この投影は検索用の読み取りで、Tripの条件・Profile・user-turn receiptを増やさない。現在の明示条件や未定・取消を優先し、候補・予約・経路成立の検証とは区別する。
 public finalの構造化表示は[Conversation turn保存](server-state.md)と[表示契約](../specs/agent-publication.md)を参照する。
 
 一次根拠: `backend/agent-api/src/personal-state-api-composition.ts`、`adapters/dynamodb-profile-repository.ts`、

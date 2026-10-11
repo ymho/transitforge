@@ -60,14 +60,22 @@ export function compileEffectiveIntent(input: {
   profile?: UserProfile;
   profileRevision?: number;
   overlay: ConversationIntentOverlay;
+  /** Owner-authorized, focused saved-item inputs; read-only and never user-turn receipts. */
+  searchContextConstraints?: readonly TripConstraint[];
 }): EffectiveIntent {
-  const constraints = input.baseRequest?.constraints ?? [];
   const overlayActualFacts = input.overlay.facts.filter(({ frame }) => frame === "actual").map(clone);
   const actualRetractions = input.overlay.tombstones.filter(({ frame }) => frame === "actual");
   const persistedPartialFacts = (input.baseRequest?.partialConditions ?? []).filter((fact) =>
     !overlayActualFacts.some((current) => current.target === fact.target && JSON.stringify(current.scope) === JSON.stringify(fact.scope)) &&
     !actualRetractions.some((current) => current.target === fact.target && JSON.stringify(current.scope) === JSON.stringify(fact.scope))).map(clone);
   const actualConversationFacts = [...persistedPartialFacts, ...overlayActualFacts];
+  const searchConditions = (input.searchContextConstraints ?? []).filter((constraint) => {
+    const target = targetForConstraint(constraint);
+    return !actualConversationFacts.some((fact) => fact.target === target && globalIntentScope(fact.scope)) &&
+      !actualRetractions.some((fact) => fact.target === target && globalIntentScope(fact.scope)) &&
+      !input.baseRequest?.profileSuppressions?.some((fact) => fact.target === target && globalIntentScope(fact.scope));
+  });
+  const constraints = [...(input.baseRequest?.constraints ?? []), ...searchConditions];
   const hypotheticalFacts = input.overlay.facts.filter(({ frame }) => frame === "hypothetical").map(clone);
   const suppressedBaseRefs = constraints.filter((constraint) => suppressedByConversation(constraint, actualConversationFacts, actualRetractions))
     .map(({ id }) => `constraint:${id}`);
