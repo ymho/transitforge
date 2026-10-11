@@ -60,26 +60,30 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
     const workingState = savedWorkingState && (!tripId || savedWorkingState.target.tripId === undefined ||
       savedWorkingState.target.tripId === tripId && (savedWorkingState.target.tripRevision === undefined || savedWorkingState.target.tripRevision === trip?.revision))
       ? savedWorkingState : undefined;
+    // An itinerary edit invalidates old candidate references, but not conditions
+    // accepted in this turn. Recompile those against the freshly authorized Trip.
+    const intentWorkingState = workingState ?? (before !== undefined && savedWorkingState?.sourceUserSequence === before &&
+      savedWorkingState.target.tripId === tripId ? savedWorkingState : undefined);
     const taskContext = conversationId || trip ? deriveAgentTaskContext({ conversationId, trip: trip ? { id: trip.id, revision: trip.revision,
       lifecycleState: trip.lifecycleState, planningState: trip.planningState } : undefined,
       requestRevision: trip?.revision,
       workingStateRevision: workingState?.revision, previousOutcome: workingState?.lastOutcome?.outcome }) : undefined;
-    const turnReceipts = before !== undefined && workingState?.sourceUserSequence === before
-      ? workingState.semantic?.receipts.filter(({ mutationId }) => mutationId.startsWith(`condition:${workingState.sourceTurnId}:`)) ?? [] : [];
+    const turnReceipts = before !== undefined && intentWorkingState?.sourceUserSequence === before
+      ? intentWorkingState.semantic?.receipts.filter(({ mutationId }) => mutationId.startsWith(`condition:${intentWorkingState.sourceTurnId}:`)) ?? [] : [];
     const receiptCandidate = turnReceipts.length ? summarizeConditionReceipts(turnReceipts)
-      : before !== undefined && workingState?.sourceUserSequence === before ? workingState.semantic?.receipts.at(-1) : undefined;
-    const currentIntentReceipt = receiptCandidate?.intentRevision === workingState?.semantic?.overlay.intentRevision
+      : before !== undefined && intentWorkingState?.sourceUserSequence === before ? intentWorkingState.semantic?.receipts.at(-1) : undefined;
+    const currentIntentReceipt = receiptCandidate?.intentRevision === intentWorkingState?.semantic?.overlay.intentRevision
       ? receiptCandidate : undefined;
     const acceptedIntentOperations = currentIntentReceipt?.operations.filter(({ status }) => status === "accepted") ?? [];
     const taskContextWithIntent = taskContext && currentIntentReceipt && acceptedIntentOperations.length ? { ...taskContext,
       currentIntentChange: { intentRevision: currentIntentReceipt.intentRevision, speechAct: currentIntentReceipt.speechAct,
         operations: acceptedIntentOperations.map(({ action, target, frame }) => ({ action, target, frame })) },
     } : taskContext;
-    const effectiveIntent = workingState?.semantic || trip?.request || profile?.profile ? compileEffectiveIntent({
+    const effectiveIntent = intentWorkingState?.semantic || trip?.request || profile?.profile ? compileEffectiveIntent({
       ...(trip?.request ? { baseRequest: trip.request, baseSource: "trip" as const } : {}),
       ...(taskContext?.requestRevision === undefined ? {} : { baseRevision: taskContext.requestRevision }),
       ...(profile?.profile ? { profile: profile.profile, profileRevision: profile.revision } : {}),
-      overlay: workingState?.semantic?.overlay ?? { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] },
+      overlay: intentWorkingState?.semantic?.overlay ?? { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] },
     }) : undefined;
     const effectiveProfile = effectiveIntent ? effectiveProfileContext(effectiveIntent) : undefined;
     if (effectiveIntent) options.onEffectiveIntent?.({ effectiveIntent: structuredClone(effectiveIntent),

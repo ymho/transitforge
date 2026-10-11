@@ -8,6 +8,9 @@ import { ConversationApplication } from "../conversation-application.js";
 import { ProfileApplication } from "../profile-application.js";
 import { stateDynamoFixture, stateA as a, stateB as b, conversationId as id, secondId as tripId, stateMetadata, stateProfile, noCandidateResources } from "../../adapters/state-dynamodb.fixture.js";
 import { tripDynamoFixture } from "../../adapters/trip-dynamodb.fixture.js";
+import { DynamoDbConversationTurnRepository } from "../../adapters/dynamodb-conversation-turn-repository.js";
+import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
+import { TripApplication } from "../trip-application.js";
 
 function setup() {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
@@ -21,6 +24,60 @@ const metadata = () => stateMetadata();
 const trip = () => ({ ...createTrip(tripId, "採用した旅", "2026-09-18T00:00:00Z", [
   { id: "stay", title: "宿泊", type: "stay" as const, schedule: { type: "unscheduled" as const }, selection: { status: "unselected" as const } },
 ]), planningState: "itinerary_refinement" as const, request: { goal: "鉄道で旅行", constraints: [], assumptions: [] } });
+
+it("projects current route conditions against the latest Trip after an itinerary edit", async () => {
+  const f = setup();
+  const initial = { ...trip(), createdAt: f.trips.clock.now().toISOString(), updatedAt: f.trips.clock.now().toISOString() };
+  f.trips.seed(initial, a.subject);
+  await f.conversations.create(a, metadata());
+  const turns = new DynamoDbConversationTurnRepository("test-state", f.client);
+  const accept = async (turnId: string, origin: string) => {
+    const identity = { principal: a, conversationId: id, turnId };
+    const begun = await turns.beginTurn(identity, { userRequest: `${origin}から移動`, tripId });
+    if (begun.state !== "started") throw new Error("unexpected turn");
+    const receipt = await turns.acceptCondition(identity, begun.lease, {
+      target: "origin", quote: origin, place: origin,
+    });
+    return { identity, begun, receipt };
+  };
+  const previous = await accept("33333333-3333-4333-8333-333333333333", "大阪");
+  await turns.completeTurn(previous.identity, previous.begun.lease, { status: "completed", response: "出発地を確認",
+    tripUpdateProposal: { tripId, baseRevision: 0, summary: "条件の変更", patches: [{ type: "request", request: trip().request }] } });
+  // The user edits/adopts an itinerary independently of the last chat turn.
+  f.trips.seed({ ...initial, revision: 1 }, a.subject);
+  const current = await accept("44444444-4444-4444-8444-444444444444", "京都");
+  const onEffectiveIntent = vi.fn();
+  const load = createServerStateContextLoader({ conversations: f.conversations, profiles: f.profiles,
+    trips: f.trips.repository, workingStates: turns }, { historyBeforeSequence: current.begun.lease.userSequence, onEffectiveIntent });
+  const context = await load({ principal: a, conversationId: id });
+  expect(context.workingState).toBeUndefined(); // Old candidate references cannot be reused.
+  expect(context.effectiveIntent?.intentRevision).toBe(current.receipt.intentRevision);
+  const { effectiveIntent, currentReceipt } = onEffectiveIntent.mock.calls[0][0];
+  expect(currentReceipt).toMatchObject({ intentRevision: current.receipt.intentRevision });
+  const proposal = proposeVerifiedIntentRequest({ conversationId: id, trip: (await f.trips.repository.get(a, tripId))!,
+    effectiveIntent, receipt: currentReceipt });
+  expect(proposal).toMatchObject({ baseRevision: 1, patches: [{ type: "request", request: { constraints: [
+    { requirement: { type: "origin", place: { name: "京都" } } },
+  ] } }] });
+  const working = (await turns.getWorkingState(a, id))!;
+  for (const stale of [
+    { ...working, sourceUserSequence: previous.begun.lease.userSequence },
+    { ...working, target: { ...working.target, tripId: id } },
+  ]) {
+    const excluded = vi.fn();
+    const otherLoad = createServerStateContextLoader({ conversations: f.conversations, profiles: f.profiles,
+      trips: f.trips.repository, workingStates: { getWorkingState: async () => stale } },
+    { historyBeforeSequence: current.begun.lease.userSequence, onEffectiveIntent: excluded });
+    expect((await otherLoad({ principal: a, conversationId: id })).effectiveIntent?.intentRevision).toBe(0);
+    expect(excluded.mock.calls[0][0].currentReceipt).toBeUndefined();
+  }
+  await turns.stageIntentProposal(current.identity, current.begun.lease, proposal!);
+  const application = new TripApplication(f.trips.repository, f.trips.repository, f.trips.clock, undefined, undefined, undefined, turns);
+  await application.execute(a, { version: "trip-api-v1", operation: "mutate", tripId, baseRevision: 1,
+    mutationId: "55555555-5555-4555-8555-555555555555", proposal: proposal! });
+  expect((await f.trips.repository.get(a, tripId))?.revision).toBe(2);
+  expect((await turns.getWorkingState(a, id))?.semantic?.overlay.facts).toEqual([]);
+});
 
 describe("Server State Context Loader", () => {
   it("restores metadata/history, existing profile projection and owner Trip without writes", async () => {
