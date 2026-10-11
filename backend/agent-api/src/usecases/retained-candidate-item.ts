@@ -7,7 +7,7 @@ export function trustedCandidateItem(draft: DraftPlanItem, candidateSetId: strin
   const base = { id: draft.baseItemId ?? id, title: draft.title, schedule: structuredClone(draft.schedule), ...(draft.logicalDayId ? { logicalDayId: draft.logicalDayId } : {}) };
   if (draft.sourceCandidateRef) {
     if (!retainedItem || retainedItem.id !== draft.sourceCandidateRef || retainedItem.type !== draft.kind || !selectedAt) throw new Error("Missing retained candidate");
-    const item = { ...structuredClone(retainedItem), id: base.id };
+    const item = { ...structuredClone(retainedItem), id: base.id, ...(draft.logicalDayId ? { logicalDayId: draft.logicalDayId } : {}) };
     if (item.type === "transport" && item.detail.status === "selected" && item.detail.mode === "rail") item.detail = { ...item.detail, journey: { ...item.detail.journey, selectedAt } };
     if (item.type === "stay" && item.selection.status === "selected") item.selection = { ...item.selection, accommodation: { ...item.selection.accommodation, selectedAt } };
     return item;

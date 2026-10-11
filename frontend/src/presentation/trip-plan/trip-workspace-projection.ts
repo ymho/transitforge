@@ -9,16 +9,18 @@ import { itineraryScheduleLabel } from "../../usecases/trip-plan/itinerary-sched
 import { tripPartyView } from "../../usecases/trip-plan/trip-party-presentation";
 import { tripPlacesPreview } from "../../usecases/trip-plan/trip-places-preview";
 import { projectDailyItinerary, type DayEntry, type DayView } from "@raiquora/trip/daily-itinerary";
+import { tripCalendarDates } from "../../domain/trip-calendar-dates";
 
 type WorkspaceEntry = DayEntry & { item: ItineraryItem; sourceDayKey: string };
 type WorkspaceDay = [key: string, entries: WorkspaceEntry[], label: string];
 
 /** Calendar navigation only: source day/entry identities and authored zones stay intact for edits. */
-function calendarTimeline(days: readonly DayView[], byId: Map<string, ItineraryItem>, itemOrder: Map<string, number>): WorkspaceDay[] {
+function calendarTimeline(days: readonly DayView[], byId: Map<string, ItineraryItem>, itemOrder: Map<string, number>, dates: ReadonlyMap<string, string>): WorkspaceDay[] {
   const groups = new Map<string, WorkspaceDay>();
   for (const day of days) {
-    const key = day.localDate ? `calendar:${day.localDate}` : day.dayKey;
-    const group = groups.get(key) ?? [key, [], day.localDate ?? day.label] as WorkspaceDay;
+    const date = day.localDate ?? (day.logicalDayId ? dates.get(day.logicalDayId) : undefined);
+    const key = date ? `calendar:${date}` : day.dayKey;
+    const group = groups.get(key) ?? [key, [], date ?? day.label] as WorkspaceDay;
     for (const entry of day.entries) {
       const item = byId.get(entry.sourceItemId);
       if (item) group[1].push({ ...entry, item, sourceDayKey: day.dayKey });
@@ -26,7 +28,8 @@ function calendarTimeline(days: readonly DayView[], byId: Map<string, ItineraryI
     groups.set(key, group);
   }
   for (const [, entries] of groups.values()) entries.sort((a, b) => itemOrder.get(a.sourceItemId)! - itemOrder.get(b.sourceItemId)!);
-  return [...groups.values()];
+  const calendar = [...groups.values()].filter(day => day[0].startsWith("calendar:")).sort((a, b) => a[0].localeCompare(b[0]));
+  return [...calendar, ...[...groups.values()].filter(day => !day[0].startsWith("calendar:"))];
 }
 
 export const assumptionFieldLabels = { schedule: "日時", place: "場所", selection: "採用内容" } as const;
@@ -63,7 +66,7 @@ export function tripWorkspaceProjection(trip: Trip) {
   const days: [string, ItineraryItem[]][] = [...legacyBuckets];
   const dayEntries: [string, (DayEntry & { item: ItineraryItem })[], string][] = daily.days.map((day) => [day.dayKey,
     day.entries.flatMap((entry) => { const item = byId.get(entry.sourceItemId); return item ? [{ ...entry, item }] : []; }), day.label]);
-  const timelineDays = calendarTimeline(daily.days, byId, new Map(trip.items.map((item, index) => [item.id, index])));
+  const timelineDays = calendarTimeline(daily.days, byId, new Map(trip.items.map((item, index) => [item.id, index])), tripCalendarDates(trip));
   if (daily.unscheduled.length) dayEntries.push(["unscheduled", daily.unscheduled.flatMap((entry) => {
     const item = byId.get(entry.sourceItemId); return item ? [{ ...entry, item }] : [];
   }), "日時未定"]);

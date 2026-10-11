@@ -91,8 +91,8 @@ export function configureTripWorkspace(options: {
     if (!trip || source?.getRole?.() === "viewer" || consultationDialog?.isConnected) return;
     consultationDialog = openTripConsultation(trip, topic => {
       if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.sessionId() !== session || controller.source() !== source || source?.getRole?.() === "viewer") { report("旅程が更新されました。相談したい内容を選び直してください。"); return; }
-      controller.focus(topic?.itemId);
-      if (topic) chat(topic.prompt); else show("chat");
+      controller.focus(topic.itemId);
+      chat(topic.prompt);
     });
   });
   consult.dataset.tripConsultation = "";

@@ -23,3 +23,12 @@ it("does not invent a date for unscheduled entries or retain a foreign insertion
   expect(tripAddConsultation(trip, "unscheduled", "walk")).toEqual({ itemId: "walk", prompt: "「町を歩く」の後に追加する予定を相談したい。" });
   expect(tripAddConsultation(trip, "unscheduled", "foreign")).toEqual({ prompt: "日時未定の旅程に追加する予定を相談したい。" });
 });
+
+it("uses the visible calendar label and both neighbours after logical/calendar tabs merge", () => {
+  const trip = createTrip("11111111-1111-4111-8111-111111111111", "旅", "2026-10-01T00:00:00Z", [
+    { id: "rail", title: "移動", type: "transport", detail: { status: "unresolved", mode: "rail" }, schedule: { type: "relative", dayId: "d1" } },
+    { id: "hotel", title: "宿", type: "stay", selection: { status: "unselected" }, logicalDayId: "d1", schedule: { type: "day", date: "2026-10-24", endDate: "2026-10-25" } },
+  ], undefined, undefined, undefined, { version: 1, logicalDays: [{ id: "d1" }, { id: "d2" }], calendarBindings: [] });
+  expect(tripAddConsultation(trip, "logical:d1", "rail", "昼食")).toEqual({ itemId: "rail", prompt: "2026-10-24の「移動」の後、次の「宿」の前に予定を追加したい。\n希望：昼食" });
+  expect(trip.items[0]!.schedule).toEqual({ type: "relative", dayId: "d1" });
+});
