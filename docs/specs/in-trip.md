@@ -28,6 +28,12 @@ Notificationの有無はImpact選別に無関係であり、未知情報も候�
 古いrevision/消えたitem/終端Trip/archiveはcurrent扱いしない。予約失敗は空の「予約なし」にしない。
 read自体は各独立resourceのpoint-in-time viewであり、複数tableを跨ぐserializableな実世界snapshotを保証するものではない。
 
+## 内部能力の保留範囲
+
+最新観測の読取と通知停止中の内部store、および旅行中のContext・再計画・robustness計算は、
+旅行当日の機能を設計するまで保持する。現在の公開入口とは区別し、一般の未使用UIや旧Browser Agentの維持理由にしない。
+旅行当日の接続先と必要な観測を決めた時点で、採用する入口へ集約し、不要な組成・計算・専用テストを削除する。
+
 ## 接続・公開gate
 
 `createInTripContextApplication`は既存Repositoryを組成する。認証済みhostは

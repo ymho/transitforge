@@ -2627,14 +2627,13 @@
   },
   "x-unpublished": {
     "paths": [
-      "/api/trips/notifications/v1",
       "/api/trips/in-trip/v1"
     ],
     "applications": [
       "ReservationApplication",
       "ChecklistApplication"
     ],
-    "description": "通知/in-tripは公開Trip hostに接続されず404。独立factoryの501 gateやIAM-only workerは公開APIに含めない。静的Viewer/trafficデータ・認証設定・Cognito OAuth endpointは別契約。"
+    "description": "通知APIは廃止済み。in-tripは公開Trip hostに接続されず404。独立factoryの501 gateやIAM-only workerは公開APIに含めない。静的Viewer/trafficデータ・認証設定・Cognito OAuth endpointは別契約。"
   },
   "components": {
     "securitySchemes": {
@@ -6213,7 +6212,11 @@
                 "const": "relative_distance"
               },
               "direction": {
-                "$ref": "#/components/schemas/NonNullable_1"
+                "enum": [
+                  "farther",
+                  "nearer"
+                ],
+                "type": "string"
               },
               "comparedCandidateIds": {
                 "type": "array",
@@ -6236,10 +6239,19 @@
                 "const": "adventure"
               },
               "intensity": {
-                "$ref": "#/components/schemas/NonNullable_2"
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  3
+                ],
+                "type": "number"
               },
               "avoidedRisks": {
-                "$ref": "#/components/schemas/NonNullable_3"
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AdventureRisk"
+                }
               }
             },
             "required": [
@@ -6460,28 +6472,6 @@
         ],
         "type": "string"
       },
-      "NonNullable_1": {
-        "enum": [
-          "farther",
-          "nearer"
-        ],
-        "type": "string"
-      },
-      "NonNullable_2": {
-        "enum": [
-          0,
-          1,
-          2,
-          3
-        ],
-        "type": "number"
-      },
-      "Array_4": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/AdventureRisk"
-        }
-      },
       "AdventureRisk": {
         "enum": [
           "illegal",
@@ -6492,9 +6482,6 @@
           "weather-exposure"
         ],
         "type": "string"
-      },
-      "NonNullable_3": {
-        "$ref": "#/components/schemas/Array_4"
       },
       "IntentScope": {
         "anyOf": [
@@ -9704,7 +9691,7 @@
                 "const": "trip-sharing-v1"
               },
               "trips": {
-                "$ref": "#/components/schemas/Array_5"
+                "$ref": "#/components/schemas/Array_4"
               },
               "afterTripId": {
                 "type": "string"
@@ -9894,7 +9881,7 @@
           "version"
         ]
       },
-      "Array_5": {
+      "Array_4": {
         "type": "array",
         "items": {
           "type": "object",
@@ -11368,7 +11355,7 @@
                 "type": "number"
               },
               "matches": {
-                "$ref": "#/components/schemas/Array_8"
+                "$ref": "#/components/schemas/Array_7"
               }
             },
             "required": [
@@ -11463,7 +11450,7 @@
                 }
               },
               "journeys": {
-                "$ref": "#/components/schemas/Array_10"
+                "$ref": "#/components/schemas/Array_9"
               },
               "contractVersion": {
                 "type": "string",
@@ -11511,7 +11498,7 @@
                 "$ref": "#/components/schemas/ExternalTravelInformation_2"
               },
               "targetObservations": {
-                "$ref": "#/components/schemas/Array_14"
+                "$ref": "#/components/schemas/Array_13"
               }
             },
             "required": [
@@ -11600,7 +11587,7 @@
             "type": "number"
           },
           "topTrains": {
-            "$ref": "#/components/schemas/Array_6"
+            "$ref": "#/components/schemas/Array_5"
           }
         },
         "required": [
@@ -11612,7 +11599,7 @@
           "trainCount"
         ]
       },
-      "Array_6": {
+      "Array_5": {
         "type": "array",
         "items": {
           "type": "object",
@@ -11740,7 +11727,7 @@
             "type": "number"
           },
           "topTrains": {
-            "$ref": "#/components/schemas/Array_7"
+            "$ref": "#/components/schemas/Array_6"
           }
         },
         "required": [
@@ -11754,7 +11741,7 @@
           "totalDelayMinutes"
         ]
       },
-      "Array_7": {
+      "Array_6": {
         "type": "array",
         "items": {
           "type": "object",
@@ -12126,7 +12113,7 @@
         ],
         "type": "string"
       },
-      "Array_8": {
+      "Array_7": {
         "type": "array",
         "items": {
           "type": "object",
@@ -12147,7 +12134,7 @@
               "type": "string"
             },
             "matchingStops": {
-              "$ref": "#/components/schemas/Array_9"
+              "$ref": "#/components/schemas/Array_8"
             }
           },
           "required": [
@@ -12160,7 +12147,7 @@
           ]
         }
       },
-      "Array_9": {
+      "Array_8": {
         "type": "array",
         "items": {
           "type": "object",
@@ -12263,7 +12250,7 @@
           "trainNumber"
         ]
       },
-      "Array_10": {
+      "Array_9": {
         "type": "array",
         "items": {
           "type": "object",
@@ -12345,7 +12332,7 @@
             "type": "string"
           },
           "stops": {
-            "$ref": "#/components/schemas/Array_11"
+            "$ref": "#/components/schemas/Array_10"
           }
         },
         "required": [
@@ -12362,7 +12349,7 @@
           "trainNumber"
         ]
       },
-      "Array_11": {
+      "Array_10": {
         "type": "array",
         "items": {
           "type": "object",
@@ -12431,7 +12418,7 @@
             "$ref": "#/components/schemas/Record"
           },
           "selectedJourneys": {
-            "$ref": "#/components/schemas/Array_12"
+            "$ref": "#/components/schemas/Array_11"
           }
         },
         "required": [
@@ -12456,7 +12443,7 @@
       "Record": {
         "$ref": "#/components/schemas/__type_7"
       },
-      "Array_12": {
+      "Array_11": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Record_string_unknown_"
@@ -12657,7 +12644,7 @@
             "type": "string"
           },
           "sources": {
-            "$ref": "#/components/schemas/Array_13"
+            "$ref": "#/components/schemas/Array_12"
           },
           "openingHours": {
             "type": "string"
@@ -12725,7 +12712,7 @@
         ],
         "type": "string"
       },
-      "Array_13": {
+      "Array_12": {
         "type": "array",
         "items": {
           "type": "object",
@@ -12832,7 +12819,7 @@
           "url"
         ]
       },
-      "Array_14": {
+      "Array_13": {
         "type": "array",
         "items": {
           "type": "object",

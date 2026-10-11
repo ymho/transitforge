@@ -45,7 +45,7 @@ const shell = configureAiFirstShell(document, app, {
   openTrip: () => openTrip("trip"), consultTrip: async () => { openTrip("chat"); },
   openMap: () => undefined,
   journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: () => undefined,
-  openNotifications: () => undefined, now: () => new Date("2026-09-27T00:00:00Z"),
+  now: () => new Date("2026-09-27T00:00:00Z"),
 });
 workspace = configureTripWorkspace({ app, chat: panel, messages, input, controller,
   showContext: () => undefined, returnToConversation: () => undefined, showMap: () => undefined,

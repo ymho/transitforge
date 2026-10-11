@@ -17,20 +17,6 @@ export interface UserProfile {
   updatedAt: string;
 }
 
-export interface TripContext {
-  planningStage?: "inspiration" | "planning";
-  destinationWish?: string;
-  startDate?: string;
-  endDate?: string;
-  stayNights?: number;
-  outboundDepartureTimeMinutes?: number;
-  returnArrivalTimeMinutes?: number;
-  interests?: Partial<Record<TravelPreference, number>>;
-  relativeDistancePreference?: "nearer" | "farther";
-  avoidances?: string[];
-  adventureIntensity?: 0 | 1 | 2 | 3;
-  avoidedRisks?: AdventureRisk[];
-}
 export type AdventureRisk = "illegal" | "uncontrolled-violence" | "unverified-border" | "night-isolation" | "transport-stranding" | "weather-exposure";
 
 export const travelPreferenceLabels: Record<TravelPreference, string> = {

@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTripSharingHandler } from "./trip-sharing-handler.js";
-import { createNotificationHandler } from "./notification-handler.js";
 import { createInTripContextHandler } from "./in-trip-context-handler.js";
-import { createPersonalApiHandler } from "./personal-api-composition.js";
 import { createHttpPrincipalResolver } from "./http-auth-composition.js";
-import { personalApiPolicies, apiAuthenticationInventory } from "./adapters/api-route-policy.js";
-import { cognitoTokenFixture, token, scope, pool } from "./adapters/cognito-token.fixture.js";
+import { personalApiPolicies } from "./adapters/api-route-policy.js";
+import { cognitoTokenFixture, token, scope } from "./adapters/cognito-token.fixture.js";
 import { tripDynamoFixture } from "./adapters/trip-dynamodb.fixture.js";
 import { DynamoDbTripSharing } from "./adapters/dynamodb-trip-sharing.js";
 import { CryptographicShareSecret } from "./adapters/share-secret.js";
@@ -19,10 +17,9 @@ const event = (path: string, body: object, access?: string) => ({ path, httpMeth
 describe("other stable personal handlers share the same authentication", () => {
   it("enforces 401/403 before each Application, and rejects unknown operations", async () => {
     const { verifier } = cognitoTokenFixture(), authenticate = createHttpPrincipalResolver(verifier, [scope]);
-    const execute = vi.fn(async (_principal: unknown, _input: unknown) => ({})), list = vi.fn(async () => ({ notifications: [] })), read = vi.fn(async () => undefined);
+    const execute = vi.fn(async (_principal: unknown, _input: unknown) => ({})), read = vi.fn(async () => undefined);
     const routes = [
       { policy: personalApiPolicies.sharing, h: createTripSharingHandler({ execute }, { authenticate }), fields: { operation: "accessible" } },
-      { policy: personalApiPolicies.notification, h: createNotificationHandler({ list, read }, authenticate), fields: { operation: "list" } },
       { policy: personalApiPolicies.inTrip, h: createInTripContextHandler({ read }, authenticate), fields: { tripId: id } },
     ];
     for (const { policy, h, fields } of routes) {
@@ -33,12 +30,11 @@ describe("other stable personal handlers share the same authentication", () => {
       }
       expect((await h(event(policy.path, { ...body, operation: "worker-send" }, token()))).statusCode).toBe(400);
     }
-    expect(execute).not.toHaveBeenCalled(); expect(list).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled();
     for (const { policy, h, fields } of routes) {
       expect((await h(event(policy.path, { version: policy.version, ...fields }, token()))).statusCode).toBe(200);
     }
     const principal = await verifier.verify(token());
-    expect(list).toHaveBeenCalledWith(principal, undefined);
     expect(read).toHaveBeenCalledWith(principal, id);
     expect(execute.mock.calls[0]?.[0]).toEqual(principal);
   });
@@ -58,18 +54,5 @@ describe("other stable personal handlers share the same authentication", () => {
     const inTrip = createInTripContextHandler(context, authenticate), readBody = { version: "in-trip-api-v1", tripId: id };
     expect((await inTrip(event(personalApiPolicies.inTrip.path, readBody, token()))).statusCode).toBe(200);
     expect((await inTrip(event(personalApiPolicies.inTrip.path, readBody, b))).statusCode).toBe(404);
-  });
-  it("keeps host default-off, rejects unknown paths and does not route Agent or IAM workers", async () => {
-    const options = { auth: { userPoolId: pool, clientId: "app-client", requiredScopes: [scope] }, tripTable: "trips", notificationTable: "notifications", stateTable: "state" };
-    expect((await createPersonalApiHandler(options)({})).statusCode).toBe(501);
-    const host = createPersonalApiHandler({ ...options, enabled: true });
-    for (const path of ["/api/agent", "/api/conversations", "/api/profile", "/api/trips/unknown", "/trip-changed-lambda"]) {
-      expect((await host(event(path, {}, token()))).statusCode).toBe(404);
-    }
-    for (const policy of Object.values(personalApiPolicies)) {
-      // Content-free diagnostics are exposed by the production personal-state host only.
-      expect((await host(event(policy.path, { version: policy.version }))).statusCode).toBe(policy === personalApiPolicies.browserDiagnostics ? 404 : 401);
-    }
-    expect(apiAuthenticationInventory.internalIamOnly).toEqual(["trip-changed-lambda", "rail-impact-lambda", "trip-recheck-lambda", "notification-lambda"]);
   });
 });

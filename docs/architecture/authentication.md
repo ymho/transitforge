@@ -17,7 +17,8 @@ TrustedPrincipal.subjectをownerへ写し、bodyのownerId / userId / email / cl
 | POST `/api/conversations/v1` / `/api/profile/v1` | 専用personal-state Lambda → Conversation / Profile V3 Application → owner-scoped DynamoDB |
 | POST `/api/trips/v1` | 専用Trip API Lambda → TripApplication。start / branch consultation、CRUD・CAS mutation・参照・候補/Trip/itemのpreview / confirmを既存operationで提供 |
 | `/api/trips/sharing/v1` | 認証済みTrip API hostがParticipant / Grantの共有操作を公開する |
-| `/api/trips/in-trip/v1` / `/api/trips/notifications/v1` | 独立factoryの公開501 gateを維持。Trip API hostはこれらのpathを公開せず404 |
+| `/api/trips/in-trip/v1` | 独立factoryの公開501 gateを維持。Trip API hostはこのpathを公開せず404 |
+| `/api/trips/notifications/v1` | 廃止済み。公開Trip hostと個人API hostは404 |
 | Reservation / Checklist | 内部Applicationのみ。公開handler / clientなし。実予約・取消APIではない |
 | POST `/api/agent`の汎用conversation / feedback / trace / 未知operation | 410。独立read callerのFunction URL / OAC resourceと分離する |
 | 同routeの残存read operation | Cognito Access Token / scope必須。Browser transportが`X-Raiquora-Access-Token`を設定し、OAC signingとの競合を避ける |

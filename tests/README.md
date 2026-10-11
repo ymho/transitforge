@@ -25,7 +25,10 @@ V2の互換要件にしない。ユーザー可視の意味がある場合はApp
 DOMの読み順・非同期画面更新・MutationObserverを検証するPresentationテストは、
 先頭に`// @vitest-environment happy-dom`を指定する。Happy DOMはFrontendの開発依存だけに置き、
 手作りのDOMモックでは確認しにくい要素の表示・イベント・属性の退行を再現する。
-外部通信や実Mapboxは使用しない。画素配置・実端末の描画速度を保証するブラウザE2Eとは区別する。
+外部通信や実Mapboxは使用しない。廃止実装の専用テストは実装と一緒に削除する。
+汎用Adapterの契約テストに廃止機能の巨大なschemaやBrowser Tool組成を読み込まず、最小fixtureを使う。
+認証・owner隔離・CAS・安全な表示などの現役契約は維持する。
+バッチ・ページ境界の検証には境界を越える最小fixtureを使い、別の性能・規模要件がない限り件数を増やさない。画素配置・実端末の描画速度を保証するブラウザE2Eとは区別する。
 
 ## Python
 
@@ -53,6 +56,8 @@ npm run eval:agent:smoke
 
 作業中は変更箇所のtargeted testを使い、仕上げの全量確認は原則1回とする。同じrevisionのCI成功結果を
 再利用し、変更・失敗・未確認範囲がなければ全量を繰り返さない。
+`npm test`はBrowser・Server・共有Domain・通常のToolテストを1回のVitest起動で実行し、共通依存の変換を重複させない。
+workspaceのtest scriptは部分調査用として維持する。
 `architecture:check`は`workspace:check`を含む。`test:journey-scenarios`とStrands live-fixturesは`npm test`に
 含まれるため追加実行しない。`lambda:check:built`は直前のbuildを検証し、単独の`lambda:check`はbuildも行う。
 

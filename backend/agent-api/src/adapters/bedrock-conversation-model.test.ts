@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { outputContract } from "@raiquora/agent/output-contract";
-import { semanticInterpretationOutputContract } from "@raiquora/agent/semantic-interpretation";
 
 it("does not retain earlier Profile text echoed in conversation after consent removal", async () => {
   const record = vi.fn(async () => undefined);
@@ -241,7 +240,7 @@ describe("BedrockConversationModel", () => {
     });
 
     await model.converse({ messages: [{ role: "user", content: [{ text: "一般に旅行保険は必要？" }] }],
-      instruction: "Interpret the utterance.", outputContract: semanticInterpretationOutputContract });
+      instruction: "Interpret the utterance.", outputContract: outputContract("standalone", "1", { type: "object", properties: { outcome: { type: "string" } }, required: ["outcome"] }) });
 
     const system = JSON.stringify(converse.mock.calls[0]?.[0].system);
     expect(system).toContain("root objectをそのまま返し");

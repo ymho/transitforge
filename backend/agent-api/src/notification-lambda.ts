@@ -12,6 +12,8 @@ function record(name: NotificationMetric, value: number) {
 }
 export async function handler(event: unknown, context: { getRemainingTimeInMillis(): number }) {
   if (!trustedTick(event, process.env.NOTIFICATION_RULE_ARN ?? "")) throw new Error("invalid-internal-trigger");
+  // Delivery stays off unless explicitly re-enabled by infrastructure. Observations remain independently readable.
+  if (process.env.NOTIFICATION_ENABLED !== "true") return;
   try {
     const table = process.env.NOTIFICATION_TABLE_NAME, trips = process.env.TRIP_TABLE_NAME;
     if (!table || !trips) throw new Error();

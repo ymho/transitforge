@@ -1,3 +1,4 @@
+/* concierge owns these styles; change the existing rule rather than appending a theme override. */
 .public-accommodation-presentation .accommodation-photo { display: block; width: 100%; max-height: 240px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; margin-bottom: .65rem; }
 .public-accommodation-presentation h3 { margin: 0 0 .65rem; font-size: 14px; }
 .accommodation-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .3rem .8rem; margin: .6rem 0; font-size: 12px; line-height: 1.6; }
@@ -21,3 +22,10 @@
 .accommodation-conditions { margin: 0 0 .6rem; color: var(--product-muted); font-size: 12px; line-height: 1.6; }
 .accommodation-introduction { margin: .6rem 0; font-size: 12px; line-height: 1.7; }
 .accommodation-introduction p { margin: .3rem 0; }
+
+
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .public-accommodation-presentation { padding: 12px; border: 1px solid var(--tf-line); border-radius: 9px; background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; font-size: 14px; }
+  & .public-accommodation-presentation .public-plan-candidate-tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; }
+  & .public-accommodation-presentation .public-plan-candidate-tabs button[aria-selected="true"] { border-bottom-color: var(--tf-blue); background: transparent; }
+}

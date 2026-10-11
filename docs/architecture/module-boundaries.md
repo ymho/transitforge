@@ -10,8 +10,7 @@ Trip/TripRequest/Itineraryのpure契約は`modules/trip/domain`、BackendのTrip
 既存規則に従い`backend/agent-api/src/ports`、CRUD / CAS / 採用は`usecases`、DB/Browser/HTTPは各Adapterへ置く。
 本設計採用だけでは新しいpackageやRepository実装を追加せず、旧型とV2を二重正本にしない。
 
-Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)と
-[TypeScript構成移行台帳](module-boundaries.md)を参照する。この文書は現在稼働している境界を説明する。
+共有Domainとworkspaceの採用理由は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)を参照する。この文書は現在稼働している境界を説明する。
 
 ## 現行構成
 
@@ -167,7 +166,7 @@ VPC依存を持ち込まない。両Lambdaのpackageは別artifactとしてbuild
 本サービスはTypeScriptを唯一のBackend正本とし 正本と境界契約をこの文書で定める
 
 Issue #203ではBackendをTypeScriptへ統一し shared Domainを`modules`へ移す判断を採用した。
-移行記録は[TypeScript構成移行台帳](module-boundaries.md)を参照する。
+当時の採用理由は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)を参照する。
 
 所有権は言語ではなく実行責務で決める
 LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算結果を生成しない
@@ -186,7 +185,7 @@ Bedrockは判断とProposalを担うがTrip永続状態の所有者ではない�
 | 表示日時 業務時刻 列車フォーカス | `frontend/src/domain`と`frontend/src/usecases/viewer` | PresentationがUsecase Portを利用 | TypeScriptの隣接テスト |
 | 経路条件 候補 比較 直通検索 CSA 乗換判定 順位付け | `modules/journey/domain` | Node Agent APIが日付別indexをAdapterから渡す | shared moduleとjourney search scenario |
 | 遅延予測 遅延と混雑の履歴分析 | `modules/journey/domain`と`modules/operation/domain` | Agent Toolは計算済みの応答を変更せず利用 | shared module test Agent Eval |
-| 旅行候補 既知価格の費用集計 Profile TripContext 旅程 外部旅行情報のEvidenceと鮮度 天気 Place 再確認 | `modules/trip/domain` | Server保存と外部Providerを境界の外へ分離。端末の経路設定・表示状態は別 | shared module / Server owner・CAS / Provider contractのテスト |
+| 旅行候補 既知価格の費用集計 Profile V3 旅行条件 旅程 外部旅行情報のEvidenceと鮮度 天気 Place 再確認 | `modules/trip/domain` | Server保存と外部Providerを境界の外へ分離。端末の経路設定・表示状態は別 | shared module / Server owner・CAS / Provider contractのテスト |
 | Agent Runtime Tool Evidence Trace Policy | `modules/agent/runtime`、実行責務はBackend Application | Backend AdapterのStrands v2 loopとServer Toolへ接続。Browserは入力・表示・HTTPだけ | core隣接testとServer fake/Bedrock-weather縦切り |
 | HTTP Bedrock AWS 外部提供者の形式 | `frontend/src/adapters`と`backend/agent-api/src/adapters` | Domainへ変換してからUsecaseへ渡す | Adapter contract testとLambda package check |
 | 会話metadata・履歴 | `backend/agent-api` のConversation Application | BrowserはHTTP clientとmemory read modelで表示・選択する。永続状態はDynamoDB | owner-scoped Application/APIとfrontend controller test |

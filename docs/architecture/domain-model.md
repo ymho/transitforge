@@ -49,7 +49,7 @@ ProfileはEffective Intentのreference-only soft hintで、今回の明示条件
 
 Server Context Loaderは同ownerのTrip、Profile、直近最大12件のtext履歴とworking stateを復元する。
 TripRequestと受理済み条件・仮定・Profile hintを分離し、本文から正本を再構築しない。
-`TripContext`等の残る計算・表示用型をBrowserの永続正本や旧Runtimeと扱わない。
+旅行条件は`TripRequirement`とConversation Intentで扱い、旧`TripContext`コンテナは保持しない。Browserの計算・表示用値を永続正本や旧Runtimeと扱わない。
 別会話へ自動的に好みを昇格するTravelMemory writerはない。
 
 ## Agentと表示契約

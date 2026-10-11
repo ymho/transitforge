@@ -1,4 +1,4 @@
-export type ProductIconName = "arrowDown" | "pencil" | "back" | "account" | "chat" | "close" | "compose" | "explore" | "notifications" | "send" | "train" | "trips" | "child" | "clock" | "settings" | "info" | "thumbUp" | "thumbDown" | "refresh";
+export type ProductIconName = "arrowDown" | "pencil" | "back" | "account" | "chat" | "close" | "compose" | "explore" | "send" | "train" | "trips" | "child" | "clock" | "settings" | "info" | "thumbUp" | "thumbDown" | "refresh";
 
 const paths: Record<ProductIconName, string> = {
   arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
@@ -16,7 +16,6 @@ const paths: Record<ProductIconName, string> = {
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   compose: '<path d="M20 15a4 4 0 0 1-4 4H8l-4 2V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4"/><path d="M12 7v6M9 10h6"/>',
   explore: '<circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/>',
-  notifications: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/>',
   send: '<path d="M12 19V5m-6 6 6-6 6 6"/>',
   train: '<rect x="5" y="3" width="14" height="15" rx="3"/><path d="M8 7h8M8 14h.01M16 14h.01M8 21l2-3M16 18l2 3"/>',
   trips: '<path d="M8 5h12v15H8zM4 9h4M4 13h4M4 17h4M11 9h6M11 13h6"/>',

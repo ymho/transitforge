@@ -4,7 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./domain/index.ts",
     "./path": "./domain/path.ts",
     "./route-time": "./domain/route-time.ts",
     "./station": "./domain/station.ts",

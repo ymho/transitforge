@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyTripProposal } from "@raiquora/trip/trip";
 import { multiCityTrip } from "../../../../modules/trip/domain/trip-places.fixture";
 import { createTripWorkspaceController } from "./trip-workspace-controller";
-import { proposeManualActivity } from "./propose-trip-activity";
+import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
 import { railSelectionFixture } from "../../../../modules/trip/domain/selected-rail-journey.fixture";
 import { createTravelCandidate } from "@raiquora/trip/travel-candidate";
 import { createTrip } from "@raiquora/trip/trip";
@@ -57,7 +57,7 @@ describe("Trip workspace read/proposal host", () => {
   });
   it("refines an Activity without dropping its retained provider place", () => {
     const trip = multiCityTrip(), before = structuredClone(trip);
-    const proposal = proposeManualActivity(trip, { itemId: "activity", operation: "replace" }, { title: "ゆっくり散策", category: "sightseeing", schedule: { type: "day", date: "2026-09-24" } });
+    const proposal = proposeTripItemChange(trip, { action: "rename", itemId: "activity", title: "ゆっくり散策" });
     const after = applyTripProposal(trip, proposal);
     expect(after.items[2]).toMatchObject({ id: "activity", place: (trip.items[2] as { place: unknown }).place });
     expect(after.items.slice(0, 2)).toEqual(trip.items.slice(0, 2)); expect(trip).toEqual(before);

@@ -1,3 +1,4 @@
+/* concierge owns these styles; change the existing rule rather than appending a theme override. */
 .public-place-presentation {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
@@ -72,4 +73,12 @@
 .public-place-illustration .public-place-photo figcaption {
   padding: .3rem 0;
   background: var(--product-surface);
+}
+
+
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .public-place-presentation { padding: 12px; border: 1px solid var(--tf-line); border-radius: 9px; background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; font-size: 14px; }
+  & .place-card { padding: 12px; border: 1px solid var(--tf-line); border-radius: 9px; background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; font-size: 14px; }
+  & .public-place-card { padding: 12px; border: 1px solid var(--tf-line); border-radius: 9px; background: var(--tf-bg); }
+  & .public-place-photo { margin: -12px -12px 10px; border-radius: 9px 9px 0 0; }
 }

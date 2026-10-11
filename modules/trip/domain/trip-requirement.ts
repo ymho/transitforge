@@ -3,7 +3,7 @@ import type { JourneySearchRequest } from "@raiquora/journey/journey-search-serv
 import { validatePlaceSnapshot, type PlaceSnapshot } from "./place-snapshot";
 import { validateTimeZone, validateZonedInstant, type LocalDate, type ZonedInstant } from "./itinerary-schedule";
 import { exactKeys, validDate } from "./snapshot-validation";
-import { travelPreferenceLabels, type TravelPreference, type TripContext } from "./travel-profile";
+import { travelPreferenceLabels, type TravelPreference, type AdventureRisk } from "./travel-profile";
 import { transportModes, type TransportMode } from "./transport-detail";
 import { validateMoney, type Money } from "./money";
 
@@ -28,8 +28,8 @@ export type TripRequirement =
   | { readonly type: "pace"; readonly value: number }
   | { readonly type: "aggregate_metric"; readonly metric: "travel_minutes" | "walking_minutes" | "transfer_count";
       readonly aggregation: "sum"; readonly maximum: number }
-  | { readonly type: "relative_distance"; readonly direction: NonNullable<TripContext["relativeDistancePreference"]>; readonly comparedCandidateIds: readonly string[] }
-  | { readonly type: "adventure"; readonly intensity: NonNullable<TripContext["adventureIntensity"]>; readonly avoidedRisks: NonNullable<TripContext["avoidedRisks"]> };
+  | { readonly type: "relative_distance"; readonly direction: "nearer" | "farther"; readonly comparedCandidateIds: readonly string[] }
+  | { readonly type: "adventure"; readonly intensity: 0 | 1 | 2 | 3; readonly avoidedRisks: AdventureRisk[] };
 
 export function nonemptyText(value: unknown): value is string { return typeof value === "string" && value.trim().length > 0; }
 export function validateDateRange(range: DateRange): void {

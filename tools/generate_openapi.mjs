@@ -206,7 +206,7 @@ export async function generateOpenApi() {
     description: "既存SPAが利用するHTTP契約。TypeScriptの公開型とtransport制約から生成する。国制限は日本、旅行検索は設定済み32都府県。動的なowner認可・cross-field制約・Domain validatorはOpenAPIだけで置換しない。API Gatewayの前段拒否は独自のエラーbodyを返し得る。CloudFront内部API key/OACはBrowserへ公開しない。" },
     servers: [{ url: "/", description: "SPAと同じorigin。Gateway originへ直接接続しない。" }],
     tags: ["agent", "conversation", "profile", "trip", "sharing", "read", "browserDiagnostics"].map(name => ({ name })), security: [{ CognitoAccessToken: [] }], paths,
-    "x-unpublished": { paths: [personalApiPolicies.notification.path, personalApiPolicies.inTrip.path], applications: ["ReservationApplication", "ChecklistApplication"], description: "通知/in-tripは公開Trip hostに接続されず404。独立factoryの501 gateやIAM-only workerは公開APIに含めない。静的Viewer/trafficデータ・認証設定・Cognito OAuth endpointは別契約。" },
+    "x-unpublished": { paths: [personalApiPolicies.inTrip.path], applications: ["ReservationApplication", "ChecklistApplication"], description: "通知APIは廃止済み。in-tripは公開Trip hostに接続されず404。独立factoryの501 gateやIAM-only workerは公開APIに含めない。静的Viewer/trafficデータ・認証設定・Cognito OAuth endpointは別契約。" },
     components: { securitySchemes: { CognitoAccessToken: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "Cognito Access Token。ID Token不可。raiquora/user scopeが必要。" },
       CognitoReadToken: { type: "apiKey", in: "header", name: "X-Raiquora-Access-Token", description: "Bearer <Cognito Access Token>。OAC署名用Authorizationとは別。" } }, schemas } };
   // Drop helper aliases that are no longer referenced after command flattening.

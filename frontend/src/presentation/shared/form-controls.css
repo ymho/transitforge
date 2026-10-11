@@ -1,0 +1,17 @@
+/* shared owns these styles; change the existing rule rather than appending a theme override. */
+
+
+#app[data-primary-view]:is([data-primary-view]) {
+  & .ds-composer-field { display: block; flex: 1; min-width: 0; }
+  & .ds-composer-field > :is(input,textarea) { width: 100%; min-width: 0; }
+}
+@media (max-width: 44rem) {
+  #app[data-primary-view]:is([data-primary-view]) .ds-composer-field > :is(input,textarea) {
+    font-size: 16px; width: 114.285714%; max-width: none;
+    transform: scale(.875); transform-origin: left center;
+    min-height: 48px; height: 48px; line-height: 1.5;
+  }
+}
+#app[data-primary-view]:is([data-primary-view]) {
+  & .ds-composer-field > :is(input,textarea) { box-sizing: border-box; height: 36px; min-height: 36px; padding: 7px 8px; line-height: 22px; }
+}

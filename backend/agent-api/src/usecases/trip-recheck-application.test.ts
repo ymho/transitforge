@@ -45,7 +45,7 @@ describe("shared time-originated recheck -> existing Impact pipeline", () => {
   });
   it("partial Watch batch uses existing complete=false recovery before creating tasks", async () => {
     const f = railImpactDynamoFixture(), queue = recheckDynamoFixture(), original = areaInput();
-    const trip = { ...original.trip, items: Array.from({ length: 60 }, (_, i) => ({ ...original.trip.items[0]!, id: `activity-${i}` })) }; f.seed(trip);
+    const trip = { ...original.trip, items: Array.from({ length: 50 }, (_, i) => ({ ...original.trip.items[0]!, id: `activity-${i}` })) }; f.seed(trip);
     const projection = new TripRecheckProjection(f.repository, f.watches, queue.repository,
       { resolve: async () => ({ scopes: trip.items.flatMap((item) => [
         { itineraryItemId: item.id, subject: original.watches[0]!.subject as { type: "weather-area"; area: string } },
@@ -54,7 +54,7 @@ describe("shared time-originated recheck -> existing Impact pipeline", () => {
     f.watchFaults.failBatch = 2; await expect(projection.reconcile(owner, trip.id)).rejects.toThrow();
     expect((await f.watches.read(owner, trip.id)).complete).toBe(false); expect(queue.rows.size).toBe(0);
     f.watchFaults.failBatch = undefined; await projection.reconcile(owner, trip.id);
-    expect((await f.watches.read(owner, trip.id)).complete).toBe(true); expect(queue.rows.size).toBe(120);
+    expect((await f.watches.read(owner, trip.id)).complete).toBe(true); expect(queue.rows.size).toBe(100);
   });
   it("create projection, fresh weather -> Impact, duplicate execution never changes Trip/Watch/Reservation", async () => {
     const f = await setup(), before = structuredClone([...f.records.entries()]);

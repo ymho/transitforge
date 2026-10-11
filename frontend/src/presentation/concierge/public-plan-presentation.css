@@ -1,6 +1,9 @@
+/* concierge owns these styles; change the existing rule rather than appending a theme override. */
 .public-plan-presentation { display: grid; gap: .75rem; min-width: 0; margin-block: .9rem; }
 .public-plan-candidate-tabs { display: flex; gap: .4rem; max-width: 100%; overflow-x: auto; }
-.public-plan-candidate-tabs button, .public-plan-adopt, .public-plan-detail, .public-plan-presentation > button { min-height: 2.4rem; padding: .4rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: .8rem; background: var(--glass-surface-strong); color: var(--glass-text); font: inherit; cursor: pointer; }
+.public-plan-candidate-tabs button { min-height: 2.4rem; padding: .4rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: .8rem; background: var(--glass-surface-strong); color: var(--glass-text); font: inherit; cursor: pointer; }
+.public-plan-adopt { min-height: 2.4rem; padding: .4rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: .8rem; background: var(--glass-surface-strong); color: var(--glass-text); font: inherit; cursor: pointer; }
+.public-plan-presentation > button { min-height: 2.4rem; padding: .4rem .75rem; border: 1px solid var(--glass-border-subtle); border-radius: .8rem; background: var(--glass-surface-strong); color: var(--glass-text); font: inherit; cursor: pointer; }
 .public-plan-candidate-tabs button[aria-selected="true"] { border-color: var(--glass-accent); background: var(--glass-surface-muted); }
 .public-plan-candidate { min-width: 0; padding: .85rem 1rem; border: 1px solid var(--glass-border-subtle); border-radius: 1rem; background: var(--glass-surface); }
 .public-plan-candidate[hidden] { display: none; }
@@ -11,9 +14,11 @@
 .public-plan-days ul li { position: relative; padding-left: 1rem; overflow-wrap: anywhere; }
 .public-plan-days ul li::before { position: absolute; left: 0; color: var(--glass-accent); content: "•"; }
 .public-plan-axes { display: flex; flex-wrap: wrap; gap: .25rem .7rem; margin: 0 0 .75rem; color: var(--glass-muted); font-size: .72rem; }
-.public-plan-axes dt, .public-plan-axes dd { margin: 0; }
-.public-plan-axes dd { color: var(--glass-text); font-weight: 650; }
+.public-plan-axes dt { margin: 0; }
+.public-plan-axes dd { margin: 0; color: var(--glass-text); font-weight: 650; }
 .public-plan-scenarios { margin: .6rem 0 0; color: var(--glass-muted); font-size: .72rem; }
 .public-plan-adopt { margin-top: .75rem; }
-.ai-guide-message-copy a[title="参考資料"], .ai-guide-message-copy a[title="写真の出典"] { display: inline-flex; align-items: center; width: fit-content; padding: .1rem .4rem; border: 1px solid var(--glass-border-subtle); border-radius: 999px; color: var(--glass-muted); font-size: .7rem; line-height: 1.5; text-decoration: none; vertical-align: baseline; }
-.ai-guide-message-copy a[title="参考資料"]:hover, .ai-guide-message-copy a[title="写真の出典"]:hover { color: var(--glass-text); border-color: var(--glass-accent); }
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .public-plan-presentation { padding: 12px; border: 1px solid var(--tf-line); border-radius: 9px; background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; font-size: 14px; background: transparent; box-shadow: none; }
+  & .public-plan-candidate { background: transparent; box-shadow: none; }
+}

@@ -21,7 +21,7 @@ it("uses the same consultation surface from Trip, returns to Trip, and makes the
     subscribe: () => () => {}, login: vi.fn(), logout: vi.fn(), retry: vi.fn(async () => {}),
     newConsultation: vi.fn(async () => {}), resetConsultation: vi.fn(), openChat: vi.fn(), openMap: vi.fn(),
     openTrip: () => workspace.show("trip"), journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }),
-    setJourneySettings: vi.fn(), openNotifications: vi.fn(), now: () => new Date("2026-09-27T00:00:00Z"),
+    setJourneySettings: vi.fn(), now: () => new Date("2026-09-27T00:00:00Z"),
   });
   workspace = configureTripWorkspace({ app, chat, messages: chat.querySelector("ol")!, input: chat.querySelector("input")!, controller,
     ask, showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => "new-item",

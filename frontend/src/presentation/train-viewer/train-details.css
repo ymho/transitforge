@@ -1,0 +1,495 @@
+/* train-viewer owns these styles; change the existing rule rather than appending a theme override. */
+
+
+.train-details {
+  position: absolute;
+  overflow-y: auto;
+}
+
+.train-details h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.train-title-main {
+  min-width: 0;
+}
+
+.train-details dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.7rem 0 0;
+}
+
+.train-details dl div {
+  display: flex;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.train-details dt {
+  color: #91a6bc;
+  white-space: nowrap;
+}
+
+.train-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.train-timetable h3 {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.train-timetable ol {
+  margin: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.train-timetable li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  font-size: 0.8rem;
+}
+
+.train-timetable li[data-current-status] {
+  border-left: 3px solid #f5a623;
+  border-radius: 0.3rem;
+}
+
+.train-timetable-times {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.train-timetable-time strong {
+  color: #ffd166;
+  font-weight: 750;
+}
+
+.train-timetable-scheduled-replaced {
+  color: #91a6bc;
+  text-decoration-line: line-through;
+  text-decoration-style: double;
+  text-decoration-thickness: 1px;
+}
+
+#close-train-details {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  border: 0;
+  color: #d9e3ef;
+  background: transparent;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+
+  .train-details {
+    right: 0.65rem;
+    bottom: 0.65rem;
+  }
+
+  .train-details h2 {
+    gap: 0.3rem;
+    padding-right: 1.4rem;
+    font-size: 1.05rem;
+  }
+
+  .train-details dl {
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .train-timetable {
+    margin-top: 0.55rem;
+    padding-top: 0.5rem;
+  }
+
+  .train-timetable li {
+    padding: 0.3rem 0.25rem;
+    font-size: 0.75rem;
+  }
+}
+
+#close-train-details {
+  border: 0;
+  color: #9da8b3;
+  background: transparent;
+  box-shadow: none;
+}
+
+.train-details h2 {
+  margin: 0;
+}
+
+.train-timetable {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.train-timetable h3 {
+  color: #9da8b3;
+  font-size: 0.7rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.train-timetable li {
+  border-bottom: 0;
+  border-left: 2px solid transparent;
+  box-shadow: none;
+}
+
+.train-timetable li[data-current-status] {
+  box-shadow: none;
+}
+@media (max-width: 600px) {
+
+  .train-details {
+    width: min(18rem, calc(100vw - 1.3rem));
+    max-height: min(46dvh, 22rem);
+    padding: 0.6rem;
+  }
+
+  .train-timetable ol {
+    max-height: 23dvh;
+  }
+}
+
+.train-details {
+  color: var(--ui-text);
+}
+
+#close-train-details {
+  color: var(--ui-muted);
+}
+
+.train-details dt {
+  color: var(--ui-muted);
+}
+
+.train-timetable h3 {
+  color: var(--ui-muted);
+}
+
+.train-timetable-scheduled-replaced {
+  color: var(--ui-muted);
+}.train-details {
+  border-color: var(--ui-border);
+}
+
+.train-timetable li {
+  color: var(--ui-text);
+}
+
+.train-timetable-times {
+  color: var(--ui-text);
+}
+
+.train-timetable li[data-current-status] {
+  border-left-color: var(--ui-accent);
+}
+
+.train-details[data-sheet-state="closing"] {
+  pointer-events: none;
+  animation: sheet-drop-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+#close-train-details {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--glass-muted);
+  background: rgb(120 120 128 / 16%);
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+#close-train-details:hover {
+  color: var(--glass-text);
+  background: var(--glass-accent-soft);
+}
+.train-details {
+  z-index: 6;
+  right: 5.25rem;
+  bottom: 1.25rem;
+  width: min(24rem, calc(100vw - 6.5rem));
+  max-height: min(68dvh, 40rem);
+  padding: 1.05rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  color: var(--glass-text);
+  background: var(--glass-surface);
+  box-shadow: 0 0.5rem 2.5rem rgb(0 0 0 / 12%);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  animation: sheet-rise-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  isolation: isolate;
+  pointer-events: auto;
+}
+
+.train-details[hidden] {
+  display: none;
+}
+
+.train-details h2 {
+  min-height: 2.5rem;
+  margin-right: 0;
+  padding-right: 3.25rem;
+  color: var(--glass-text);
+  gap: 0.55rem;
+  font-size: 1.12rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.train-service-badge {
+  display: inline-flex;
+  min-height: 1.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.7rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: #ffffff;
+  background: var(--train-line-color, #0091ff);
+  box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--train-line-color), transparent 72%);
+  font-size: 0.72rem;
+  font-weight: 510;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.train-title-main {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.train-destination-change {
+  display: inline-flex;
+  min-height: 1.75rem;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+}
+
+.train-destination-scheduled {
+  color: var(--glass-muted);
+  text-decoration-line: line-through;
+  text-decoration-style: double;
+  text-decoration-thickness: 1px;
+}
+
+.train-destination-change-arrow {
+  color: var(--glass-muted);
+}
+
+.train-destination-current {
+  color: var(--glass-danger);
+}
+
+.train-timetable h3 {
+  color: var(--glass-muted);
+}
+
+.train-timetable-scheduled-replaced {
+  color: var(--glass-muted);
+}
+
+.train-details dd {
+  color: var(--glass-text);
+}
+
+.train-timetable-times {
+  color: var(--glass-text);
+}
+
+.train-timetable li {
+  color: var(--glass-text);
+}
+
+.train-timetable {
+  margin-top: 0.65rem;
+}
+
+#close-train-details {
+  z-index: 3;
+}
+
+.train-timetable li {
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0.35rem 0.15rem 0;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 0.8rem;
+  background: transparent;
+}
+
+.train-timetable li[data-current-status] {
+  color: var(--glass-text);
+  background: var(--glass-accent-soft);
+}
+
+.train-timetable ol {
+  position: relative;
+  max-height: min(43vh, 21rem);
+  padding: 0.25rem 0 0.25rem 0.2rem;
+  scrollbar-color: rgb(120 120 128 / 38%) transparent;
+  scrollbar-width: thin;
+}
+
+.train-timetable ol::-webkit-scrollbar {
+  width: 0.375rem;
+}
+
+.train-timetable ol::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.train-timetable ol::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(120 120 128 / 38%);
+}
+
+.train-timetable ol::-webkit-scrollbar-button {
+  display: none;
+}
+
+.train-timetable-station {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.82rem;
+  font-weight: 590;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.train-timetable-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  align-items: center;
+  font-size: 0.75rem;
+}
+
+.train-timetable-time {
+  display: inline-flex;
+  gap: 0.2rem;
+  align-items: baseline;
+  padding: 0;
+  background: transparent;
+}
+
+.train-timetable-clock {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.train-timetable-event {
+  color: var(--glass-muted);
+  font-size: 0.58rem;
+  font-weight: 590;
+}
+
+.train-timetable-time-separator {
+  color: var(--glass-muted);
+  font-size: 0.65rem;
+}
+
+.train-timetable-time-separator::before {
+  content: "／";
+}
+
+.train-timetable-delay-arrow {
+  color: var(--glass-delay);
+}
+
+.train-timetable-time .train-timetable-adjusted {
+  color: var(--glass-delay);
+  font-weight: 750;
+}
+
+@media (max-width: 720px) {
+
+
+  .train-details {
+    inset: auto 0 0;
+    width: 100%;
+    max-height: min(70dvh, 38rem);
+    padding: 0.9rem max(0.9rem, env(safe-area-inset-right)) max(0.9rem, env(safe-area-inset-bottom)) max(0.9rem, env(safe-area-inset-left));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 2.125rem 2.125rem 0 0;
+  }
+
+  .train-details::before {
+    display: block;
+    width: 2.25rem;
+    height: 0.3125rem;
+    margin: -0.55rem auto 0.75rem;
+    border-radius: 6.25rem;
+    background: rgb(120 120 128 / 36%);
+    content: "";
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .train-details {
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .train-details {
+    background: var(--glass-surface-strong) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+#app .train-details {
+  inset: auto 4rem calc(var(--map-bottom-clearance) + 2rem) auto;
+  display: flex; flex-direction: column; width: min(17.5rem, calc(100vw - 1rem));
+  max-height: min(31dvh, 18rem); padding: .5rem; overflow: hidden;
+  border: 1px solid #dfe4e8; border-radius: .625rem;
+  background: var(--product-surface, #fff); color: var(--product-ink, #102337); box-shadow: 0 2px 10px #10233714;
+  font-family: var(--product-font);
+  backdrop-filter: none; -webkit-backdrop-filter: none; animation: none;
+}
+#app .train-details[hidden] { display: none; }
+#app .train-details::before { display: none; }
+#app .train-details h2 { flex: 0 0 auto; min-height: 1.65rem; margin: 0; padding-right: 2rem; color: var(--product-ink, #102337); font: 700 .78rem/1.3 var(--product-font); gap: .3rem; }
+#app .train-service-badge { min-height: 1.25rem; padding: .16rem .32rem; font-size: .6rem; box-shadow: none; }
+#app #close-train-details { top: .2rem; right: .2rem; width: 2rem; height: 2rem; border-radius: .35rem; background: transparent; font-size: 1.1rem; box-shadow: none; }
+#app .train-timetable { min-height: 0; overflow-y: auto; margin-top: .2rem; }
+#app .train-timetable ol { max-height: none; margin: 0; padding: 0; overflow: visible; }
+#app .train-timetable li { min-height: 1.3rem; margin: 0; padding: .14rem .25rem; gap: .25rem; border-radius: .25rem; color: var(--product-ink, #102337); }
+#app .train-timetable-station { color: var(--product-ink, #102337); font: 600 .64rem/1.35 var(--product-font); }
+#app .train-timetable-times { color: var(--product-ink, #102337); font: 500 .62rem/1.35 var(--product-font); }
+#app .train-timetable-event { color: var(--product-muted, #647181); }
+#app .train-timetable-time-separator { color: var(--product-muted, #647181); }
+@media (max-width: 62rem) {
+  #app .train-details { right: .5rem; bottom: calc(var(--map-bottom-clearance) + 1rem); }
+}

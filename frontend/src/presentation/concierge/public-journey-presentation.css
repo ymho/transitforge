@@ -1,4 +1,9 @@
-.journey-presentation { display: grid; gap: .75rem; margin-block: 1rem; }
+/* concierge owns these styles; change the existing rule rather than appending a theme override. */
+
+
+.journey-leg {
+  --journey-line-color: #8b96a1;
+}.journey-presentation { display: grid; gap: .75rem; margin-block: 1rem; }
 .journey-presentation > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem .75rem; }
 .journey-presentation > header h2 { margin: 0; font: 750 1.1rem/1.4 var(--product-font); }
 .journey-presentation > header small { color: var(--product-muted); }
@@ -11,8 +16,36 @@
 .journey-card-legs { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .journey-card-legs li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: .75rem; padding-block: .85rem; border-bottom: 1px solid var(--product-line); }
 .journey-card-legs li:last-child { border-bottom: 0; padding-bottom: 0; }
-.journey-card-time, .journey-card-route { display: grid; gap: .15rem; }
-.journey-card-time span, .journey-card-route span { color: var(--product-muted); font-size: .8rem; }
-.journey-delay { width: fit-content; border-radius: 999px; padding: .15rem .4rem; background: #fff1df; color: #824310; }
-.journey-transfer-wait { color: var(--product-muted); }
+.journey-card-time { display: grid; gap: .15rem; }
+.journey-card-route { display: grid; gap: .15rem; }
+.journey-card-time span { color: var(--product-muted); font-size: .8rem; }
+.journey-card-route span { color: var(--product-muted); font-size: .8rem; }
 @media (max-width: 30rem) { .journey-card > header { grid-template-columns: 1fr auto; }.journey-card > header span { grid-column: 1 / -1; }.journey-card-legs li { grid-template-columns: 3.75rem minmax(0, 1fr); } }
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .journey-presentation { padding: 12px; border: 1px solid var(--tf-line); border-radius: 9px; background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; font-size: 14px; }
+  & .journey-card { padding: 12px; border: 1px solid var(--tf-line); border-radius: 9px; background: var(--tf-bg); color: var(--tf-ink); box-shadow: none; font-size: 14px; }
+  & .journey-card-route :is(strong, span) { font-size: 12px; }
+  & .journey-card-time { font-size: 12px; }
+  & .journey-presentation { border: 1px solid var(--tf-line); padding: 12px; }
+  & .journey-presentation > header h2 { font-size: 14px; font-weight: 500; }
+  & .journey-presentation-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+  & :is(.journey-presentation-tabs, .public-plan-candidate-tabs) button { padding: 6px 10px; font-size: 12px; font-weight: 400; }
+  & :is(.journey-presentation-tabs, .public-plan-candidate-tabs) [aria-selected="true"] { color: var(--tf-blue); background: var(--tf-soft); border-color: var(--tf-blue); }
+  & .journey-card { border: 0; padding: 0; background: transparent; }
+  & .journey-card.public-plan-candidate { border: 0; padding: 0; background: transparent; }
+  & .journey-card > header { padding: 4px 0 12px; }
+  & .journey-card > header > span { display: none; }
+  & .journey-card > header > strong { font-size: 16px; font-weight: 500; }
+  & .journey-card > header > small { font-size: 12px; color: var(--tf-muted); }
+  & .journey-card-legs { margin: 0; gap: 0; }
+  & .journey-card-legs > li { border-top: 1px solid var(--tf-line); padding: 12px 0; }
+  & .journey-card-route strong { font-size: 13px; font-weight: 500; }
+  & .journey-card-route :is(span, small) { font-size: 12px; color: var(--tf-muted); }
+  & .journey-adoption { padding: 12px 0 0; border-top: 1px solid var(--tf-line); }
+}
+#app[data-primary-view="chat"]:not([data-primary-view="map"]) {
+  & .journey-presentation-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(88px,1fr); width: 100%; overflow-x: auto; gap: 0; margin: 12px 0 20px; border-bottom: 1px solid var(--tf-line); }
+  & .journey-presentation-tabs [role="tab"] { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--tf-muted); min-height: 44px; white-space: nowrap; padding: 10px 16px; }
+  & .journey-presentation-tabs [aria-selected="true"] { color: var(--tf-blue); border-bottom-color: var(--tf-blue); font-weight: 600; }
+  & .journey-adoption .public-plan-adopt { background: #b34337; color: #fff; border: 1px solid #b34337; font-size: 12px; min-height: 36px; padding: 7px 12px; border-radius: 10px; }
+}

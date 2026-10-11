@@ -6,7 +6,6 @@ export const personalApiPolicies = {
   browserDiagnostics: { path: "/api/conversations/diagnostics/v1", version: "browser-agent-diagnostics-v1", operations: ["record"] },
   trip: { path: "/api/trips/v1", version: "trip-api-v1", operations: ["refresh-weather", "generate-title", "start-consultation", "branch-consultation", "create", "mutate", "get", "list", "archive", "attach", "detach", "reference", "preview-plan-adoption", "confirm-plan-adoption", "preview-trip-adoption", "confirm-trip-adoption", "preview-item-decision", "confirm-item-decision"] },
   sharing: { path: "/api/trips/sharing/v1", version: "trip-sharing-v1", operations: ["create-grant", "redeem", "revoke-grant", "manage", "participant", "accessible", "owned-shared", "reservation-facts", "official-capabilities", "official-list", "official-get", "official-publish", "official-withdraw", "official-import"] },
-  notification: { path: "/api/trips/notifications/v1", version: "notification-api-v1", operations: ["list", "read"] },
   inTrip: { path: "/api/trips/in-trip/v1", version: "in-trip-api-v1", operations: [undefined] },
   conversation: { path: "/api/conversations/v1", version: "conversation-api-v1", operations: ["create", "get", "list", "history", "turn", "update", "delete"] },
   profile: { path: "/api/profile/v1", version: "profile-api-v1", operations: ["get", "update", "delete"] },
