@@ -6,7 +6,7 @@
 
 1操作の正体は、このuser turnにおける1条件の最終意思決定。Applicationが `condition:<turnId>:<target>` を識別子にする。同じ条件/同じ値の再送は元receiptを返し、同じslot/別値は競合とする。異なる値へさらに変更したい場合は次の利用者turnで行う。モデルのtoolUseId、呼出順、再試行attemptに依存しない。
 
-独立した条件は同一turnで複数確定できる。旅行期間はstart_date/end_date/durationを1つのbusiness slotとして扱い、1 receipt内の同一atomic groupで更新する。この実装を一般的な任意patch engineへ拡張しない。
+独立した条件は同一turnで複数確定できる。新しく明示された日付と日数は旅行期間として一緒に受理し、そのreceiptを確認してから行き先等の独立条件、次に外部検索へ進む。SDKの順次実行を使い、条件ごとに別の意味解析model callを増やさない。旅行期間はstart_date/end_date/durationを1つのbusiness slotとして扱い、1 receipt内の同一atomic groupで更新する。この実装を一般的な任意patch engineへ拡張しない。
 
 ## 永続化と回復
 
@@ -170,7 +170,7 @@ start/end/durationを複数Toolへ分けない。1回の呼出しをApplication�
 
 年が明示されていない月日は、Applicationがtrusted `calendarDate`を基準に**その日以降で最初に到来する月日**へ機械的に解決する。たとえば基準日2026-09-26なら12/25は2026-12-25、1/21は2027-01-21である。モデルが推測したyear値は対応する部分quoteに年が無ければ無視する。明示年がある場合だけその年を使う。相対表現にcalendar anchorが無ければ受理しない。
 
-日数は`days`または`nights`で、今回発言に明示された整数だけを受け取る。
+日数は`days`または`nights`で、今回発言に明示された整数だけを受け取る。「日帰り」は1日（days / amount=1）として受理し、開始日と同じperiodで保持する。泊数0や未設定へ変換せず、終了日や出発時刻は生成しない。
 
 ### 整合性
 

@@ -77,6 +77,8 @@ describe("AI guide panel assistant text", () => {
 
   it("distinguishes a bounded research limit from an unknown failure", () => {
     expect(agentFailureMessage(new Error("limit_reached"))).toContain("条件は保持しています");
+    expect(agentFailureMessage(new Error("limit_reached"))).toContain("処理の上限");
+    expect(agentFailureMessage(new Error("limit_reached"))).not.toContain("地域・日数");
     expect(agentFailureMessage(new Error("agent_failed"))).toContain("時間をおいて");
   });
 

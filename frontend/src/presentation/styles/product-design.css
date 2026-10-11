@@ -156,6 +156,9 @@
   & .consultation-messages > .ai-guide-message-assistant { width: 100%; max-width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   & .consultation-messages > .ai-guide-message-assistant::before { display: none; }
   & .consultation-messages > .ai-guide-message-user { width: fit-content; max-width: 85%; padding: 9px 12px; border: 0; border-radius: 9px; color: var(--tf-ink); background: var(--tf-soft); text-align: left; }
+  & .consultation-messages > .ai-guide-message-pending { color: var(--tf-muted); font-size: 12px; font-weight: 400; }
+  & .ai-guide-message-pending > span { animation: consultation-pending-pulse 1.8s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { & .ai-guide-message-pending > span { animation: none; } }
   & .ai-guide-message-copy :is(p, li) { color: var(--tf-ink); font-size: 14px; line-height: 1.65; }
   & .ai-guide-message-copy p { margin: 0 0 12px; }
   & .ai-guide-message-copy :is(h2, h3, h4, h5, h6) { font-size: 15px; margin: 16px 0 8px; font-weight: 500; }

@@ -29,6 +29,7 @@
 .consultation-messages > .ai-guide-message-assistant :first-child { margin-top: 0; }
 .consultation-messages > .ai-guide-message-assistant :last-child { margin-bottom: 0; }
 .consultation-messages > .ai-guide-message-failure { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+@keyframes consultation-pending-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
 .consultation-messages .ai-guide-failure-actions { display: flex; margin-top: .3rem; }
 .consultation-messages .ai-guide-failure-actions button { display: grid; place-items: center; width: 30px; min-width: 30px; min-height: 30px; padding: .4rem; border: 0; border-radius: 50%; color: #527087; background: transparent; }
 .consultation-messages .ai-guide-failure-actions .ds-icon { width: 1rem; height: 1rem; }

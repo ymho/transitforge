@@ -455,7 +455,7 @@ export function configureAiGuidePanel(
 
 export function agentFailureMessage(error: unknown): string {
   if (error instanceof Error && error.message === "limit_reached") {
-    return "候補の確認に時間がかかり、今回の案をまとめきれませんでした。条件は保持しています。もう一度送るか、地域・日数などを一つ加えて続けてください。";
+    return "処理の上限に達し、今回の案をまとめきれませんでした。条件は保持しています。もう一度お試しください。";
   }
   if (error instanceof Error && error.message === "turn_conflict") {
     return "同じ相談を処理中です。少し待ってから、もう一度お試しください。";

@@ -20,7 +20,7 @@ type Step = ToolStep | ToolStep[] | "end";
 class IntentScenarioModel extends Model<BaseModelConfig> {
   readonly requests: string[] = [];
   private config: BaseModelConfig = { modelId: "synthetic-intent" };
-  constructor(private readonly steps: Step[]) { super(); }
+  constructor(private readonly steps: Step[], private readonly outputTokens = 0) { super(); }
   updateConfig(config: BaseModelConfig): void { this.config = { ...this.config, ...config }; }
   getConfig(): BaseModelConfig { return this.config; }
   async *stream(messages: Message[], _options?: StreamOptions): AsyncGenerator<ModelStreamEvent> {
@@ -40,6 +40,7 @@ class IntentScenarioModel extends Model<BaseModelConfig> {
       }
     }
     yield { type: "modelMessageStopEvent", stopReason: step === "end" ? "endTurn" : "toolUse" };
+    if (this.outputTokens) yield { type: "modelMetadataEvent", usage: { inputTokens: 100, outputTokens: this.outputTokens, totalTokens: 100 + this.outputTokens } };
   }
 }
 function update(label = "京都", overrides: Record<string, unknown> = {}): ToolStep {
@@ -75,10 +76,10 @@ async function setup() {
     observation: { observationId: `observation:${context.executionId}:${context.toolCallId}`, subjectKey: `place:${context.executionId}`,
       scopeKey: "conversation", predicate: "verified_place", retrievedAt: context.retrievedAt, applicability: "applicable", retention: "reference_only" },
   }];
-  const build = (steps: Step[], executionId = "intent-acceptance") => {
-    const model = new IntentScenarioModel(steps);
+  const build = (steps: Step[], executionId = "intent-acceptance", outputTokens = 0) => {
+    const model = new IntentScenarioModel(steps, outputTokens);
     const runtime = createStrandsServerRuntime(new StrandsAgentEngine({
-      modelId: "unused", region: "ap-northeast-1", systemPrompt: "Use the Application Tools.", maxTurns: 8,
+      modelId: "unused", region: "ap-northeast-1", systemPrompt: "Use the Application Tools.", maxTurns: 8, maxInvocationOutputTokens: 8192,
     }, { model }));
     const runRuntime = vi.fn((input: ServerAgentRuntimeInput) => runtime({ ...input,
       limits: { ...input.limits, maxIterations: 8, maxModelCalls: 8, maxToolCalls: 1 } }));
@@ -241,6 +242,44 @@ it("executes independent conditions in one model response before reading and rep
   expect(model.requests).toHaveLength(3);
   expect(result.consultationRequestProposal).toBeUndefined();
   expect(result.tripUpdateProposal).toBeUndefined();
+});
+
+it("commits tomorrow/day-trip and destination before research, then saves and replays a bounded reply", async () => {
+  const test = await setup();
+  test.operation.mockImplementation(async () => {
+    const working = await test.turns.getWorkingState(test.principal, conversationId);
+    expect(working?.semantic?.overlay.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target: "start_date", value: expect.objectContaining({ date: "2026-10-12" }) }),
+      expect.objectContaining({ target: "duration", value: { kind: "quantity", amount: 1, unit: "days" } }),
+      expect.objectContaining({ target: "destination", value: { kind: "place_label", label: "城崎温泉" } }),
+    ]));
+    return { statusCode: 200, body: { verified: true } };
+  });
+  const period: ToolStep = { tool: "update_current_travel_period", input: { action: "set", period: {
+    start: { kind: "relative_date", relation: "tomorrow" }, duration: { amount: 1, unit: "days" },
+  }, quote: "明日日帰り" } };
+  const { app, model } = test.build([period, update("城崎温泉"), read("城崎温泉"), answer("intent-acceptance")], "intent-acceptance", 1501);
+  const input = { ...test.input, userRequest: "明日日帰りで城崎温泉にいきたい", uiContext: { calendarDate: "2026-10-11" } };
+  const result = await app.runConversationTurn(input);
+  expect(result.status).toBe("completed");
+  expect(test.operation).toHaveBeenCalledOnce();
+  const saved = (await test.trips.repository.get(test.principal, stateMetadata().tripId))!;
+  expect(saved.request.constraints.map(c => c.requirement)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ type: "dates", start: { earliest: "2026-10-12", latest: "2026-10-12" } }),
+    { type: "duration", unit: "days", minimum: 1, maximum: 1 },
+    expect.objectContaining({ type: "destinations", places: [expect.objectContaining({ name: "城崎温泉" })] }),
+  ]));
+  expect(saved.items).toEqual([]);
+  expect(result.semanticReceipt?.changes).toEqual(expect.arrayContaining([
+    expect.objectContaining({ target: "start_date", status: "accepted" }),
+    expect.objectContaining({ target: "duration", status: "accepted" }),
+    expect.objectContaining({ target: "destination", status: "accepted" }),
+  ]));
+  expect((await test.state.conversations.history(test.principal, conversationId)).items.at(-1)?.text).toBe(result.response);
+  const requests = model.requests.length;
+  expect(await app.runConversationTurn(input)).toEqual(result);
+  expect(model.requests).toHaveLength(requests);
+  expect(test.operation).toHaveBeenCalledOnce();
 });
 
 it("does not revive an old conversation condition after the Trip was manually edited", async () => {

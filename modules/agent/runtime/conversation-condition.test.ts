@@ -129,6 +129,24 @@ describe("small Conversation condition operations", () => {
     }, quote: "2026-10-03から2026-10-05まで4泊" }, "2026-10-03から2026-10-05まで4泊", "2026-09-27")).toThrow("invalid_condition");
   });
 
+  it("retains an explicit day trip together with its trusted relative start in one period receipt", () => {
+    const change = admitConditionChange({ target: "travel_period", period: {
+      start: { kind: "relative_date", relation: "tomorrow" }, duration: { amount: 1, unit: "days" },
+    }, quote: "明日日帰り" }, "明日日帰りで城崎温泉にいきたい", "2026-10-11");
+    expect(change).toMatchObject({ period: { start: { date: "2026-10-12" }, duration: { amount: 1, unit: "days" } } });
+    expect(change).not.toHaveProperty("period.end");
+    const reduced = reduceConversationIntent(empty(), conditionDelta(change, "73000000-0000-4000-8000-000000000010", empty()));
+    expect(reduced.overlay.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target: "start_date", value: expect.objectContaining({ date: "2026-10-12" }) }),
+      expect.objectContaining({ target: "duration", value: { kind: "quantity", amount: 1, unit: "days" } }),
+    ]));
+    expect(new Set(reduced.receipt.operations.map(operation => operation.groupId)).size).toBe(1);
+    expect(() => admitConditionChange({ target: "travel_period", period: { duration: { amount: 2, unit: "days" } },
+      quote: "日帰り" }, "日帰り")).toThrow("invalid_source");
+    expect(() => admitConditionChange({ target: "travel_period", period: { duration: { amount: 1, unit: "nights" } },
+      quote: "日帰り" }, "日帰り")).toThrow("invalid_source");
+  });
+
   it("maps a yearless month/day to its first occurrence on or after the trusted calendar date", () => {
     const christmas = admitConditionChange({ target: "travel_period", period: {
       start: { kind: "calendar_date", month: 12, day: 25 },
