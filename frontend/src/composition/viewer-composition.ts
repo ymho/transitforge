@@ -1,3 +1,4 @@
+import { validateWorkspaceWriteConfirmation } from "../usecases/trip-plan/workspace-write-confirmation";
 import { prioritizeStartupPaths } from "../domain/route-startup-priority";
 import { TrainHitUpdateSchedule } from "../domain/train-hit-update";
 import { startTripConsultation } from "../usecases/trip-plan/start-trip-consultation";
@@ -231,12 +232,7 @@ const syncServerTripSource = (session: typeof activeConversationSession) => {
   const source = createReferencedTripSource(session, serverTripClient, {
     mutate: async (mutation) => { const result = await serverTripClient.mutate(mutation); void serverTripList.refresh(); return result; },
     newMutationId: () => crypto.randomUUID(),
-    validateConfirmation: async (_trip, proposal) => {
-      // Other patches require a trusted candidate/reservation confirmation adapter.
-      if (proposal.patches.some((patch) => patch.type !== "request" && patch.type !== "title" && patch.type !== "cost_forecast" && patch.type !== "cost_override")) {
-        throw new Error("予定の変更は、この画面からはまだ保存できません。条件・名称・費用の変更だけを確認してください。");
-      }
-    },
+    validateConfirmation: validateWorkspaceWriteConfirmation,
   });
   if (source) tripWorkspaceController.attach(session.id, source);
 };

@@ -88,8 +88,20 @@ export function configureTripWorkspace(options: {
   coverImage.alt = ""; coverImage.setAttribute("aria-hidden", "true");
   cover.append(coverImage, element("small", "trip-cover-caption", "旅のイメージ"));
   const coverContent = element("div", "trip-header-content"); coverContent.append(identity, headerActions);
-  heading.append(back, emblem, cover, coverContent, notice, adoptionHelp);
+  const hero = element("div", "trip-header-hero"); hero.append(cover, coverContent);
+  heading.append(back, emblem, hero, notice, adoptionHelp);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
+  let metadataPending: Promise<void> = Promise.resolve();
+  const saveMetadata = (build: (current: Trip) => import("@raiquora/trip/trip").TripUpdateProposal): Promise<void> => {
+    const session = controller.sessionId(), source = controller.source(), tripId = controller.current()?.id;
+    const next = metadataPending.catch(() => {}).then(async () => {
+      const current = controller.current();
+      if (!current || current.id !== tripId || controller.sessionId() !== session || controller.source() !== source || !controller.canConfirm()) throw new Error("旅程が更新されました");
+      await controller.applyConfirmed(build(current));
+    });
+    metadataPending = next; return next;
+  };
+  const memoDrafts = new Map<string, { value: string; base?: string }>();
   const pendingCostEditors = new Map<string, { tripId: string; node: Element }>();
   let costSessionVersion = controller.source()?.sessionVersion?.();
   const dayTabs = element("div", "trip-day-tabs"); dayTabs.setAttribute("role", "tablist"); dayTabs.setAttribute("aria-label", "旅程の日付");
@@ -188,12 +200,12 @@ export function configureTripWorkspace(options: {
   const render = () => {
     const nextCostSession = controller.source()?.sessionVersion?.();
     if (nextCostSession !== costSessionVersion) {
-      pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
+      memoDrafts.clear(); pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
       costSessionVersion = nextCostSession;
     }
     if (activeSession !== controller.sessionId()) {
       viewState().scroll = panel.scrollTop; viewState().chatScroll = options.messages.scrollTop;
-      pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
+      memoDrafts.clear(); pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
       activeSession = controller.sessionId(); previousTripId = undefined; report("");
       travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false;
       partyKey = ""; add.hidden = true; addContext = undefined;
@@ -295,7 +307,7 @@ export function configureTripWorkspace(options: {
         let card = cards.get(entryKey);
         if (card?.key !== key) {
           const node = renderWorkspaceCard(trip, item, controller, { entry, collapsed: collapsed.get(collapseKey) ?? true,
-            collapse: (value) => collapsed.set(collapseKey, value), chat, report,
+            collapse: (value) => collapsed.set(collapseKey, value), chat, report, memoDrafts, saveMetadata,
             ...(role !== "viewer" && options.refreshWeather ? { refreshWeather: options.refreshWeather } : {}),
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           const pending = pendingCostEditors.get(entryKey);
