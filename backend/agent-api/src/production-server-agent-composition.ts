@@ -60,9 +60,10 @@ export function createProductionServerAgent(executionId: string, environment: Re
  const maxExecutionMs = serverAgentDeadline(environment);
  if (environment.AGENT_RUNTIME !== undefined && environment.AGENT_RUNTIME !== "strands-v2") throw new Error("Invalid server runtime configuration");
  const s3 = new AwsS3Client();
+ const stationCatalog = new S3StationCatalogRepository(s3, required("TRAFFIC_SNAPSHOT_BUCKET"));
  const journey = new S3JourneyDataRepository(s3, { indexBucket: required("AI_TIMETABLE_BUCKET"),
    indexPrefix: environment.PLANNING_TIMETABLE_PREFIX ?? "timetable", snapshotBucket: required("TRAFFIC_SNAPSHOT_BUCKET"),
-   snapshotKey: "api/traffic/delays.json", stationCatalog: new S3StationCatalogRepository(s3, required("TRAFFIC_SNAPSHOT_BUCKET")) });
+   snapshotKey: "api/traffic/delays.json", stationCatalog });
  const secrets = new AwsSecretsManagerClient();
  // Dedicated non-travel secret: do not grant the old mixed secret to this role.
  const secretArn = required("AGENT_PROVIDER_SECRET_ARN");
@@ -178,7 +179,7 @@ SERVICE AREA: The service accepts travel searches only in Japan, within these pr
        searchGroundAccess: call(createGroundAccessSearchOperation(new MapboxGroundAccessProvider(mapboxHttp, mapboxCredentials))),
        searchRestaurants: call(restaurantSearch),
      },
-   }), ...(groundRoutes ? [railBusConnectionTool(new S3StationCatalogRepository(s3, required("TRAFFIC_SNAPSHOT_BUCKET")), railSearch, groundRoutes)] : [])],
+   }), ...(groundRoutes ? [railBusConnectionTool(stationCatalog, railSearch, groundRoutes)] : [])],
  });
 }
 
