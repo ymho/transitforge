@@ -58,6 +58,12 @@ CDはAWSのApp Clientから期限・単位を読み戻し、12時間と5分の�
 ハッシュなし・保護route・reload・pageshow・8時間経過後のrefresh・12時間失効・logout・import失敗後の復旧を確認する。
 CIでは既存のChromium導入とbuildを再利用する。認証/個人APIはsyntheticであり、実Cognitoでの12時間連続利用の証明ではない。
 
+## 全画面のログイン表示
+
+相談・旅程一覧・旅程詳細・運行・設定は、初期化済みの共通AuthSessionからログイン状態を読む。起動時の復元が完了してから画面を組成し、画面遷移・履歴移動・pageshow・フォーカス復帰・可視状態への復帰でも同じ状態を再判定する。ログイン済みならログインボタンやゲスト向け案内を出さず、設定・プロフィール・旅程の操作を表示する。タブ復帰の表示確認自体では業務APIの再実行やログインへの自動転送を行わない。
+
+旅程APIの取得失敗や403は、共通セッションが有効な限り未ログインとして扱わない。ログイン状態とデータ取得状態を別に表示する。ログアウト・絶対期限の失効では保護画面から入口へ戻し、個人表示を隠す。公式しおりも認証の変化で表示状態を更新し、古い取得結果を採用しない。
+
 ## 独立read入口 `/api/agent`
 
 旧汎用conversation、feedback、trace、未指定・未知operationは410。独立したread operationだけを`backend/agent-api/src/legacy-agent-ingress.ts`のallowlistで受け付ける。HTTP入力からモデルのmessages、Tool定義、modelClass、認証principalを注入できない。

@@ -15,7 +15,7 @@ function setup(officialOnly = false, initiallyAuthenticated = true) {
   let session = 1, authenticated = initiallyAuthenticated; const login = vi.fn(); const openTrip = vi.fn(async () => {});
   const ui = configureTripLibrary(root, own, client, { openTrip, session: () => session, authenticated: () => authenticated, officialOnly, login });
   const click = (label: string) => [...document.querySelectorAll("button")].find(b => b.textContent === label)!.click();
-  return { root, own, client, openTrip, ui, click, login, logout: () => { authenticated = false; session++; ui.refresh(); }, signIn: () => { authenticated = true; session++; ui.refresh(); }, switchAccount: () => { session++; ui.refresh(); } };
+  return { root, own, client, openTrip, ui, click, login, logout: () => { authenticated = false; session++; ui.refresh(); }, signIn: (changeSession = true) => { authenticated = true; if (changeSession) session++; ui.refresh(); }, switchAccount: () => { session++; ui.refresh(); } };
 }
 describe("Trip catalogue sharing and official guide navigation", () => {
   it("keeps only own and shared tabs; displays server roles and opens shared Trip", async () => {
@@ -35,6 +35,13 @@ describe("Trip catalogue sharing and official guide navigation", () => {
     await Promise.resolve(); expect(f.root.textContent).not.toContain("公式の海");
     f.signIn(); await vi.waitFor(() => expect(f.root.textContent).toContain("公式の海"));
     f.click("再読み込み"); await vi.waitFor(() => expect(f.client.officialList).toHaveBeenCalledTimes(3));
+  });
+  it("removes the login prompt when authentication becomes available without a session counter change", async () => {
+    const f = setup(true, false); expect(f.root.textContent).toContain("ログインすると");
+    f.signIn(false); await vi.waitFor(() => expect(f.root.textContent).toContain("公式の海"));
+    expect(f.root.textContent).not.toContain("ログインすると");
+    expect([...f.root.querySelectorAll("button")].some(button => button.textContent === "ログイン")).toBe(false);
+    f.ui.dispose();
   });
   it("creates from explicit date/party, retains a stable retry ID, closes stale account dialogs", async () => {
     vi.spyOn(HTMLDialogElement.prototype, "showModal").mockImplementation(function (this: HTMLDialogElement) { this.open = true; });

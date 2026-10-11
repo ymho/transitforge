@@ -158,27 +158,39 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const updateJourneySettings = () => ports.setJourneySettings({ transferPace: transferPace.value, rankingPreference: rankingPreference.value });
   transferPace.addEventListener("change", updateJourneySettings); rankingPreference.addEventListener("change", updateJourneySettings);
   root.querySelector("[data-notifications]")!.addEventListener("click", ports.openNotifications);
+  // Every feature uses the same session projection, including route changes and tab resume.
+  const renderAuthentication = () => {
+    const auth = ports.authState();
+    app.dataset.authState = auth.status;
+    const account = root.querySelector<HTMLButtonElement>("[data-account]")!;
+    account.innerHTML = `${iconMarkup("account")}<span>設定</span>`;
+    account.setAttribute("aria-label", auth.status === "signed-in" ? "設定を開く" : "ログイン");
+    account.title = account.getAttribute("aria-label")!;
+    const myStatus = root.querySelector<HTMLElement>("[data-my-account-status]")!, myLogin = root.querySelector<HTMLButtonElement>("[data-my-login]")!, myLogout = root.querySelector<HTMLButtonElement>("[data-my-logout]")!;
+    myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。`
+      : auth.status === "authenticating" ? "ログイン状態を確認しています。"
+      : auth.status === "unavailable" ? "ログイン状態を確認できませんでした。再読み込みしてください。"
+      : "旅程やプロフィールを保存するにはログインしてください。";
+    myLogin.hidden = auth.status === "signed-in";
+    myLogout.hidden = auth.status !== "signed-in";
+    myLogin.disabled = auth.status === "authenticating" || auth.status === "unavailable";
+    const signedIn = auth.status === "signed-in";
+    for (const view of ["trips"]) root.querySelector<HTMLElement>(`[data-primary="${view}"]`)!.hidden = !signedIn;
+    for (const section of root.querySelectorAll<HTMLElement>("[data-signed-in-only]")) section.hidden = auth.status !== "signed-in";
+    return auth;
+  };
   const render = () => {
     if (!root.isConnected) return;
     libraryUi?.refresh(); officialUi?.refresh();
     let input: HomeReadInput;
     try { input = ports.read(); } catch { input = { state: "unavailable", trips: [] }; }
     const view = homeReadModel(input, ports.now());
-    const auth = ports.authState(), account = root.querySelector<HTMLButtonElement>("[data-account]")!;
-    account.innerHTML = `${iconMarkup("account")}<span>設定</span>`;
-    account.setAttribute("aria-label", auth.status === "signed-in" ? "設定を開く" : "ログイン");
-    account.title = account.getAttribute("aria-label")!;
-    const myStatus = root.querySelector<HTMLElement>("[data-my-account-status]")!, myLogin = root.querySelector<HTMLButtonElement>("[data-my-login]")!, myLogout = root.querySelector<HTMLButtonElement>("[data-my-logout]")!;
-    myStatus.textContent = auth.status === "signed-in" ? `${auth.displayName} としてログイン中です。` : "旅程やプロフィールを保存するにはログインしてください。";
-    myLogin.hidden = auth.status === "signed-in";
-    myLogout.hidden = auth.status !== "signed-in";
-    const signedIn = auth.status === "signed-in";
-    for (const view of ["trips"]) root.querySelector<HTMLElement>(`[data-primary="${view}"]`)!.hidden = !signedIn;
-    for (const section of root.querySelectorAll<HTMLElement>("[data-signed-in-only]")) section.hidden = auth.status !== "signed-in";
+    const auth = renderAuthentication(), signedIn = auth.status === "signed-in";
     const journey = ports.journeySettings(); transferPace.value = journey.transferPace; rankingPreference.value = journey.rankingPreference;
-    const stateText = view.state === "loading" ? "旅程を読み込んでいます。" : view.state === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
-      : view.state === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
-    root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, row.group)).join("") : `<p role="status" aria-busy="${view.state === "loading"}">${view.state === "loading" ? loadingMarkup(stateText) : stateText}</p>`;
+    const listState = signedIn && view.state === "unauthenticated" ? "unavailable" : view.state;
+    const stateText = listState === "loading" ? "旅程を読み込んでいます。" : listState === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
+      : listState === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
+    root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, row.group)).join("") : `<p role="status" aria-busy="${listState === "loading"}">${listState === "loading" ? loadingMarkup(stateText) : stateText}</p>`;
     root.querySelectorAll<HTMLButtonElement>("[data-trip], [data-trip-open]").forEach((button) => button.addEventListener("click", () => {
       const move = (allowed: boolean) => { if (!allowed || !button.isConnected) return; window.history.pushState({ tripId: (button.dataset.trip ?? button.dataset.tripOpen)! }, "", "#trip"); apply(); };
       const result = canNavigate(); if (typeof result === "boolean") move(result); else void result.then(move);
@@ -215,6 +227,10 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   }
   function paintRoute() {
     if (!root.isConnected) return;
+    const auth = renderAuthentication();
+    if (auth.status !== "signed-in" && (window.location.hash !== "#chat" || consultationMode !== "landing")) {
+      window.history.replaceState({ consultation: "new" }, "", "#chat"); apply(true); return;
+    }
     const route = window.location.hash.slice(1), isMap = route === "map", isTrip = route === "trip";
     if (route === "trips" || isTrip) current = "trips";
     else if (route === "my") current = "my";
@@ -329,7 +345,11 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   }
   entryRetry.addEventListener("click", () => apply(true));
   root.querySelectorAll<HTMLButtonElement>("[data-map]").forEach((button) => button.addEventListener("click", showMap));
-  const historyChanged = () => apply();
+  const historyChanged = () => { render(); apply(); };
+  const resumed = () => { render(); apply(); };
+  const visibilityChanged = () => { if (!document.hidden) resumed(); };
+  window.addEventListener("pageshow", resumed); window.addEventListener("focus", resumed);
+  document.addEventListener("visibilitychange", visibilityChanged);
   window.addEventListener("popstate", historyChanged); window.addEventListener("hashchange", historyChanged);
   document.addEventListener("transitforge:travel-profile-changed", render);
   const resumePending = () => {
@@ -353,6 +373,8 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   return { navigate, showMap, showConversation, showTrip, refresh: render, dispose() {
     ++entryGeneration; window.clearInterval(exampleTimer); unsubscribe(); libraryUi?.dispose(); officialUi?.dispose();
     document.removeEventListener("click", dismissTripMenus, true);
+    window.removeEventListener("pageshow", resumed); window.removeEventListener("focus", resumed);
+    document.removeEventListener("visibilitychange", visibilityChanged);
     window.removeEventListener("popstate", historyChanged); window.removeEventListener("hashchange", historyChanged);
     document.removeEventListener("transitforge:travel-profile-changed", render); root.remove();
   } };

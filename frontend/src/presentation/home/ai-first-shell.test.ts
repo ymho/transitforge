@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import type { AuthState } from "../../usecases/auth/auth-session";
 import { configureAiFirstShell, type AiFirstShellPorts } from "./ai-first-shell";
 import { createServerTripListSource } from "../../usecases/trip-plan/server-trip-list-source";
 import { createTrip } from "@raiquora/trip/trip";
@@ -386,4 +387,57 @@ it("opens a card from its copy and keeps management separate, with a status chip
   expect(f.ports.openTrip).not.toHaveBeenCalled();
   document.querySelector<HTMLElement>(".trip-list-copy > small")!.click();
   await vi.waitFor(() => expect(f.ports.openTrip).toHaveBeenCalledWith(trip.id));
+});
+
+it.each(["chat", "trips", "my", "map", "trip"])("uses restored authentication on initial #%s without asking for login", async route => {
+  const tripId = "11111111-1111-4111-8111-111111111111";
+  window.history.replaceState(route === "trip" ? { tripId } : null, "", `#${route}`);
+  const f = setup({ authState: () => ({ status: "signed-in", displayName: "復元ユーザー" }), read: () => ({ state: "available", trips: [] }) });
+  await Promise.resolve();
+  expect(window.location.hash).toBe(`#${route}`);
+  expect(document.querySelector("main")!.dataset.authState).toBe("signed-in");
+  expect(document.querySelector<HTMLButtonElement>("[data-my-login]")!.hidden).toBe(true);
+  expect(document.querySelector<HTMLButtonElement>("[data-my-logout]")!.hidden).toBe(false);
+  expect(document.querySelector('[data-primary="trips"]')!.hasAttribute("hidden")).toBe(false);
+  expect(document.querySelector('[data-account]')!.getAttribute("aria-label")).toBe("設定を開く");
+  expect(f.ports.login).not.toHaveBeenCalled();
+  if (route === "map") expect(f.ports.openMap).toHaveBeenCalledOnce();
+  if (route === "trip") expect(f.ports.openTrip).toHaveBeenCalledWith(tripId);
+  f.shell.dispose();
+});
+
+it("refreshes the shared account display on navigation without depending on a subscription notification", () => {
+  let auth: AuthState = { status: "signed-out" };
+  const f = setup({ authState: () => auth });
+  auth = { status: "signed-in", displayName: "ログインしたユーザー" };
+  for (const route of ["my", "trips", "chat"] as const) {
+    f.shell.navigate(route);
+    expect(document.querySelector("main")!.dataset.authState).toBe("signed-in");
+    expect(document.querySelector<HTMLButtonElement>("[data-my-login]")!.hidden).toBe(true);
+    expect(document.querySelector('[data-my-account-status]')!.textContent).toContain(auth.displayName);
+  }
+  f.shell.showMap(); expect(document.querySelector("main")!.dataset.authState).toBe("signed-in");
+  expect(f.ports.login).not.toHaveBeenCalled();
+  f.shell.dispose();
+});
+
+it.each(["pageshow", "focus", "visibilitychange"])("rechecks authentication after %s and leaves protected screens on expiry", event => {
+  let auth: AuthState = { status: "signed-in", displayName: "ユーザー" };
+  const f = setup({ authState: () => auth }); f.shell.navigate("my");
+  auth = { status: "expired" };
+  (event === "visibilitychange" ? document : window).dispatchEvent(new Event(event));
+  expect(document.querySelector("main")!.dataset.authState).toBe("expired");
+  expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
+  expect(document.querySelector<HTMLButtonElement>("[data-my-login]")!.hidden).toBe(false);
+  expect(document.querySelector<HTMLButtonElement>("[data-my-logout]")!.hidden).toBe(true);
+  expect(f.ports.login).not.toHaveBeenCalled();
+  f.shell.dispose();
+});
+
+it("does not ask signed-in users to log in when the trip read view is unavailable", () => {
+  const f = setup({ authState: () => ({ status: "signed-in", displayName: "ユーザー" }), read: () => ({ state: "unauthenticated", trips: [] }) });
+  f.shell.navigate("trips");
+  expect(document.querySelector('[data-trip-list]')!.textContent).toContain("旅程を取得できませんでした");
+  expect(document.querySelector('[data-trip-list]')!.textContent).not.toContain("ログインすると");
+  expect(f.ports.login).not.toHaveBeenCalled(); f.shell.dispose();
 });

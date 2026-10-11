@@ -9,7 +9,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
   officialOnly?: boolean; login?(): void;
 }) {
   const initialCategory = options.officialOnly ? "official" : "own";
-  let selected = initialCategory, epoch = options.session(), disposed = false;
+  let selected = initialCategory, epoch = options.session(), authentication = options.authenticated(), disposed = false;
   const dialogs = new Set<HTMLDialogElement>();
   const closeDialogs = () => { for (const dialog of dialogs) { dialog.close(); dialog.remove(); } dialogs.clear(); };
   const tabs = element("div", "trip-library-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "旅程の種類");
@@ -44,7 +44,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
     try {
       if (category === "official") {
         const page = await client.officialList(s.officialAfter);
-        if (disposed || session !== options.session() || !options.authenticated()) return;
+        if (disposed || session !== options.session() || !options.authenticated() || states.get(category) !== s) return;
         for (const guide of page.guides) if (!s.seen.has(guide.id)) {
           s.seen.add(guide.id); const card = catalogueCard(guide.id);
           card.append(element("strong", "", guide.trip.title), element("p", "", `公式しおり · ${guide.trip.timeline?.logicalDays.length ?? 0}日間`), control("しおりを見る", () => { void preview(guide); })); s.entries.push(card);
@@ -53,7 +53,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
       } else {
         const owned = s.ownedDone ? undefined : await client.ownedShared(s.ownedAfter);
         const joined = s.joinedDone ? undefined : await client.accessible(s.joinedAfter);
-        if (disposed || session !== options.session() || !options.authenticated()) return;
+        if (disposed || session !== options.session() || !options.authenticated() || states.get(category) !== s) return;
         for (const entry of [...owned?.trips ?? [], ...joined?.trips ?? []]) if (!s.seen.has(entry.trip.id)) {
           s.seen.add(entry.trip.id); const card = catalogueCard(entry.trip.id);
           card.append(element("strong", "", entry.trip.title), element("p", "", entry.role === "owner" ? "共有中 · あなたの旅" : entry.role === "editor" ? "共有 · 共同編集" : "共有 · 閲覧のみ"),
@@ -63,8 +63,8 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
         if (joined) { s.joinedAfter = joined.afterTripId; s.joinedDone = !joined.afterTripId; }
       }
       s.loaded = true;
-    } catch { if (session === options.session()) s.error = true; }
-    finally { s.busy = false; if (session === options.session() && category === selected) paint(); }
+    } catch { if (!disposed && session === options.session() && states.get(category) === s) s.error = true; }
+    finally { s.busy = false; if (!disposed && session === options.session() && category === selected && states.get(category) === s) paint(); }
   };
   async function preview(initial: OfficialGuide) {
     const session = options.session(); let guide: OfficialGuide;
@@ -98,7 +98,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
   }
   if (!options.officialOnly) own.setAttribute("aria-labelledby", "trip-library-tab-own");
   paint(); if (options.officialOnly) void load();
-  return { refresh() { if (epoch !== options.session() || !options.authenticated()) { epoch = options.session(); states.clear(); closeDialogs(); selected = initialCategory; paint(); } if (options.officialOnly && options.authenticated() && !state().loaded && !state().busy && !state().error) void load(); }, dispose() { disposed = true; closeDialogs(); tabs.remove(); panel.remove(); } };
+  return { refresh() { if (epoch !== options.session() || authentication !== options.authenticated()) { epoch = options.session(); authentication = options.authenticated(); states.clear(); closeDialogs(); selected = initialCategory; paint(); } if (options.officialOnly && options.authenticated() && !state().loaded && !state().busy && !state().error) void load(); }, dispose() { disposed = true; closeDialogs(); tabs.remove(); panel.remove(); } };
 }
 
 function catalogueCard(id: string): HTMLElement {
