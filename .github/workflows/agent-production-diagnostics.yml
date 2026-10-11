@@ -39,7 +39,7 @@ jobs:
           aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
             --filter-pattern '"agent_diagnostic"' --query 'events[].message' --output json > agent-diagnostics.json
           aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
-            --filter-pattern '"agent_stream"' --query 'events[].message' --output json > agent-stream-events.json
+            --filter-pattern '"agent_stream"' --query 'events[].{message:message,timestamp:timestamp}' --output json > agent-stream-events.json
           aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
             --filter-pattern '"agent_model_response_rejected"' --query 'events[].message' --output json > agent-model-shapes.json
           aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
