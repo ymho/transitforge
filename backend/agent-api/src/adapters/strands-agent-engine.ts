@@ -1,6 +1,6 @@
 import { publicCommentaryMarkdown } from "./public-commentary-markdown.js";
 import {
-  Agent, BedrockModel, StructuredOutputError, tool,
+  Agent, BedrockModel, StructuredOutputError, BeforeModelCallEvent, AfterModelCallEvent, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
   type JSONSchema, type JSONValue, type Model, type MessageData,
 } from "@strands-agents/sdk";
@@ -17,12 +17,14 @@ import { placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, trave
 import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
+import { strandsFailureDiagnostic } from "./strands-failure-diagnostic.js";
 import { z } from "zod";
 import { presentedCandidateSelectionSchema, type PresentedCandidateController } from "../contracts/presented-candidate-selection.js";
 
 export const strandsConditionToolNames = ["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "update_current_budget", "consider_trip_scenario"] as const;
 export interface StrandsAgentEngineOptions {
   modelId: string;
+  log?: (event: string, fields: Record<string, unknown>) => void;
   region: string;
   systemPrompt: string;
   maxTurns?: number;
@@ -78,6 +80,7 @@ export interface StrandsAgentRunResult {
     cacheReadInputTokens?: number; cacheWriteInputTokens?: number };
 }
 export interface StrandsAgentLike {
+  addHook?: Agent["addHook"];
   invoke(args: string, options?: {
     cancelSignal?: AbortSignal;
     limits?: { turns?: number; totalTokens?: number; outputTokens?: number };
@@ -249,6 +252,17 @@ export class StrandsAgentEngine {
         ? [{ text: this.options.systemPrompt }, { text: input.applicationReference }] : this.options.systemPrompt,
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
+    // Observe only bounded metadata; hooks never change retries, messages or publication.
+    let modelCall = 0, modelStartedAt = 0;
+    const log = (event: string, fields: Record<string, unknown>) => {
+      try { this.options.log?.(event, { executionId: input.executionId, ...fields }); } catch { /* Diagnostics cannot fail a turn. */ }
+    };
+    agent.addHook?.(BeforeModelCallEvent, () => { modelCall++; modelStartedAt = Date.now(); });
+    agent.addHook?.(AfterModelCallEvent, event => {
+      log("agent_model_call", { modelCall, elapsedMs: Date.now() - modelStartedAt,
+        occurredAt: new Date().toISOString(), outcome: event.error ? "failed" : "completed",
+        ...(event.error ? strandsFailureDiagnostic(event.error) : {}) });
+    });
     const startedAt = Date.now();
     const deadlineSignal = input.limits?.maxExecutionMs ? AbortSignal.timeout(input.limits.maxExecutionMs) : undefined;
     const cancelSignal = combineSignals(input.cancelSignal, deadlineSignal);
@@ -292,6 +306,7 @@ export class StrandsAgentEngine {
         } } : {}),
       };
     } catch (error) {
+      log("agent_invocation_failed", { elapsedMs: Date.now() - startedAt, occurredAt: new Date().toISOString(), ...strandsFailureDiagnostic(error) });
       trace.taskCompleted("failed", Date.now() - startedAt, error instanceof Error ? error.name : "unknown_error");
       if (error instanceof ServerAgentRuntimeExecutionError) throw error;
       if (error instanceof StructuredOutputError) throw new ServerAgentRuntimeExecutionError("runtime_projection", "validation");
