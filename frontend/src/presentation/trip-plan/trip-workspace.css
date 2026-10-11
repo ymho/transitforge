@@ -144,3 +144,7 @@
 
 .trip-item-booking { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 6px 0; }
 #app[data-primary-view]:not([data-primary-view="map"]) .trip-item-booking .ds-control { width: auto; min-height: 32px; padding: 4px 8px; font-size: 13px; }
+
+.trip-item-memo-disclosure { margin-top: .65rem; }
+.trip-item-memo-disclosure > summary { cursor: pointer; font-size: .85rem; color: var(--tf-muted); padding-block: .35rem; }
+.trip-item-memo-disclosure[open] > summary { margin-bottom: .35rem; }

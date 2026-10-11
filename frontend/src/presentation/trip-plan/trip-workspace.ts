@@ -101,6 +101,7 @@ export function configureTripWorkspace(options: {
     });
     metadataPending = next; return next;
   };
+  const memoExpanded = new Map<string, boolean>();
   const memoDrafts = new Map<string, { value: string; base?: string }>();
   const pendingCostEditors = new Map<string, { tripId: string; node: Element }>();
   let costSessionVersion = controller.source()?.sessionVersion?.();
@@ -200,12 +201,12 @@ export function configureTripWorkspace(options: {
   const render = () => {
     const nextCostSession = controller.source()?.sessionVersion?.();
     if (nextCostSession !== costSessionVersion) {
-      memoDrafts.clear(); pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
+      memoExpanded.clear(); memoDrafts.clear(); pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
       costSessionVersion = nextCostSession;
     }
     if (activeSession !== controller.sessionId()) {
       viewState().scroll = panel.scrollTop; viewState().chatScroll = options.messages.scrollTop;
-      memoDrafts.clear(); pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
+      memoExpanded.clear(); memoDrafts.clear(); pendingCostEditors.clear(); panel.querySelectorAll(".trip-cost-editor").forEach(editor => editor.remove());
       activeSession = controller.sessionId(); previousTripId = undefined; report("");
       travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false;
       partyKey = ""; add.hidden = true; addContext = undefined;
@@ -307,7 +308,7 @@ export function configureTripWorkspace(options: {
         let card = cards.get(entryKey);
         if (card?.key !== key) {
           const node = renderWorkspaceCard(trip, item, controller, { entry, collapsed: collapsed.get(collapseKey) ?? true,
-            collapse: (value) => collapsed.set(collapseKey, value), chat, report, memoDrafts, saveMetadata,
+            collapse: (value) => collapsed.set(collapseKey, value), chat, report, memoDrafts, memoExpanded, saveMetadata,
             ...(role !== "viewer" && options.refreshWeather ? { refreshWeather: options.refreshWeather } : {}),
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           const pending = pendingCostEditors.get(entryKey);
