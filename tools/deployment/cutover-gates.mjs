@@ -40,6 +40,15 @@ export function japanAccessRolloutReady(environment) {
   }
 }
 
+export function japanAccessDeploymentInputs(environment) {
+  if (!["plan", "japan-prepare", "deploy"].includes(environment.CD_MODE)) throw new Error("Invalid deployment mode");
+  const enforcing = environment.CD_MODE !== "japan-prepare";
+  for (const name of ["TF_VAR_require_cloudfront_origin_key", "TF_VAR_enforce_japan_country"]) {
+    if (environment[name] !== String(enforcing)) throw new Error("Japan access inputs differ from deployment mode");
+  }
+  return enforcing;
+}
+
 /** No values from plan/state/policies/outputs are printed, including on malformed input. */
 export function reviewCutoverPlan(plan, environment) {
   const gates = deploymentSafetyInputs(environment);
@@ -51,12 +60,22 @@ export function reviewCutoverPlan(plan, environment) {
     const planned = plan.variables?.[name]?.value;
     if (planned !== value && planned !== String(value)) throw new Error("Plan gate inputs differ from validated deployment inputs");
   }
+  if (environment.CD_MODE !== undefined) {
+    const enforcing = japanAccessDeploymentInputs(environment);
+    for (const name of ["require_cloudfront_origin_key", "enforce_japan_country"]) {
+      const planned = plan.variables?.[name]?.value;
+      if (planned !== enforcing && planned !== String(enforcing)) throw new Error("Japan access plan differs from validated deployment mode");
+    }
+  }
   const summary = ["Terraform plan: resource actions only; sensitive values omitted."];
   const destructive = [];
   let unsafeProtectedReplacement = false;
   for (const resource of plan.resource_changes) {
     if (resource.mode !== "managed") continue;
     const { actions, before } = resource.change ?? {};
+    if (environment.CD_MODE === "japan-prepare" && resource.type === "aws_api_gateway_method" && before?.api_key_required === true) {
+      throw new Error("Preparation cannot disable an already enforced API key");
+    }
     const detachedLegacyAuth = resource.address === "aws_cloudfront_function.basic_auth" &&
       actions?.length === 1 && actions[0] === "forget";
     if (!Array.isArray(actions) || !actions.length ||
@@ -103,13 +122,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     if (process.argv[2] === "inputs") deploymentSafetyInputs(process.env);
     else if (process.argv[2] === "japan-access") japanAccessRolloutReady(process.env);
+    else if (process.argv[2] === "japan-inputs") japanAccessDeploymentInputs(process.env);
     else if (process.argv[2] === "plan") {
       let input = "";
       for await (const chunk of process.stdin) input += chunk;
       let plan;
       try { plan = JSON.parse(input); } catch { throw new Error("Invalid Terraform JSON plan"); }
       process.stdout.write(reviewCutoverPlan(plan, process.env));
-    } else throw new Error("Expected inputs, japan-access or plan mode");
+    } else throw new Error("Expected inputs, japan-inputs, japan-access or plan mode");
   } catch (error) {
     // Only our fixed validation messages: never print parser errors or plan contents.
     process.stderr.write(`Cutover guard rejected: ${error.message}\n`);

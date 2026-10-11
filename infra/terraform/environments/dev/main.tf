@@ -251,8 +251,8 @@ resource "aws_cloudfront_distribution" "website" {
 
   restrictions {
     geo_restriction {
-      restriction_type = "whitelist"
-      locations        = ["JP"]
+      restriction_type = var.enforce_japan_country ? "whitelist" : "none"
+      locations        = var.enforce_japan_country ? ["JP"] : []
     }
   }
 

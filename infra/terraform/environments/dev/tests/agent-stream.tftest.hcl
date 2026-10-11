@@ -8,6 +8,11 @@ mock_provider "aws" {
 mock_provider "aws" { alias = "us_east_1" }
 mock_provider "archive" {}
 override_resource {
+  target          = aws_cloudfront_function.japan_access_probe[0]
+  override_during = plan
+  values          = { arn = "arn:aws:cloudfront::123456789012:function/transitforge-dev-japan-access-probe" }
+}
+override_resource {
   target          = aws_cloudfront_function.japan_only[0]
   override_during = plan
   values          = { arn = "arn:aws:cloudfront::123456789012:function/transitforge-dev-japan-only" }
@@ -260,6 +265,37 @@ run "reject_fractional_business_deadline" {
   command = plan
   variables { server_agent_max_execution_ms = 120000.5 }
   expect_failures = [var.server_agent_max_execution_ms]
+}
+
+run "japan_access_preparation_defers_enforcement" {
+  command = plan
+  variables {
+    cloudflare_front_door_enabled = true
+    require_cloudfront_origin_key = false
+    enforce_japan_country         = false
+  }
+  assert {
+    condition = alltrue([
+      !aws_api_gateway_method.agent_stream_post["stream"].api_key_required,
+      !aws_api_gateway_method.personal_state_post["stream"].api_key_required,
+      !aws_api_gateway_method.personal_profile_post["stream"].api_key_required,
+      !aws_api_gateway_method.trip_api_post["stream"].api_key_required,
+      !aws_api_gateway_method.trip_sharing_post["stream"].api_key_required,
+    ])
+    error_message = "Initial preparation must not enforce origin keys."
+  }
+  assert {
+    condition     = one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].restriction_type == "none" && one(aws_cloudfront_distribution.viewer[0].restrictions).geo_restriction[0].restriction_type == "none"
+    error_message = "Initial preparation must retain access before domestic verification."
+  }
+  assert {
+    condition     = alltrue([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : length(b.function_association) == 1 && alltrue([for f in b.function_association : f.function_arn == aws_cloudfront_function.japan_access_probe[0].arn])]) && one(one(aws_cloudfront_distribution.viewer[0].default_cache_behavior).function_association).function_arn == aws_cloudfront_function.japan_access_probe[0].arn
+    error_message = "Preparation must associate only the non-enforcing country probe."
+  }
+  assert {
+    condition     = one([for item in aws_cloudfront_distribution.viewer[0].origin : item if item.origin_id == local.agent_stream_name]).custom_header == toset([{ name = "x-api-key", value = aws_api_gateway_api_key.cloudfront_origin["stream"].value }])
+    error_message = "Initial preparation must still distribute the server-only origin key."
+  }
 }
 
 run "cloudfront_origin_guard" {
