@@ -29,6 +29,7 @@
 - [KAIHO ブランド表示](specs/brand.md)
 - [取得済み事実による候補Assessment](specs/candidate-assessment.md)
 - [相談と旅程の開始・継続](specs/consultation.md)
+- [SPAのHTTP API / OpenAPI](specs/http-api.md)
 - [InTripContextSnapshot](specs/in-trip.md)
 - [公式アカウントのしおり公開と取り込み](specs/official-guides.md)
 - [Profile V3](specs/profile.md)

@@ -3,6 +3,7 @@
   "include": [
     "tools/run_epic_537_scale_evaluation.ts",
     "tools/run_live_strands_v2_evaluation.ts",
-    "tools/strands-v2-live-evaluation.ts"
+    "tools/strands-v2-live-evaluation.ts",
+    "tools/openapi-contract.ts"
   ]
 }

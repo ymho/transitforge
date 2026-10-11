@@ -36,6 +36,7 @@ npm run dev
 
 ```bash
 npm run docs:check
+npm run api:check
 npm run architecture:check
 npm run build
 ```
@@ -50,6 +51,7 @@ npm run build
 - [モジュール境界](docs/architecture/module-boundaries.md) / [Domainの所有権](docs/architecture/module-boundaries.md): コードの配置と依存方向。
 - [標準データモデル](docs/architecture/domain-model.md) / [プロフィール](docs/specs/profile.md) / [Trip workspace](docs/specs/trip-workspace.md): 正本・保存先・画面。
 - [共通認証境界](docs/architecture/authentication.md) / [Server Agent](docs/architecture/agent-runtime.md): 公開経路と実行責務。
+- [HTTP API契約](docs/specs/http-api.md) / [OpenAPI定義](docs/api/openapi.json): SPAが利用するAPIの入出力・認証・SSE。
 - [Viewer入力](docs/data/viewer-input.md) / [Infrastructure](infra/README.md): データと運用。
 - [ADR索引](docs/decisions/README.md): 当時の判断履歴。Historical節のコマンドやgateを現行手順として使わない。
 

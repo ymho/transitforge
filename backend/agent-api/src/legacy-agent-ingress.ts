@@ -4,13 +4,14 @@ import type { AccessTokenVerifier } from "./ports/access-token-verifier.js";
 import { accessTokenFromHttp } from "./adapters/http-api-auth.js";
 import { authenticatedApplication } from "./usecases/authenticated-application.js";
 
-const protectedOperations = new Set([
+export const legacyReadOperations = [
   "weather_grid_search", "weather_forecast_search",
   "representative_timetable_search", "journey_search", "daily_congestion_analysis",
   "daily_congestion_peak", "train_delay_analysis", "travel_accommodation_search",
   "place_media_search", "place_detail_research", "web_search", "web_page_read",
   "travel_alert_search", "ground_access_search", "restaurant_search",
-]);
+] as const;
+const protectedOperations = new Set<string>(legacyReadOperations);
 
 /** OAC owns Authorization. The dedicated header transports an UNTRUSTED token,
  * never an identity; the same Cognito verifier and scope as Server Agent validate it.
