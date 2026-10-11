@@ -67,7 +67,8 @@ describe("other stable personal handlers share the same authentication", () => {
       expect((await host(event(path, {}, token()))).statusCode).toBe(404);
     }
     for (const policy of Object.values(personalApiPolicies)) {
-      expect((await host(event(policy.path, { version: policy.version }))).statusCode).toBe(401);
+      // Content-free diagnostics are exposed by the production personal-state host only.
+      expect((await host(event(policy.path, { version: policy.version }))).statusCode).toBe(policy === personalApiPolicies.browserDiagnostics ? 404 : 401);
     }
     expect(apiAuthenticationInventory.internalIamOnly).toEqual(["trip-changed-lambda", "rail-impact-lambda", "trip-recheck-lambda", "notification-lambda"]);
   });

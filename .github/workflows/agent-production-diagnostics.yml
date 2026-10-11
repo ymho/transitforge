@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/agent-production-diagnostics.yml
       - tools/deployment/summarize-agent-diagnostics.mjs
+      - tools/deployment/summarize-browser-agent-diagnostics.mjs
 
 permissions:
   contents: read
@@ -23,6 +24,7 @@ jobs:
     env:
       AWS_REGION: ap-northeast-1
       AGENT_STREAM_LOG_GROUP: /aws/lambda/transitforge-dev-agent-stream
+      PERSONAL_STATE_LOG_GROUP: /aws/lambda/transitforge-dev-agent-stream-personal-state
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Configure AWS credentials
@@ -52,3 +54,6 @@ jobs:
             --filter-pattern '"agent_reply_validation"' --query 'events[].message' --output json > agent-reply-validations.json
           node tools/deployment/summarize-agent-diagnostics.mjs \
             agent-diagnostics.json agent-stream-events.json agent-model-shapes.json agent-model-calls.json agent-invocation-failures.json agent-tool-calls.json agent-reply-validations.json | tee -a "$GITHUB_STEP_SUMMARY"
+          aws logs filter-log-events --log-group-name "$PERSONAL_STATE_LOG_GROUP" --start-time "$start_time" \
+            --filter-pattern '"browser_agent_diagnostic"' --query 'events[].message' --output json > browser-agent-diagnostics.json
+          node tools/deployment/summarize-browser-agent-diagnostics.mjs browser-agent-diagnostics.json | tee -a "$GITHUB_STEP_SUMMARY"

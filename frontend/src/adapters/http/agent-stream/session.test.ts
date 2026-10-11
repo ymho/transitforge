@@ -1,11 +1,12 @@
 import { expect, it, vi } from "vitest";
 import { createConversationStreamSession, type ConversationStreamReferences } from "./session";
 import type { AuthSession, AuthState } from "../../../usecases/auth/auth-session";
+import { createBrowserAgentDiagnostics } from "./diagnostics";
 
 const frame = (seq: number, event: object) => `event: agent\ndata: ${JSON.stringify({ v: 1, runId: "run", seq, event })}\n\n`;
 const progress = frame(1, { type: "progress", phase: "running" });
 const finish = frame(2, { type: "final", status: "completed", response: "保存された回答" }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n';
-function setup() {
+function setup(withDiagnostics = false) {
   let state: AuthState = { status: "signed-in", displayName: "A" };
   const listeners = new Set<(state: AuthState) => void>();
   const changeAuth = (next: AuthState = { status: "signed-in", displayName: "B" }) => { state = next; listeners.forEach(l => l(state)); };
@@ -18,10 +19,13 @@ function setup() {
   let stream: ReadableStreamDefaultController<Uint8Array>;
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(new ReadableStream({ start(c) { stream = c; c.enqueue(new TextEncoder().encode(progress)); } }), { headers: { "content-type": "text/event-stream" } }));
   const newTurnId = vi.fn(() => `turn-${newTurnId.mock.calls.length}`);
+  const diagnosticFetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("diagnostic endpoint offline"));
+  const diagnostics = withDiagnostics ? createBrowserAgentDiagnostics({ auth, buildId: "e0d06e68", fetcher: diagnosticFetcher }) : undefined;
   const session = createConversationStreamSession({ auth, references: () => refs, fetcher, newTurnId,
+    diagnostics,
     now: () => new Date(2026, 8, 21, 23, 30) });
   const complete = () => { stream.enqueue(new TextEncoder().encode(finish)); stream.close(); };
-  return { auth, refs, fetcher, session, changeAuth, complete, newTurnId };
+  return { auth, refs, fetcher, session, changeAuth, complete, newTurnId, diagnostics, diagnosticFetcher };
 }
 it("sends only references/raw request and Bearer; a communication retry retains the turn ID", async () => {
   const s = setup(); Object.assign(s.refs, { history: "PRIVATE", profile: "PRIVATE", trip: "PRIVATE", tools: ["PRIVATE"] });
@@ -36,6 +40,30 @@ it("sends only references/raw request and Bearer; a communication retry retains 
   expect(bodies[1]).toEqual(bodies[0]); expect(s.newTurnId).toHaveBeenCalledTimes(1);
   expect(s.fetcher.mock.calls[0][1]?.headers).toMatchObject({ Authorization: "Bearer access-token" });
   expect(s.session.start("次の相談").request.turnId).toBe("turn-2"); s.session.dispose();
+});
+it("a failed consultation does not poison a subsequent different conversation", async () => {
+  const s = setup(); s.fetcher.mockRejectedValueOnce(new Error("offline"));
+  await expect(s.session.start("前の相談").send()).rejects.toThrow("stream_error");
+  s.refs.conversationId = "conversation-b"; s.refs.tripId = "trip-b"; s.session.contextChanged();
+  const pending = s.session.start("新しい相談").send();
+  await vi.waitFor(() => expect(s.fetcher).toHaveBeenCalledTimes(2)); s.complete();
+  expect(await pending).toEqual({ text: "保存された回答" });
+  expect(JSON.parse(String(s.fetcher.mock.calls[1]![1]?.body))).toMatchObject({ conversationId: "conversation-b", tripId: "trip-b", turnId: "turn-2" });
+  s.session.dispose();
+});
+it("failed diagnostic delivery never retries the Agent or interferes with the next consultation", async () => {
+  const s = setup(true); s.fetcher.mockRejectedValueOnce(new Error("network"));
+  await expect(s.session.start("PRIVATE consultation").send()).rejects.toThrow("stream_error");
+  await vi.waitFor(() => expect(s.diagnosticFetcher).toHaveBeenCalledOnce());
+  const body = String(s.diagnosticFetcher.mock.calls[0]![1]?.body);
+  expect(body).not.toMatch(/PRIVATE|access-token|conversation-a|trip-a/);
+  expect(JSON.parse(body).reports[0]).toMatchObject({ code: "stream_error", requestSent: true });
+  s.refs.conversationId = "conversation-b"; s.refs.tripId = "trip-b";
+  const pending = s.session.start("次の相談").send();
+  await vi.waitFor(() => expect(s.fetcher).toHaveBeenCalledTimes(2)); s.complete();
+  expect(await pending).toEqual({ text: "保存された回答" });
+  expect(s.auth.getAccessToken).toHaveBeenCalledTimes(2); expect(s.auth.refreshAccessToken).not.toHaveBeenCalled(); expect(s.auth.invalidate).not.toHaveBeenCalled();
+  s.session.dispose(); s.diagnostics?.dispose();
 });
 it.each(["logout", "account", "conversation", "trip", "draft", "turn"])("rejects delayed final after %s and aborts reception", async change => {
   const s = setup(), events = vi.fn(); const action = s.session.start("相談"); const pending = action.send(events);

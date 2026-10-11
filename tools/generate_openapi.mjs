@@ -118,10 +118,10 @@ export async function generateOpenApi() {
     if (value.$ref !== `#/components/schemas/${name}`) schemas[name] = value;
   }
   const indexes = {};
-  for (const name of ["ConversationCommand", "ProfileCommand", "TripCommand", "SharingCommand", "ReadCommand"]) {
+  for (const name of ["ConversationCommand", "ProfileCommand", "TripCommand", "SharingCommand", "ReadCommand", "BrowserDiagnosticCommand"]) {
     indexes[name] = operationIndex(name, schemas); refineCommands(name, indexes[name]);
   }
-  for (const name of ["ConversationResponse", "ProfileResponse", "TripResponse", "SharingResponse", "ReadResponse"]) {
+  for (const name of ["ConversationResponse", "ProfileResponse", "TripResponse", "SharingResponse", "ReadResponse", "BrowserDiagnosticResponse"]) {
     schemas[name] = { anyOf: variants(schemas[name], schemas).map(s => ({ ...s, additionalProperties: false })) };
   }
   // Structures whose bounds are checked separately from command dispatch.
@@ -147,11 +147,24 @@ export async function generateOpenApi() {
   context.properties.itemId = { type: "string", minLength: 1, maxLength: 200, pattern: "^[^\\u0000-\\u001f\\u007f]+$" };
   context.properties.calendarDate = { type: "string", format: "date", pattern: "^\\d{4}-\\d{2}-\\d{2}$" };
   const paths = {};
+  const diagnosticCommand = indexes.BrowserDiagnosticCommand.record;
+  diagnosticCommand.additionalProperties = false;
+  diagnosticCommand.properties.reports.minItems = 1;
+  diagnosticCommand.properties.reports.maxItems = 4;
+  const diagnostic = resolve(diagnosticCommand.properties.reports.items, schemas);
+  diagnostic.additionalProperties = false;
+  for (const key of ["diagnosticId", "turnId", "runId"]) diagnostic.properties[key] = { type: "string", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" };
+  diagnostic.properties.occurredAt = { type: "string", format: "date-time", pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$" };
+  diagnostic.properties.buildId = { type: "string", pattern: "^(?:[0-9a-f]{7,40}|development)$" };
+  for (const key of ["elapsedMs", "maxSilenceMs", "headersMs", "firstByteMs"]) diagnostic.properties[key] = { type: "integer", minimum: 0, maximum: 600000 };
+  diagnostic.properties.httpStatus = { type: "integer", minimum: 100, maximum: 599 };
+  indexes.BrowserDiagnosticCommand.record = diagnosticCommand;
   const routes = [
     ["conversation", "ConversationCommand", "ConversationResponse", 160 * 1024, "会話の作成・履歴・更新・削除"],
     ["profile", "ProfileCommand", "ProfileResponse", 160 * 1024, "任意のProfile V3の取得・CAS保存・削除"],
     ["trip", "TripCommand", "TripResponse", 256 * 1024, "旅程・予定・相談・候補採用の操作"],
     ["sharing", "SharingCommand", "SharingResponse", 8192, "共有・参加者・公式しおりの操作"],
+    ["browserDiagnostics", "BrowserDiagnosticCommand", "BrowserDiagnosticResponse", 4096, "本文を含まないブラウザー通信障害の診断記録"],
   ];
   for (const [name, command, response, bytes, summary] of routes) {
     const policy = personalApiPolicies[name];
@@ -161,6 +174,7 @@ export async function generateOpenApi() {
     const statuses = { 400: ["invalid-input"], 401: ["unauthenticated"], 403: ["forbidden"], 404: ["not-found"], 409: name === "trip" ? ["already-exists", "conflict", "mutation-reused", "confirmation-required", "feasibility-required"] : ["conflict"], 501: ["unavailable"] };
     if (name === "trip" || name === "sharing") statuses[413] = ["payload-too-large"];
     if (name === "sharing") { delete statuses[501]; statuses[503] = ["unavailable"]; }
+    if (name === "browserDiagnostics") { delete statuses[404]; delete statuses[409]; delete statuses[501]; }
     for (const [status, errors] of Object.entries(statuses)) responses[status] = {
       description: errors.join(" / "), headers: { ...headers, ...(status === "401" ? { "WWW-Authenticate": { schema: { const: "Bearer" } } } : {}) }, content: json(errorSchema(policy.version, errors)) };
     // Production-host disabled gate has no version. Handler-only default gates are not published paths.
@@ -191,7 +205,7 @@ export async function generateOpenApi() {
   const spec = { openapi: "3.1.1", info: { title: "KAIHO HTTP API", version: "1.0.0",
     description: "既存SPAが利用するHTTP契約。TypeScriptの公開型とtransport制約から生成する。国制限は日本、旅行検索は設定済み32都府県。動的なowner認可・cross-field制約・Domain validatorはOpenAPIだけで置換しない。API Gatewayの前段拒否は独自のエラーbodyを返し得る。CloudFront内部API key/OACはBrowserへ公開しない。" },
     servers: [{ url: "/", description: "SPAと同じorigin。Gateway originへ直接接続しない。" }],
-    tags: ["agent", "conversation", "profile", "trip", "sharing", "read"].map(name => ({ name })), security: [{ CognitoAccessToken: [] }], paths,
+    tags: ["agent", "conversation", "profile", "trip", "sharing", "read", "browserDiagnostics"].map(name => ({ name })), security: [{ CognitoAccessToken: [] }], paths,
     "x-unpublished": { paths: [personalApiPolicies.notification.path, personalApiPolicies.inTrip.path], applications: ["ReservationApplication", "ChecklistApplication"], description: "通知/in-tripは公開Trip hostに接続されず404。独立factoryの501 gateやIAM-only workerは公開APIに含めない。静的Viewer/trafficデータ・認証設定・Cognito OAuth endpointは別契約。" },
     components: { securitySchemes: { CognitoAccessToken: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "Cognito Access Token。ID Token不可。raiquora/user scopeが必要。" },
       CognitoReadToken: { type: "apiKey", in: "header", name: "X-Raiquora-Access-Token", description: "Bearer <Cognito Access Token>。OAC署名用Authorizationとは別。" } }, schemas } };

@@ -7,6 +7,7 @@ import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 import { createTripConsultationNavigation } from "../usecases/trip-plan/trip-consultation-navigation";
 import { currentAuthentication } from "./auth-composition";
 import { createConversationStreamSession } from "../adapters/http/agent-stream/session";
+import { createBrowserAgentDiagnostics } from "../adapters/http/agent-stream/diagnostics";
 
 import { accommodationProviderAttributionFromEnvironment } from "../adapters/browser/accommodation-provider-attribution";
 import { browserDigitalTwinClockEnvironment } from "../adapters/browser/digital-twin-clock-environment";
@@ -208,7 +209,10 @@ const contextWorkspaceController = createContextWorkspaceController(
   new BrowserContextWorkspaceRepository(localStorage),
 );
 const tripWorkspaceController = createTripWorkspaceController(activeConversationSession.id);
+const browserAgentDiagnostics = createBrowserAgentDiagnostics({ auth: currentAuthentication(), buildId: import.meta.env.VITE_APP_BUILD_ID });
+window.addEventListener("online", browserAgentDiagnostics.flush);
 const serverAgentSession = createConversationStreamSession({
+  diagnostics: browserAgentDiagnostics,
   auth: currentAuthentication(), references: () => ({ conversationId: activeConversationSession.id,
     tripId: tripWorkspaceController.current()?.id, tripRevision: tripWorkspaceController.current()?.revision,
     itemId: tripWorkspaceController.uiFocus()?.itemId }),
@@ -587,6 +591,7 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("trip
 const initialDateTime = new Date();
 handleAiGuidePrompt = async (prompt, _preferences, _metadata, execution) => {
   if (activeConversationSession.tripId && tripWorkspaceController.current()?.id !== activeConversationSession.tripId) {
+    browserAgentDiagnostics.record(new Error("preflight_trip_unavailable"), { requestStart: 0, maxSilenceMs: 0 });
     throw new Error("対象の旅程を再取得してから相談してください。");
   }
   return serverAgentSession.start(prompt, execution?.requestedResearchMode ?? "standard", execution?.researchTarget)

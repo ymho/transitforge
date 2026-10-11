@@ -118,6 +118,10 @@ it("enforces idle timeout and measures silence on abort without retry", async ()
     const pending = expect(consumeAgentStream({ ...options, fetcher, idleMs: 100, now: () => Date.now() })).rejects.toThrow("aborted");
     await vi.advanceTimersByTimeAsync(101); await pending;
     expect(options.measurement.maxSilenceMs).toBe(100);
+    expect(options.measurement.abortReason).toBe("idle_timeout");
+    expect(options.measurement.requestSent).toBe(true);
+    expect(options.measurement.httpStatus).toBe(200);
+    expect(options.measurement.runId).toBe("run");
     expect(fetcher).toHaveBeenCalledOnce();
   } finally { vi.useRealTimers(); }
 });
