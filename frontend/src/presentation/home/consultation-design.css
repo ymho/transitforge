@@ -103,3 +103,11 @@
     & .consultation-composer { padding-left: 6px; }
   }
 }
+
+/* The page already reserves space for bottom navigation and its safe area. */
+@media (max-width: 62rem) {
+  #app[data-primary-view="chat"]:not([data-primary-view="map"]) {
+    & .consultation-page { padding-bottom: 0; }
+    & .consultation-composer-dock { margin-bottom: 0; }
+  }
+}

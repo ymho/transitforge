@@ -27,7 +27,7 @@ it("reviews, saves and rereads item estimates without an AI forecast, leaving ra
   expect(panel.querySelector('[data-item-id="rail"] .trip-item-cost')).toBeNull();
   expect(panel.textContent).not.toContain("AIに概算"); expect(panel.querySelector(".trip-extra-details")).toBeNull();
   const row = () => panel.querySelector('[data-item-id="food"]')!;
-  button(row(), "金額を入力").click();
+  row().querySelector<HTMLButtonElement>('[aria-label="昼食の概算費用を編集"]')!.click();
   const form = row().querySelector<HTMLFormElement>(".trip-cost-editor")!;
   expect(form.querySelector("input")!.parentElement).toBe(form.querySelector("select")!.parentElement);
   expect(form.querySelector("select")!.parentElement?.className).toBe("trip-cost-input-group");
@@ -38,12 +38,12 @@ it("reviews, saves and rereads item estimates without an AI forecast, leaving ra
   await vi.waitFor(() => expect(itemCost(f.server(), food)?.amount.amountMinor).toBe(0));
   await f.source.refresh(); expect(row().textContent).toContain("JPY 0");
   expect(f.server().costs?.forecast).toBeUndefined(); expect(f.ask).not.toHaveBeenCalled();
-  button(row(), "JPY 0").click(); button(row(), "入力を削除").click(); button(panel, "確認して旅程を保存").click();
+  row().querySelector<HTMLButtonElement>('[aria-label="昼食の概算費用を編集"]')!.click(); button(row(), "入力を削除").click(); button(panel, "確認して旅程を保存").click();
   await vi.waitFor(() => expect(itemCost(f.server(), food)).toBeUndefined()); f.ui.destroy();
 });
 it("preserves an interrupted form but rejects outdated revisions and conversations", async () => {
   const f = await setup(), panel = f.ui.panel;
-  button(panel.querySelector('[data-item-id="food"]')!, "金額を入力").click();
+  panel.querySelector<HTMLButtonElement>('[data-item-id="food"] [aria-label="昼食の概算費用を編集"]')!.click();
   const form = panel.querySelector<HTMLFormElement>(".trip-cost-editor")!; form.querySelector("input")!.value = "12345";
   f.replace({ ...f.server(), revision: 1 }); await f.source.refresh();
   expect(panel.contains(form)).toBe(true); expect(form.querySelector("input")!.value).toBe("12345");

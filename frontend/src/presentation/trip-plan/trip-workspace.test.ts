@@ -112,32 +112,31 @@ describe("Trip workspace DOM and mobile navigation", () => {
       research: { sourceUrl: "https://example.org/garden", observedAt: "2026-09-26T10:00:00Z" } }]);
     const f = setup({ getCurrentTrip: () => trip }); f.ui.showPlan();
     const item = f.ui.panel.querySelector<HTMLElement>('[data-item-id="garden"]')!;
-    expect(item.textContent).toContain("2026/9/26に参照した資料を開く");
+    expect(item.textContent).toContain("2026/09/26 19:00:00");
     const source = item.querySelector<HTMLAnchorElement>(".trip-workspace-research-source")!;
     expect(source.href).toBe("https://example.org/garden");
     expect(source.rel).toBe("noopener noreferrer");
   });
-  it("shows retained forecasts and only refreshes on explicit action; viewer cannot refresh", async () => {
+  it("automatically refreshes on entering Trip once and keeps viewers read-only", async () => {
     const fixture = tripWeatherFixture(), refreshWeather = vi.fn(async () => {});
-    const f = setup({ getCurrentTrip: () => fixture.trip }, undefined, { refreshWeather }); f.ui.showPlan();
-    expect(f.ui.panel.textContent).toContain("雨 15〜22℃"); expect(refreshWeather).not.toHaveBeenCalled();
-    const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="visit"]')!;
-    button(card, "天気を更新").click(); expect(refreshWeather).toHaveBeenCalledWith(fixture.trip, "visit");
-    await vi.waitFor(() => expect(button(card, "天気を更新").disabled).toBe(false));
+    const f = setup({ getCurrentTrip: () => fixture.trip, confirmProposal: async () => {} }, undefined, { refreshWeather });
+    expect(refreshWeather).not.toHaveBeenCalled(); f.ui.showPlan();
+    await vi.waitFor(() => expect(refreshWeather).toHaveBeenCalledOnce());
+    f.ui.render(); f.ui.showPlan(); await Promise.resolve(); expect(refreshWeather).toHaveBeenCalledOnce();
+    expect(f.ui.panel.textContent).toContain("雨 15〜22℃"); expect(button(f.ui.panel, "天気を更新")).toBeUndefined();
     const viewer = setup({ getCurrentTrip: () => fixture.trip, getRole: () => "viewer" }, undefined, { refreshWeather }); viewer.ui.showPlan();
-    expect(viewer.ui.panel.textContent).toContain("雨 15〜22℃"); expect(button(viewer.ui.panel, "天気を更新")).toBeUndefined();
+    await Promise.resolve(); expect(refreshWeather).toHaveBeenCalledOnce();
   });
-  it("starts a weather discussion for one Trip activity without changing the confirmed itinerary", () => {
-    const trip = createTrip(placesTripId, "出雲の旅", placesAt, [{ id: "shrine", title: "出雲大社", type: "activity",
-      category: "sightseeing", schedule: { type: "day", date: "2026-10-01" }, place: { name: "出雲大社", area: "出雲市", sources: [] },
-      decision: { confirmedAt: "2026-09-26T10:00:00Z" } }]);
-    const f = setup({ getCurrentTrip: () => trip }); f.ui.showPlan();
-    const item = f.ui.panel.querySelector<HTMLElement>('[data-item-id="shrine"]')!;
-    button(item, "天気を踏まえて相談").click();
-    expect(f.controller.uiFocus()).toEqual({ itemId: "shrine" });
-    expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("日付と地域の天気を確認"));
-    expect(f.controller.proposal()).toBeUndefined();
-    expect(trip.items[0]?.decision).toMatchObject({ confirmedAt: "2026-09-26T10:00:00Z" });
+  it("shows confirmed item badges without booking/cost pencils and retains editable memo", () => {
+    const fixture = tripWeatherFixture();
+    const item = { ...fixture.item, decision: { confirmedAt: "2026-09-26T10:00:00Z" } };
+    const trip = { ...fixture.trip, items: [item] }; const f = setup({ getCurrentTrip: () => trip });
+    const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="visit"]')!;
+    expect(card.querySelector(".trip-workspace-item-decision")?.textContent).toBe("確定");
+    expect(card.querySelector<HTMLButtonElement>(".trip-item-booking .trip-field-pencil")!.hidden).toBe(true);
+    expect(card.querySelector(".trip-item-cost .trip-field-pencil")).toBeNull();
+    expect(card.querySelector<HTMLTextAreaElement>(".trip-item-memo textarea")!.readOnly).toBe(false);
+    expect(card.textContent).not.toContain("天気を踏まえて相談"); expect(card.textContent).not.toContain("場所の変更案を確認");
   });
   it("opens a bounded travel mode and drops a delayed response after Trip switch", async () => {
     const first = inTripFixture(); let resolve!: (value: InTripContextSnapshot | undefined) => void;
@@ -196,7 +195,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     const changeItemDecision = vi.fn(async () => undefined);
     const f = setup({ getCurrentTrip: () => trip, getRole: () => "owner" }, undefined, { changeItemDecision });
     f.ui.showPlan();
-    expect(f.ui.panel.textContent).toContain("未確定");
+    expect(f.ui.panel.textContent).toContain("下書き");
     button(f.ui.panel, "この予定を確定").click();
     document.querySelector<HTMLButtonElement>("dialog.app-dialog button[type=submit]")!.click();
     await vi.waitFor(() => expect(changeItemDecision).toHaveBeenCalledWith(trip, trip.items[0], "confirm"));
@@ -215,7 +214,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(header.querySelector(".trip-item-consult")?.textContent).toBe("相談");
     const body = card.querySelector<HTMLElement>(".trip-workspace-item-body")!;
     expect(body.hidden).toBe(true);
-    expect(header.querySelector(".trip-workspace-item-decision")?.textContent).toBe("未確定");
+    expect(header.querySelector(".trip-workspace-item-decision")?.textContent).toBe("下書き");
     expect(header.querySelector(".trip-item-consult")?.previousElementSibling?.classList.contains("trip-workspace-item-decision")).toBe(true);
     expect(card.querySelector(".trip-warning-box")?.closest(".trip-workspace-item-body")).toBe(body);
     expect(card.querySelector(".trip-item-cost")?.closest(".trip-workspace-item-body")).toBe(body);
@@ -277,8 +276,8 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(button(activity, "日付変更案")).toBeUndefined();
     button(activity, "相談").click(); expect(f.ask).toHaveBeenCalledWith(`相談対象：旅程「${trip.title}」の3番目の予定「Zürich」。\nこの予定を相談したい`); expect(f.controller.uiFocus()).toEqual({ itemId: "activity" });
     expect(f.app.dataset.tripWorkspaceView).toBe("chat"); expect(trip.items).toHaveLength(3);
-    button(activity, "天気を踏まえて相談").click();
-    expect(f.ask).toHaveBeenLastCalledWith(expect.stringContaining('3番目の予定「Zürich」。\nこの予定の日付'));
+    button(activity, "相談").click();
+    expect(f.ask).toHaveBeenLastCalledWith(expect.stringContaining('3番目の予定「Zürich」。\nこの予定を相談したい'));
     const hotel = f.ui.panel.querySelector<HTMLElement>('[data-item-id="hotel"]')!;
     expect(button(hotel, "宿候補を相談")).toBeUndefined();
     button(hotel, "相談").click();

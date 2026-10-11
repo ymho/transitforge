@@ -3,7 +3,6 @@ import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/r
 import { confirmAction, requestText } from "../shared/app-dialog";
 
 import { renderTripWeather } from "./trip-weather-view";
-import { tripWeatherTargets, currentTripWeather } from "@raiquora/trip/trip-weather";
 import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
 import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itinerary";
@@ -21,14 +20,13 @@ import { reservationStatusLabels } from "../../usecases/trip-plan/reservation-re
 import type { TripFeasibilityIssue } from "@raiquora/trip/trip-feasibility";
 import { feasibilityIssueText } from "./trip-feasibility-view";
 import { travelIcon } from "../shared/travel-icon";
-import { researchDateLabel } from "../../usecases/trip-plan/research-date";
+import { researchTimestampLabel } from "../../usecases/trip-plan/research-date";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
   options: { entry?: DayEntry; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
     saveMetadata?: (build: (current: Trip) => TripUpdateProposal) => Promise<void>;
     memoDrafts?: Map<string, { value: string; base?: string }>;
     memoExpanded?: Map<string, boolean>;
-    refreshWeather?: (trip: Trip, itemId: string) => Promise<void>;
     changeItemDecision?: (trip: Trip, item: ItineraryItem, action: "confirm" | "withdraw") => Promise<void> }, issues: TripFeasibilityIssue[] = []): HTMLElement {
   const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id; card.dataset.itemType = item.type;
   const header = element("header");
@@ -57,24 +55,25 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   rail.append(icon);
   content.append(header); card.append(renderTripTimeEditor(trip, item, options.entry, controller, options.report), rail, content);
   const placeName = item.type === "stay" ? item.selection.status === "selected" ? item.selection.accommodation.place.name : item.selection.place?.name : item.type === "activity" ? item.place?.name : undefined;
-  if (placeName && placeName !== item.title) body.append(element("p", "trip-item-meta", placeName));
-  const weather = renderTripWeather(trip, item, options.entry?.localDate); if (weather) body.append(weather);
-  const decisionStatus = element("span", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" : item.decision ? "確定" : "未確定");
+
+  const weather = renderTripWeather(trip, item, options.entry?.localDate);
+  const decisionStatus = element("span", "trip-workspace-item-decision", item.decision?.needsReconfirmation ? "要再確認" : item.decision ? "確定" : "下書き");
+  decisionStatus.dataset.itemStatus = item.decision?.needsReconfirmation ? "reconfirm" : item.decision ? "confirmed" : "draft";
   decisionStatus.title = "予定の状態です。予約・購入の確認ではありません。";
-  if (options.entry?.role !== "end" && options.entry?.role !== "continue") {
-    const cost = renderItemCost(trip, item, controller, options.report); if (cost) body.append(cost);
-  }
   const warning = renderTripWarnings([...issues.map(feasibilityIssueText), ...itemAssumptions(trip, item.id).map(a => a.text)]);
   if (warning) body.append(warning);
   const saveMetadata = options.saveMetadata ?? (async (build: (current: Trip) => TripUpdateProposal) => { const current = controller.current(); if (!current) throw new Error("Trip unavailable"); await controller.applyConfirmed(build(current)); });
-  const booking = element("label", "trip-item-booking", "予約 ");
+  const draft = !item.decision || !!item.decision.needsReconfirmation;
+  const booking = element("div", "trip-item-booking");
+  booking.append(element("span", "trip-item-field-label", "予約状況"), element("span", "trip-item-booking-value", item.bookingStatus === "booked" || item.bookingStatus === "not-required" ? "済" : "未"));
   const bookingInput = element("select", "ds-control"); bookingInput.setAttribute("aria-label", `${item.title}の予約状態`);
-  for (const [value, text] of [["", "未確認"], ["booked", "予約済"], ["not-required", "予約不要"]]) {
+  for (const [value, text] of [["", "未"], ["booked", "済"]]) {
     const option = element("option", "", text); option.value = value!; bookingInput.append(option);
   }
-  bookingInput.value = item.bookingStatus ?? ""; bookingInput.disabled = !controller.canConfirm();
+  bookingInput.value = item.bookingStatus === "booked" || item.bookingStatus === "not-required" ? "booked" : ""; bookingInput.disabled = !controller.canConfirm() || !draft;
+  bookingInput.hidden = true;
   bookingInput.addEventListener("change", async () => {
-    if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || !controller.canConfirm()) { bookingInput.value = item.bookingStatus ?? ""; return; }
+    if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || !controller.canConfirm() || !draft) { bookingInput.value = item.bookingStatus ?? ""; return; }
     const status = bookingInput.value as "booked" | "not-required" | "";
     bookingInput.disabled = true;
     try {
@@ -85,9 +84,16 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       });
       options.report("予約状態を保存しました。");
     } catch { bookingInput.value = item.bookingStatus ?? ""; options.report("予約状態を保存できませんでした。最新の旅程を確認してください。"); }
-    finally { bookingInput.disabled = !controller.canConfirm(); }
+    finally { bookingInput.disabled = !controller.canConfirm() || !draft; }
   });
-  booking.append(bookingInput); body.append(booking);
+  const bookingEdit = control("✎", () => { bookingInput.hidden = !bookingInput.hidden; bookingInput.hidden ? bookingEdit.focus() : bookingInput.focus(); });
+  bookingEdit.className = "trip-field-pencil"; bookingEdit.setAttribute("aria-label", `${item.title}の予約状態を編集`);
+  bookingEdit.hidden = !draft || !controller.canConfirm() || controller.source()?.getRole?.() === "viewer";
+  booking.append(bookingEdit, bookingInput); body.append(booking);
+  if (options.entry?.role !== "end" && options.entry?.role !== "continue") {
+    const cost = renderItemCost(trip, item, controller, options.report); if (cost) body.append(cost);
+  }
+
   const information = element("details", "trip-item-information"); information.append(element("summary", "", "予約情報"));
   for (const r of controller.reservations()?.filter(r => r.itineraryItemId === item.id) ?? []) information.append(element("p", "trip-workspace-reservation", `予約記録: ${reservationStatusLabels[r.status]}`));
   if (item.type === "transport" && item.detail.status === "selected") body.append(renderTripRouteTimeline(item));
@@ -95,10 +101,14 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   if (item.type === "stay" && item.selection.status === "selected") {
     const detail = renderStayDetails(item.selection.accommodation); if (detail) body.append(detail);
   }
+  if (item.type === "activity" && placeName) {
+    const facts = element("dl", "trip-stay-facts trip-activity-facts");
+    facts.append(element("dt", "", "施設名"), element("dd", "trip-facility-name", placeName)); body.append(facts);
+  }
   if (item.type === "activity" && item.research) {
-    const source = element("a", "trip-workspace-research-source", `${researchDateLabel(item.research.observedAt)}に参照した資料を開く`);
+    const source = element("a", "trip-workspace-research-source", "施設の詳細 ↗");
     source.href = item.research.sourceUrl; source.target = "_blank"; source.rel = "noopener noreferrer";
-    body.append(source);
+    body.append(source, element("small", "trip-research-date", `検索時: ${researchTimestampLabel(item.research.observedAt)}`));
   }
   const memoSession = controller.sessionId(), memoSource = controller.source();
   const memoForm = element("form", "trip-item-memo");
@@ -119,10 +129,10 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     if (!memoDisclosure.open) memoInput.blur();
   });
   memoDisclosure.append(memoSummary, memoForm);
-  const draft = options.memoDrafts?.get(memoKey);
+  const memoDraft = options.memoDrafts?.get(memoKey);
   let memoBase = item.memo;
-  if (draft && (draft.value === (item.memo ?? "") || !draft.value.trim() && item.memo === undefined)) options.memoDrafts?.delete(memoKey);
-  else if (draft && !memoInput.readOnly) { memoInput.value = draft.value; memoBase = draft.base; }
+  if (memoDraft && (memoDraft.value === (item.memo ?? "") || !memoDraft.value.trim() && item.memo === undefined)) options.memoDrafts?.delete(memoKey);
+  else if (memoDraft && !memoInput.readOnly) { memoInput.value = memoDraft.value; memoBase = memoDraft.base; }
   memoInput.addEventListener("input", () => {
     if (!memoInput.readOnly) options.memoDrafts?.set(memoKey, { value: memoInput.value, base: memoBase });
   });
@@ -165,19 +175,6 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       item.type === "activity" && !item.place && item.category !== "free-time";
     actions.append(decision);
   }
-  if (options.refreshWeather && tripWeatherTargets(trip, item).length) {
-    const updateWeather = control("天気を更新", () => {
-      updateWeather.disabled = true;
-      void options.refreshWeather!(trip, item.id).then(() => {
-        const current = controller.current(), latest = current?.items.find(value => value.id === item.id);
-        const saved = current && latest ? currentTripWeather(current, latest) : undefined;
-        notifySaved(document, saved?.forecasts.some(value => value.status === "unavailable") ? "天気を取得できない地点があります。時間をおいて再試行してください。" : saved?.forecasts.every(value => value.status === "outside-forecast") ? "指定日は予報期間外です。" : "天気を更新しました。");
-      }).catch(() => options.report("天気を更新できませんでした。旅程を再読み込みしてお試しください。"))
-        .finally(() => { updateWeather.disabled = false; });
-    });
-    updateWeather.classList.add("trip-weather-update");
-    if (weather) weather.append(updateWeather); else body.append(updateWeather);
-  }
   const askAboutItem = (intent: string) => {
     controller.focus(item.id);
     const date = options.entry?.localDate ?? projectDailyItinerary(trip, { limit: 90 }).days.find(day => day.entries.some(entry => entry.sourceItemId === item.id))?.localDate;
@@ -198,7 +195,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     finally { rename.disabled = false; }
   });
   rename.className = "trip-item-rename"; rename.setAttribute("aria-label", `${displayTitle}の名称を変更`);
-  rename.hidden = controller.source()?.getRole?.() === "viewer";
+  rename.hidden = !draft || controller.source()?.getRole?.() === "viewer";
   const remove = control("削除", async () => {
     const current = controller.current();
     if (!current || current.id !== trip.id || current.revision !== trip.revision || !controller.canConfirm()) { options.report("旅程が更新されたか、編集できません。開き直してください。"); return; }
@@ -214,25 +211,12 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     } catch { options.report("この予定は削除できません。関連する条件を確認してください。"); }
   });
   actions.append(remove);
-  if (item.type === "activity") actions.append(control("天気を踏まえて相談", () => {
-    askAboutItem("この予定の日付と地域の天気を確認し、必要なら近くの候補や予定の変更案を相談したい。確定済みの予定は確認するまで変更しないでください");
-  }));
   if (item.type === "transport") actions.append(control(item.detail.status === "selected" ? "経路全体を選び直す" : "交通手段を選ぶ", () => {
     askAboutItem(item.detail.status === "selected"
       ? "この移動予定の経路全体を再検索して選び直したい。新しい経路を採用するまで元の経路を残し、変更をやめたら元の経路のままにしてください。ほかの予定は変更しないでください"
       : "この移動区間の交通手段を相談したい");
   }));
 
-  let manualActivityForm: HTMLElement | undefined;
-  if (item.type === "activity") {
-    const form = element("form", "trip-workspace-manual-activity"), label = element("label", "", "場所名（手入力） ");
-    const place = element("input"); place.required = true; place.maxLength = 200; place.value = item.place?.name ?? ""; label.append(place);
-    const submit = element("button", "", "場所の変更案を確認"); submit.type = "submit";
-    form.append(label, element("p", "trip-workspace-copy", "手入力した場所名として記録します。検索候補の検証や予約は行いません。"), submit);
-    form.addEventListener("submit", event => { event.preventDefault(); safe(() => controller.preview(proposeTripItemChange(controller.current()!,
-      { action: "set-manual-activity-place", itemId: item.id, placeName: place.value }))); });
-    manualActivityForm = form;
-  }
   if (item.type === "transport" && item.detail.status === "unresolved") {
     const form = element("form", "trip-workspace-manual-transport");
     const modeLabel = element("label", "", "交通手段"), mode = element("select");
@@ -248,18 +232,9 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     const manual = element("details", "trip-manual-transport-disclosure");
     manual.append(element("summary", "", "手入力"), form); body.append(manual);
   }
-  if (item.type === "stay" && item.selection.status === "unselected") {
-    const form = element("form", "trip-workspace-manual-stay"), label = element("label", "", "宿泊地の名前（手入力） ");
-    const name = element("input"); name.required = true; name.maxLength = 200; label.append(name);
-    const submit = element("button", "", "宿泊地の案を確認"); submit.type = "submit";
-    form.append(label, element("p", "trip-workspace-copy", "宿泊商品や空室を選択したことにはなりません。"), submit);
-    form.addEventListener("submit", event => { event.preventDefault(); safe(() => controller.preview(proposeTripItemChange(controller.current()!,
-      { action: "set-manual-stay-place", itemId: item.id, placeName: name.value }))); });
-    body.append(form);
-  }
   const editing = element("div", "trip-workspace-editing");
+  if (weather) body.append(weather);
   editing.append(actions);
-  if (manualActivityForm) editing.append(manualActivityForm);
   const titleGroup = element("div", "trip-item-title-group"); focus.replaceWith(titleGroup);
   titleGroup.append(focus, rename); header.append(decisionStatus);
   if (!item.decision || item.decision.needsReconfirmation) header.append(consult); body.append(editing); content.append(body);

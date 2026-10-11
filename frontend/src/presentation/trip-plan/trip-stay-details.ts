@@ -1,3 +1,4 @@
+import { researchTimestampLabel } from "../../usecases/trip-plan/research-date";
 import { accommodationPublicUrl, type AccommodationSnapshot } from "@raiquora/trip/accommodation-snapshot";
 import { formatMoney } from "@raiquora/trip/money";
 import { element } from "./trip-workspace-elements";
@@ -16,21 +17,21 @@ export function renderStayDetails(stay: AccommodationSnapshot): HTMLElement | un
     photo.addEventListener("error", () => photo.remove()); root.append(photo);
   }
   const facts = element("dl", "trip-stay-facts");
+  facts.append(element("dt", "", stay.provider === "rakuten-travel" ? "楽天トラベル" : "施設名"), element("dd", "trip-facility-name", stay.place.name));
   if (details?.reviewAverage !== undefined) {
     const rating = details.reviewAverage, value = element("dd"), stars = element("span", "trip-stay-stars", "★★★★★"), fill = element("span", "", "★★★★★");
     stars.setAttribute("aria-hidden", "true"); fill.style.width = `${Number((rating * 20).toFixed(2))}%`; stars.append(fill);
     value.setAttribute("aria-label", `5点満点中${rating}`); value.append(stars, document.createTextNode(` ${rating.toFixed(2)}${details.reviewCount !== undefined ? `（${details.reviewCount}件）` : ""}`));
     facts.append(element("dt", "", "評価"), value);
   }
-  if (stay.observedPrice) facts.append(element("dt", "", "検索時の参考料金"), element("dd", "", `${formatMoney(stay.observedPrice.price)}${stay.observedPrice.basis === "reference-minimum" ? "〜 / 1室1泊" : ""}`));
+  if (stay.observedPrice) facts.append(element("dt", "", "検索時の料金"), element("dd", "", `${formatMoney(stay.observedPrice.price)}${stay.observedPrice.basis === "reference-minimum" ? "〜 / 1室1泊" : ""}`));
   if (facts.childElementCount) root.append(facts);
   if (sourceUrl) {
-    const link = element("a", "trip-stay-booking-link", "宿の詳細・予約へ ↗"); link.href = rakutenAccommodationLink(sourceUrl, { checkInDate: stay.checkInDate, checkOutDate: stay.checkOutDate }); link.target = "_blank"; link.rel = "noopener noreferrer"; root.append(link);
+    const link = element("a", "trip-stay-booking-link", "宿の詳細・予約 ↗"); link.href = rakutenAccommodationLink(sourceUrl, { checkInDate: stay.checkInDate, checkOutDate: stay.checkOutDate }); link.target = "_blank"; link.rel = "noopener noreferrer"; root.append(link);
   }
   const at = details?.observedAt ?? stay.observedPrice?.observedAt;
   const footer = element("footer", "trip-stay-source");
-  if (at) footer.append(element("small", "", `検索時: ${new Date(at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`));
-  if (stay.provider === "rakuten-travel") footer.append(element("small", "", "楽天トラベル"));
+  if (at) footer.append(element("small", "", `検索時: ${researchTimestampLabel(at)}`));
   if (footer.childElementCount) root.append(footer);
   return root;
 }

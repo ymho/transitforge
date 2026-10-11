@@ -22,6 +22,8 @@ export interface RetainedTripForecast {
 /** Retained forecasts are observations at fetchedAt, never current conditions or safety certification. */
 export interface TripItemWeather {
   readonly itemId: string; readonly basis: string; readonly fetchedAt: string; readonly validUntil: string;
+  /** Last bounded refresh attempt, including unavailable and horizon results. */
+  readonly checkedAt?: string;
   readonly provider: "open-meteo"; readonly sourceUrl: "https://open-meteo.com/";
   readonly forecasts: readonly RetainedTripForecast[];
 }
@@ -68,9 +70,10 @@ export function retainTripWeather(trip: Trip, values: readonly TripItemWeather[]
 export function validateTripWeather(values: readonly TripItemWeather[], trip: Trip): void {
   if (!Array.isArray(values) || values.length > 100 || new Set(values.map(v => v.itemId)).size !== values.length) throw new Error("Invalid trip weather");
   for (const value of values) {
-    exactKeys(value, ["itemId", "basis", "fetchedAt", "validUntil", "provider", "sourceUrl", "forecasts"]);
+    exactKeys(value, ["itemId", "basis", "fetchedAt", "validUntil", "checkedAt", "provider", "sourceUrl", "forecasts"]);
     const item = trip.items.find(item => item.id === value.itemId);
     if (!item || value.basis !== tripWeatherBasis(trip, item) || !validInstant(value.fetchedAt) || !validInstant(value.validUntil) ||
+        value.checkedAt !== undefined && (!validInstant(value.checkedAt) || Date.parse(value.checkedAt) < Date.parse(value.fetchedAt)) ||
         Date.parse(value.validUntil) <= Date.parse(value.fetchedAt) || value.provider !== "open-meteo" || value.sourceUrl !== "https://open-meteo.com/" ||
         !Array.isArray(value.forecasts) || JSON.stringify(value.forecasts.map((f: RetainedTripForecast) => f.target)) !== value.basis) throw new Error("Invalid weather scope");
     for (const f of value.forecasts) {
@@ -89,4 +92,11 @@ export function validateTripWeather(values: readonly TripItemWeather[], trip: Tr
       }
     }
   }
+}
+
+/** Stable scope and 24-hour attempt limit; changes of place/date create a new basis. */
+export function tripWeatherRefreshDue(trip: Trip, item: ItineraryItem, now = Date.now()): boolean {
+  if (!tripWeatherTargets(trip, item).length) return false;
+  const saved = currentTripWeather(trip, item);
+  return !saved || now - Date.parse(saved.checkedAt ?? saved.fetchedAt) >= 86_400_000;
 }

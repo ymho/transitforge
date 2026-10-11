@@ -35,8 +35,10 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
     }
     if (s.busy) status.innerHTML = loadingMarkup("しおりを読み込んでいます。");
     else status.textContent = s.error ? "読み込めませんでした。もう一度お試しください。" : s.entries.length ? "" : selected === "official" ? "公開された公式しおりはまだありません。" : "共有中の旅はまだありません。";
-    if (s.loaded && !s.busy) more.append(control("再読み込み", () => { states.delete(selected); paint(); void load(); }));
-    if (s.error || s.loaded && (selected === "official" ? s.officialAfter : !s.ownedDone || !s.joinedDone)) more.append(control(s.error ? "再試行" : "さらに表示", () => { void load(); }));
+    if (!s.busy && (s.error || s.loaded && (selected === "official" ? s.officialAfter : !s.ownedDone || !s.joinedDone))) {
+      const next = control(s.error ? "再試行" : "さらに表示", () => { void load(); });
+      next.className = "trip-library-more-link"; more.append(next);
+    }
   };
   const load = async () => {
     const category = selected, session = options.session(), s = state(); if (s.busy || category === "own" || !options.authenticated()) return;
@@ -68,7 +70,7 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
   };
   async function preview(initial: OfficialGuide) {
     const session = options.session(); let guide: OfficialGuide;
-    try { guide = await client.officialGet(initial.id); } catch { status.textContent = "公開状態が変わったか、取得できませんでした。再読み込みしてください。"; return; }
+    try { guide = await client.officialGet(initial.id); } catch { status.textContent = "公開状態が変わったか、取得できませんでした。一覧を開き直してください。"; return; }
     if (disposed || session !== options.session() || !options.authenticated()) return;
     const dialog = element("dialog", "trip-sharing-panel"), feedback = element("p"); feedback.setAttribute("role", "status");
     const close = control("閉じる", () => { dialog.close(); dialog.remove(); dialogs.delete(dialog); });
