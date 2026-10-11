@@ -46,6 +46,9 @@ it("keeps undated days beyond the trip end logical, without suppressing saved ca
     requirement: { type: "dates", start: { earliest: "2026-10-12", latest: "2026-10-12" },
       end: { earliest: "2026-10-13", latest: "2026-10-13" } } }] } };
   expect([...tripCalendarDates(current)]).toEqual([["d1", "2026-10-12"], ["d2", "2026-10-13"]]);
+  expect([...tripCalendarDates({ ...current, items: [{ id: "visit", title: "観光", type: "activity", category: "sightseeing",
+    logicalDayId: "d3", schedule: { type: "day", date: "2026-10-14" } }] })])
+    .toEqual([["d1", "2026-10-12"], ["d2", "2026-10-13"], ["d3", "2026-10-14"]]);
   expect([...tripCalendarDates({ ...current, timeline: { ...current.timeline!, calendarBindings: [
     { logicalDayId: "d3", date: "2026-10-14", timeZone: "Asia/Tokyo", basis: "explicit" },
   ] } })]).toEqual([["d1", "2026-10-12"], ["d2", "2026-10-13"], ["d3", "2026-10-14"]]);

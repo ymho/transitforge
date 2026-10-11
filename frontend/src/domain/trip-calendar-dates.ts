@@ -9,11 +9,15 @@ export function tripCalendarDates(trip: Trip): ReadonlyMap<string, string> {
   if (!days.length) return explicit;
   const anchors: { index: number; date: string }[] = [];
   const ends: string[] = [];
+  const datedDays = new Set<string>();
   for (const item of trip.items) {
     if (!item.logicalDayId) continue;
     const s = item.schedule;
     const date = s.type === "day" ? s.date : s.type === "fixed" ? localDate(s.startAt) : undefined;
-    if (date) anchors.push({ index: days.findIndex(day => day.id === item.logicalDayId), date });
+    if (date) {
+      anchors.push({ index: days.findIndex(day => day.id === item.logicalDayId), date });
+      datedDays.add(item.logicalDayId);
+    }
   }
   for (const c of effectiveTripConstraints(trip.request)) {
     const r = c.requirement;
@@ -30,7 +34,7 @@ export function tripCalendarDates(trip: Trip): ReadonlyMap<string, string> {
   if ([...explicit].some(([id, date]) => shift(start, days.findIndex(day => day.id === id)) !== date)) return explicit;
   return new Map(days.flatMap((day, index) => {
     const date = shift(start, index);
-    return explicit.has(day.id) || ends.every(end => date <= end) ? [[day.id, date] as const] : [];
+    return explicit.has(day.id) || datedDays.has(day.id) || ends.every(end => date <= end) ? [[day.id, date] as const] : [];
   }));
 }
 
