@@ -1,3 +1,4 @@
+import { iconMarkup } from "../shared/primitives";
 import { saveTripEdit } from "./save-trip-edit";
 import { notifySaved } from "../shared/save-notification";
 import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/reservation";
@@ -6,7 +7,7 @@ import { confirmAction, requestText } from "../shared/app-dialog";
 import { renderTripWeather } from "./trip-weather-view";
 import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
-import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itinerary";
+import { type DayEntry } from "@raiquora/trip/daily-itinerary";
 import { renderTripTimeEditor } from "./trip-time-editor";
 import { transportModeLabel } from "../../usecases/trip-plan/transport-preview";
 import { renderTripRouteTimeline } from "./trip-route-timeline";
@@ -24,7 +25,7 @@ import { travelIcon } from "../shared/travel-icon";
 import { researchTimestampLabel } from "../../usecases/trip-plan/research-date";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
-  options: { entry?: DayEntry; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
+  options: { entry?: DayEntry; collapsed: boolean; collapse(value: boolean): void; report(message: string): void;
     saveMetadata?: (build: (current: Trip) => TripUpdateProposal) => Promise<void>;
     memoDrafts?: Map<string, { value: string; base?: string }>;
     memoExpanded?: Map<string, boolean>;
@@ -37,7 +38,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const displayTitle = item.type === "transport" ? item.title.replace(/^経路\s*[0-9０-９]+\s*[:：]\s*/u, "").replace(/\s*[（(]経路\s*[0-9０-９]+[）)]\s*$/u, "") || item.title : item.title;
   const focus = control(displayTitle, () => { controller.focus(item.id); body.hidden = false; updateDisclosure(); options.collapse(false); });
   focus.className = "trip-workspace-item-focus";
-  focus.setAttribute("aria-label", `${displayTitle}を相談対象にする`);
+  focus.setAttribute("aria-label", `${displayTitle}の詳細を開く`);
   const body = element("div", "trip-workspace-item-body");
   body.id = `trip-item-${encodeURIComponent(options.entry?.entryKey ?? item.id)}`;
   body.hidden = options.collapsed;
@@ -87,8 +88,8 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     } catch { bookingInput.value = item.bookingStatus ?? ""; options.report("予約状態を保存できませんでした。最新の旅程を確認してください。"); }
     finally { bookingInput.disabled = !controller.canConfirm() || !draft; }
   });
-  const bookingEdit = control("✎", () => { bookingInput.hidden = !bookingInput.hidden; bookingInput.hidden ? bookingEdit.focus() : bookingInput.focus(); });
-  bookingEdit.className = "trip-field-pencil"; bookingEdit.setAttribute("aria-label", `${item.title}の予約状態を編集`);
+  const bookingEdit = control("", () => { bookingInput.hidden = !bookingInput.hidden; bookingInput.hidden ? bookingEdit.focus() : bookingInput.focus(); });
+  bookingEdit.className = "trip-field-pencil trip-pencil"; bookingEdit.innerHTML = iconMarkup("pencil"); bookingEdit.setAttribute("aria-label", `${item.title}の予約状態を編集`);
   bookingEdit.hidden = !draft || !controller.canConfirm() || controller.source()?.getRole?.() === "viewer";
   booking.append(bookingEdit, bookingInput); body.append(booking);
   if (options.entry?.role !== "end" && options.entry?.role !== "continue") {
@@ -175,16 +176,8 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       item.type === "activity" && !item.place && item.category !== "free-time";
     actions.append(decision);
   }
-  const askAboutItem = (intent: string) => {
-    controller.focus(item.id);
-    const date = options.entry?.localDate ?? projectDailyItinerary(trip, { limit: 90 }).days.find(day => day.entries.some(entry => entry.sourceItemId === item.id))?.localDate;
-    const position = trip.items.findIndex(value => value.id === item.id) + 1;
-    options.chat(`相談対象：旅程「${trip.title}」の${position}番目の予定「${item.title}」${date ? `（${date}）` : ""}。\n${intent}`);
-  };
-  const consult = control("相談", () => askAboutItem("この予定を相談したい"));
-  consult.className = "trip-item-consult";
   const renameSession = controller.sessionId();
-  const rename = control("✎", async () => {
+  const rename = control("", async () => {
     if (!controller.canConfirm() || controller.source()?.getRole?.() === "viewer") return;
     const name = await requestText(document, "予定の名称", item.title);
     if (!name || name === item.title) return;
@@ -194,7 +187,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     catch (error) { options.report(error instanceof Error ? error.message : "名称を変更できませんでした。"); }
     finally { rename.disabled = false; }
   });
-  rename.className = "trip-item-rename"; rename.setAttribute("aria-label", `${displayTitle}の名称を変更`);
+  rename.className = "trip-item-rename trip-pencil"; rename.innerHTML = iconMarkup("pencil"); rename.setAttribute("aria-label", `${displayTitle}の名称を変更`);
   rename.hidden = !draft || controller.source()?.getRole?.() === "viewer";
   const remove = control("削除", async () => {
     const current = controller.current();
@@ -211,11 +204,6 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     } catch { options.report("この予定は削除できません。関連する条件を確認してください。"); }
   });
   actions.append(remove);
-  if (item.type === "transport") actions.append(control(item.detail.status === "selected" ? "経路全体を選び直す" : "交通手段を選ぶ", () => {
-    askAboutItem(item.detail.status === "selected"
-      ? "この移動予定の経路全体を再検索して選び直したい。新しい経路を採用するまで元の経路を残し、変更をやめたら元の経路のままにしてください。ほかの予定は変更しないでください"
-      : "この移動区間の交通手段を相談したい");
-  }));
 
   if (item.type === "transport" && item.detail.status === "unresolved") {
     const form = element("form", "trip-workspace-manual-transport");
@@ -242,7 +230,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   editing.append(actions);
   const titleGroup = element("div", "trip-item-title-group"); focus.replaceWith(titleGroup);
   titleGroup.append(focus, rename); header.append(decisionStatus);
-  if (!item.decision || item.decision.needsReconfirmation) header.append(consult); body.append(editing); content.append(body);
+  body.append(editing); content.append(body);
   return card;
 }
 

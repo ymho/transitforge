@@ -15,7 +15,7 @@ const trip = createTrip(reservationTripId, "旅", "2026-09-13T00:00:00Z", [item]
 it.each(reservationStatuses)("ordinary card shows %s only when a Reservation exists; no reference", (status) => {
   const controller = createTripWorkspaceController("s");
   controller.attach("s", { getCurrentTrip: () => trip, getReservationFacts: () => [reservationFact(reservationFixture({ status }))] });
-  const render = () => renderWorkspaceCard(trip, item, controller, { collapsed: false, collapse: vi.fn(), chat: vi.fn(), report: vi.fn() });
+  const render = () => renderWorkspaceCard(trip, item, controller, { collapsed: false, collapse: vi.fn(), report: vi.fn() });
   const card = render(); expect(card.textContent).toContain(reservationStatusLabels[status]); expect(card.textContent).not.toContain("PRIVATE");
   controller.attach("s", { getCurrentTrip: () => trip, getReservationFacts: () => [] });
   expect(render().querySelector(".trip-workspace-reservation")).toBeNull();
@@ -44,7 +44,7 @@ it("a selected Stay is not a booking; only an independent record supplies its st
   const selectedTrip = tripWorkspacePreviewSource().getCurrentTrip()!;
   const stay = selectedTrip.items.find((i) => i.type === "stay")!;
   const controller = createTripWorkspaceController("stay");
-  const render = () => renderWorkspaceCard(selectedTrip, stay, controller, { collapsed: false, collapse: vi.fn(), chat: vi.fn(), report: vi.fn() });
+  const render = () => renderWorkspaceCard(selectedTrip, stay, controller, { collapsed: false, collapse: vi.fn(), report: vi.fn() });
   controller.attach("stay", { getCurrentTrip: () => selectedTrip, getReservationFacts: () => [] });
   expect(render().querySelector(".trip-workspace-reservation")).toBeNull();
   controller.attach("stay", { getCurrentTrip: () => selectedTrip, getReservationFacts: () => [reservationFact(reservationFixture({

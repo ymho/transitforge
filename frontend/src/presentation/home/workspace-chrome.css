@@ -239,10 +239,6 @@
 #app[data-primary-view]:is([data-primary-view]) {
   & .home-trip-card { cursor: pointer; }
   & .trip-list-copy { padding-bottom: 20px; }
-  & .home-trip-card > .home-trip-manage, & .home-trip-card > .home-trip-manage[open] { position: absolute; right: 12px; top: 12px; box-sizing: border-box; width: 36px; height: 36px; padding: 0; margin: 0; border: 0; border-radius: 50%; background: transparent; box-shadow: none; }
-  & .home-trip-manage > summary { box-sizing: border-box; display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; background: #fff; color: var(--tf-ink); line-height: 1; cursor: pointer; }
-  & .home-trip-manage > summary:hover { background: var(--tf-soft); }
-  & .home-trip-manage > summary:focus-visible { outline: 2px solid var(--tf-blue); outline-offset: 2px; }
   & .trip-status-chip { display: inline-flex; width: fit-content; align-items: center; margin-top: 10px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1.5; background: #fff1dc; color: #80551c; }
   & .trip-status-chip:is([data-trip-status="next"], [data-trip-status="scheduled"]) { background: #e8f0fa; color: #325c84; }
   & .trip-status-chip[data-trip-status="current"] { background: #e4f2ec; color: #28654b; }

@@ -42,13 +42,7 @@
   & .trip-party-pair, & .trip-party-control > button { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; color: var(--tf-muted); }
   & .trip-party-part { display: inline-flex; align-items: center; gap: 5px; }
   & .trip-party-part .ds-icon { width: 16px; height: 16px; }
-  & .home-trip-manage { display: block; margin: 0; font-size: 12px; color: var(--tf-muted); }
-  & .home-trip-manage { position: absolute; top: 10px; right: 0; }
   & .home-trip-card { position: relative; padding-right: 44px; }
-  & .home-trip-manage summary { display: grid; place-items: center; width: 44px; font-size: 22px; list-style: none; border-radius: 7px; }
-  & .home-trip-manage summary::-webkit-details-marker { display: none; }
-  & .home-trip-manage[open] { z-index: 3; padding: 0 6px 6px; background: var(--tf-bg); border: 1px solid var(--tf-line); border-radius: 9px; box-shadow: 0 5px 18px #12273f12; }
-  & .home-trip-manage button { display: block; width: 100%; text-align: left; border: 0; }
   & [data-trip-archive] { color: #c35252; }
   & .trip-workspace { border: 0; box-shadow: none; padding: 22px 20px 28px; overflow-x: hidden; }
   & .trip-workspace-heading { display: block; padding: 0 0 12px; margin: 0; border: 0; background: transparent; }
@@ -225,9 +219,6 @@
 
 /* The trigger remains outside the compact menu. */
 #app[data-primary-view]:is([data-primary-view]) {
-  & .home-trip-manage[open] { padding: 0; border: 0; background: transparent; box-shadow: none; }
-  & .home-trip-manage .home-trip-menu { position: absolute; top: 40px; right: 0; min-width: 108px; padding: 5px; border: 1px solid var(--tf-line); border-radius: 10px; background: var(--tf-bg); box-shadow: 0 5px 18px #24304318; }
-  & .home-trip-manage .home-trip-menu button { display: block; width: 100%; min-height: 30px; margin: 0; padding: 6px 9px; border: 0; font-size: 12px; text-align: left; }
   & .trip-list-copy strong { font-size: 16px; }
 }
 
