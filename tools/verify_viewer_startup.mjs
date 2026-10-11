@@ -252,9 +252,15 @@ try {
       return Math.abs((Math.min(...nodes.map(node => node.top)) - box.top) - (box.bottom - Math.max(...nodes.map(node => node.bottom))));
     });
     assert.ok(heroBalance <= 3, `Header vertical padding differs by ${heroBalance}px`);
+    const pencilSizes = await page.locator(".trip-workspace .trip-pencil:not([hidden]) svg").evaluateAll(icons => icons.map(icon => {
+      const box = icon.getBoundingClientRect(); return { width: box.width, height: box.height };
+    }).filter(box => box.width > 0));
+    assert.ok(pencilSizes.length > 0);
+    assert.ok(pencilSizes.every(box => Math.abs(box.width - 16) < .1 && Math.abs(box.height - 16) < .1), `Pencil sizes differ: ${JSON.stringify(pencilSizes)}`);
     await checkLayout("trip-metadata-save");
     await weatherCard.locator('.trip-item-toggle').click();
-    await page.getByRole("button", { name: "共有", exact: true }).click();
+    await page.locator(".trip-header-management > summary").click();
+    await page.locator(".trip-header-menu").getByRole("button", { name: "共有", exact: true }).click();
     await page.locator(".trip-sharing-panel[open]").waitFor();
     const sharing = page.locator(".trip-sharing-panel[open]");
     assert.equal(await sharing.getByText("共有リンクで参加", { exact: true }).isVisible(), false);
@@ -298,10 +304,14 @@ try {
     await page.getByRole("button", { name: "‹ 旅程一覧", exact: true }).click();
     await page.locator(`[data-trip="${trips[0].id}"]`).click();
     await page.waitForLoadState("networkidle");
-    assert.equal(await page.locator(".trip-header-management").count(), 0);
-    assert.deepEqual(await page.locator(".trip-header-actions button").allTextContents(), ["旅程を確定", "共有"]);
-    const consultationItem = page.locator('[data-item-id="visit"]');
-    await consultationItem.getByRole("button", { name: "相談", exact: true }).click();
+    assert.equal(await page.locator(".trip-header-management").count(), 1);
+    assert.deepEqual(await page.locator(".trip-header-actions button").allTextContents(), ["旅程を確定", "相談"]);
+    assert.equal(await page.locator(".trip-item-consult").count(), 0);
+    await page.locator(".trip-header-actions").getByRole("button", { name: "相談", exact: true }).click();
+    const consultation = page.getByRole("dialog", { name: "どれについて相談しますか？", exact: true });
+    await consultation.waitFor();
+    await checkLayout("consultation-topics");
+    await consultation.getByRole("button", { name: /経路を選び直す/ }).first().click();
     await page.locator(".consultation-messages .journey-presentation").waitFor();
     assert.equal(await page.locator(".consultation-page .public-plan-presentation").count(), 0);
     assert.equal(await page.locator(".consultation-page .journey-presentation").count(), 1);
