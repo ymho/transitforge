@@ -68,6 +68,17 @@ try {
       if (/viewer-input|\/api\/traffic/.test(url.pathname) || /(^|\.)mapbox\.com$/.test(url.hostname)) dataCalls.push(url.pathname);
     });
     await page.route("**/auth-config.json", route => route.fulfill({ json: config }));
+    let providerLoggedIn = false, passiveAttempts = 0, restorationNonce;
+    await page.route(`${config.loginOrigin}/oauth2/authorize?*`, route => {
+      const request = new URL(route.request().url());
+      assert.equal(request.searchParams.get("prompt"), "none");
+      assert.equal(request.searchParams.get("code_challenge_method"), "S256");
+      passiveAttempts++; restorationNonce = request.searchParams.get("nonce");
+      const callback = new URL(config.callbackUrls[0]);
+      callback.searchParams.set("state", request.searchParams.get("state"));
+      callback.searchParams.set(providerLoggedIn ? "code" : "error", providerLoggedIn ? "fixture-code" : "login_required");
+      return route.fulfill({ status: 302, headers: { location: callback.href } });
+    });
     await page.route("**/api/**", route => {
       assert.equal(route.request().headers().authorization, "Bearer fixture-access");
       const path = new URL(route.request().url()).pathname;
@@ -113,6 +124,25 @@ try {
       await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow"))); await ready();
     }
     assert.deepEqual(apiCalls, []); assert.deepEqual(dataCalls, []); assert.deepEqual(errors, []);
+    assert.equal(passiveAttempts, 1); // Guest reloads never loop through Cognito.
+
+    // Top startup recovers a provider cookie without visiting Operations first.
+    providerLoggedIn = true;
+    await page.route(`${config.loginOrigin}/oauth2/token`, route => {
+      assert.equal(new URLSearchParams(route.request().postData()).get("grant_type"), "authorization_code");
+      const profile = { iss: config.issuer, aud: config.clientId, sub: "fixture-user", nonce: restorationNonce,
+        email: "fixture@example.test", exp: Math.floor(Date.now() / 1000) + 300 };
+      const idToken = `${Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url")}.${Buffer.from(JSON.stringify(profile)).toString("base64url")}.fixture`;
+      return route.fulfill({ headers: { "access-control-allow-origin": origin }, json: { id_token: idToken,
+        access_token: "fixture-access", refresh_token: "fixture-refresh", token_type: "Bearer", expires_in: 300, scope: config.scopes.join(" ") } });
+    });
+    await page.evaluate(clientId => sessionStorage.removeItem(`raiquora.auth.${clientId}.restore-attempt`), config.clientId);
+    await page.goto(origin + "/"); await ready();
+    await page.waitForSelector('#app[data-auth-state="signed-in"]');
+    assert.equal(await page.locator('[data-primary="trips"]').isVisible(), true);
+    assert.equal(passiveAttempts, 2);
+    await page.reload(); await ready();
+    assert.equal(passiveAttempts, 2);
 
     // Restore after eight hours using real auth refresh and full Viewer composition.
     await page.clock.install({ time: new Date("2026-10-04T00:00:00Z") });

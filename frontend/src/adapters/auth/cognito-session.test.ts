@@ -43,6 +43,75 @@ function refreshedTokens(accessToken = "access-token-refreshed", refreshToken?: 
 beforeEach(() => { sessionStorage.clear(); now = Date.now(); vi.stubGlobal("crypto", webcrypto); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
+describe("provider session restoration on browser startup", () => {
+  const restoring = (b: AuthBrowser) => createCognitoSession(config, b, { restoreProviderSession: true });
+  async function passiveRequest() {
+    const b = browser(); await restoring(b).initialize();
+    return new URL(vi.mocked(b.location.assign).mock.calls[0]![0]);
+  }
+  it("restores login from a passive code callback before Home reads the state", async () => {
+    const request = await passiveRequest();
+    expect(request.searchParams.get("prompt")).toBe("none");
+    expect(request.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(request.href).not.toMatch(/private|secret/);
+    mockTokens();
+    const b = browser(`${origin}/index.html?code=restored-code&state=${request.searchParams.get("state")}`);
+    const auth = restoring(b); await auth.initialize();
+    expect(auth.getState().status).toBe("signed-in");
+    expect(b.history.replaceState).toHaveBeenLastCalledWith(null, "", "/");
+    expect(sessionStorage.getItem(`raiquora.auth.${config.clientId}.restore-attempt`)).toBeNull();
+    const reloaded = browser(); await restoring(reloaded).initialize();
+    expect(reloaded.location.assign).not.toHaveBeenCalled();
+  });
+  it("treats validated login_required as a guest and does not loop on reload", async () => {
+    const request = await passiveRequest();
+    const b = browser(`${origin}/index.html?error=login_required&state=${request.searchParams.get("state")}`);
+    const auth = restoring(b); await auth.initialize();
+    expect(auth.getState().status).toBe("signed-out");
+    expect(b.location.assign).not.toHaveBeenCalled();
+    const reloaded = browser(); await restoring(reloaded).initialize();
+    expect(reloaded.location.assign).not.toHaveBeenCalled();
+    await auth.login();
+    const explicit = new URL(vi.mocked(b.location.assign).mock.calls[0]![0]);
+    expect(explicit.searchParams.has("prompt")).toBe(false);
+  });
+  it("rejects an uncorrelated login_required callback", async () => {
+    await passiveRequest();
+    const b = browser(`${origin}/index.html?error=login_required&state=forged`);
+    const auth = restoring(b); await auth.initialize();
+    expect(auth.getState().status).toBe("error");
+    expect(b.location.assign).not.toHaveBeenCalled();
+  });
+  it("does not classify an explicit login failure as a passive guest", async () => {
+    const { request } = await login();
+    const auth = restoring(browser(`${origin}/index.html?error=login_required&state=${request.searchParams.get("state")}`));
+    await auth.initialize(); expect(auth.getState().status).toBe("error");
+  });
+  it.each(["absolute-expiry", "invalid-grant", "temporary-failure"])("handles %s without extending the old grant", async kind => {
+    const { callback } = await login(); const fetchMock = mockTokens();
+    await createCognitoSession(config, browser(callback)).initialize();
+    const issuedAt = now;
+    now += kind === "absolute-expiry" ? 12 * 60 * 60 * 1000 : 271_000;
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: kind === "invalid-grant" ? "invalid_grant" : "unavailable" }), { status: kind === "invalid-grant" ? 400 : 503 }));
+    const b = browser(), auth = restoring(b); await auth.initialize();
+    if (kind === "temporary-failure") {
+      expect(auth.getState()).toMatchObject({ status: "signed-in", sessionExpiresAt: issuedAt + 12 * 60 * 60 * 1000 });
+      expect(b.location.assign).not.toHaveBeenCalled();
+    } else {
+      expect(auth.getState().status).toBe("authenticating");
+      expect(new URL(vi.mocked(b.location.assign).mock.calls[0]![0]).searchParams.get("prompt")).toBe("none");
+      expect(sessionStorage.getItem(`raiquora.auth.${config.clientId}.session`)).toBeNull();
+    }
+  });
+  it("keeps an explicit logout signed out when Home reopens", async () => {
+    const { callback } = await login(); mockTokens();
+    const auth = restoring(browser(callback)); await auth.initialize(); await auth.logout();
+    const b = browser(), reloaded = restoring(b); await reloaded.initialize();
+    expect(reloaded.getState().status).toBe("signed-out");
+    expect(b.location.assign).not.toHaveBeenCalled();
+  });
+});
+
 describe("Cognito public-client authentication", () => {
   it("uses code + S256 PKCE, state, nonce, Japanese Managed Login and no secret/private return URL", async () => {
     const { request } = await login();
