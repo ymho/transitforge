@@ -1,6 +1,5 @@
 import type { MessageData } from "@strands-agents/sdk";
 import type { ServerAgentRuntimeInput } from "../ports/server-agent-runtime.js";
-import { mergeAgentV2Evidence } from "@raiquora/agent/agent-v2-evidence";
 
 /** Application data budget in characters; separate from the model token window. */
 export const strandsTurnInputMaxCharacters = 64_000;
@@ -52,7 +51,7 @@ export function strandsTurnInput(input: ServerAgentRuntimeInput): string {
     } : null,
     // These objects are the actual admitted observations, not model interpretations
     // or duplicated summaries from the previous runtime's decision context.
-    evidence: mergeAgentV2Evidence(input.initialEvidence ?? [], input.limits.maxEvidence, context?.effectiveIntent).evidence,
+    evidence: input.initialEvidence ?? [],
     presentedCandidates: input.candidateController?.context ?? null,
     // SDK Tool specs are the capability source of truth. Do not duplicate an
     // incomplete registry view here (Application-local writers are added later).

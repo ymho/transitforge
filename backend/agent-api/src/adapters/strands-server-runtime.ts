@@ -19,7 +19,12 @@ export type StrandsRuntimeResult = AgentRuntimeResult & { publicReply?: AgentV2R
 export function createStrandsServerRuntime(engine: StrandsAgentEngine) {
   return async (input: ServerAgentRuntimeInput): Promise<StrandsRuntimeResult> => {
     let conversationInput: ReturnType<typeof strandsConversationInput>;
-    try { conversationInput = strandsConversationInput(input); }
+    try {
+      // Application selects the admissible Evidence view before the transport-only
+      // serializer. Preserve the full acquisition set for final collision checks.
+      conversationInput = strandsConversationInput({ ...input, initialEvidence:
+        mergeAgentV2Evidence(input.initialEvidence ?? [], input.limits.maxEvidence, input.context?.effectiveIntent).evidence });
+    }
     catch (error) {
       if (error instanceof StrandsTurnInputError) throw new ServerAgentRuntimeExecutionError("turn_input", error.code);
       throw error;
