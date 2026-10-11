@@ -8,17 +8,18 @@ import { openTripOrderEditor } from "./trip-order-editor";
 afterEach(() => document.body.replaceChildren());
 function setup(trip = orderTrip()) {
   const controller = createTripWorkspaceController("one"), report = vi.fn();
-  controller.attach("one", { getCurrentTrip: () => trip }); openTripOrderEditor(controller, report);
-  return { controller, trip, report, dialog: document.querySelector("dialog")! };
+  controller.attach("one", { getCurrentTrip: () => trip, confirmProposal: async p => { trip = applyTripProposal(trip, p); } }); openTripOrderEditor(controller, report);
+  return { controller, trip, current: () => trip, report, dialog: document.querySelector("dialog")! };
 }
-it("warns about clearing times and previews cross-day changes without changing the original", () => {
-  const { controller, trip, dialog } = setup(), original = structuredClone(trip);
+it("warns about clearing times and saves cross-day changes directly", async () => {
+  const { controller, dialog, current } = setup();
   expect(dialog.textContent).toContain("時刻は未設定");
   const select = dialog.querySelector<HTMLSelectElement>('[data-item-id="a"] select')!;
   select.value = [...select.options].find(o => o.textContent === "2026-09-23")!.value; select.dispatchEvent(new Event("change"));
-  [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "変更を確認")!.click();
-  const after = applyTripProposal(trip, controller.proposal()!);
-  expect(after.items.find(i => i.id === "a")!.schedule).toMatchObject({ type: "day", date: "2026-09-23" }); expect(trip).toEqual(original);
+  [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "確定")!.click();
+  await vi.waitFor(() => expect(dialog.isConnected).toBe(false));
+  const after = current(); expect(controller.proposal()).toBeUndefined();
+  expect(after.items.find(i => i.id === "a")!.schedule).toMatchObject({ type: "day", date: "2026-09-23" });
 });
 it("cancel retains times and transport has no move controls", () => {
   const trip = createTrip(placesTripId, "予定", placesAt, [placeTransport("rail", "A", "B"), ...orderTrip().items]);
@@ -35,6 +36,6 @@ it("rejects changes when revision or session is stale", () => {
   const dialog = document.querySelector("dialog")!;
   dialog.querySelector<HTMLButtonElement>('[data-item-id="a"] button:last-child')!.click();
   trip = { ...trip, revision: trip.revision + 1 };
-  [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "変更を確認")!.click();
+  [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "確定")!.click();
   expect(controller.proposal()).toBeUndefined(); expect(report).toHaveBeenCalledWith(expect.stringContaining("更新"));
 });

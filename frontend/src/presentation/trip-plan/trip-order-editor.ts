@@ -1,3 +1,4 @@
+import { saveTripEdit } from "./save-trip-edit";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import { proposeTripOrder, tripOrderDays, tripOrderDay } from "../../usecases/trip-plan/propose-trip-order";
 import { element, control } from "./trip-workspace-elements";
@@ -9,15 +10,14 @@ export function openTripOrderEditor(controller: TripWorkspaceController, report:
   const dialog = element("dialog", "trip-editor-dialog trip-order-editor"); dialog.setAttribute("aria-label", "予定を並べ替え");
   const list = element("div", "trip-order-list"), status = element("p", "trip-order-status"); status.setAttribute("role", "status");
   let dragged: string | undefined;
-  const preview = control("変更を確認", () => {
+  const preview = control("確定", async () => {
     const current = controller.current();
     if (!current || current.id !== trip.id || current.revision !== trip.revision || controller.sessionId() !== session || controller.source()?.getRole?.() === "viewer") {
       report("旅程が更新されました。並べ替えを開き直してください。"); dialog.close(); return;
     }
     try {
       const proposal = proposeTripOrder(current, order, [...moved].map(itemId => ({ itemId, dayKey: assignments.get(itemId)! })));
-      if (proposal) controller.preview(proposal);
-      dialog.close();
+      if (!proposal || await saveTripEdit(dialog, preview, controller, proposal, report)) dialog.close();
     } catch (error) { status.textContent = error instanceof Error ? error.message : "変更できません。予定を確認してください。"; }
   });
   const move = (id: string, to: number, dayKey: string) => {

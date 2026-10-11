@@ -1,3 +1,4 @@
+import { saveTripEdit } from "./save-trip-edit";
 import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
 import { itemCost, editItemCost, isRailItem } from "@raiquora/trip/item-cost";
 import { formatMoney, currencyMinorUnits } from "@raiquora/trip/money";
@@ -31,17 +32,17 @@ export function renderItemCost(trip: Trip, item: ItineraryItem, controller: Trip
     for (const code of Object.keys(currencyMinorUnits)) currency.append(option(code, code));
     currency.value = cost?.amount.currency ?? "JPY";
     const amount = element("div", "trip-cost-input-group"); amount.append(input, currency); label.append(amount);
-    const submit = element("button", "", "変更案を確認"); submit.type = "submit";
+    const submit = element("button", "", "確定"); submit.type = "submit";
     form.append(label, submit, control("取消", () => { form.remove(); edit.focus(); }));
-    if (cost?.source === "user") form.append(control("入力を削除", () => {
+    if (cost?.source === "user") form.append(control("入力を削除", async () => {
       if (!current()) { report("旅程が更新されました。最新の予定から入力し直してください。"); return; }
-      controller.propose(`${item.title}の概算費用を削除`, [editItemCost(trip, item.id)]); form.remove();
+      if (await saveTripEdit(form, submit, controller, { tripId: trip.id, baseRevision: trip.revision, summary: `${item.title}の概算費用を削除`, patches: [editItemCost(trip, item.id)] }, report)) form.remove();
     }));
-    form.addEventListener("submit", event => {
+    form.addEventListener("submit", async event => {
       event.preventDefault();
       if (!current()) { report("旅程が更新されました。最新の予定から入力し直してください。"); return; }
       try {
-        controller.propose(`${item.title}の概算費用`, [editItemCost(trip, item.id, parseCostInput(input.value, currency.value))]); form.remove();
+        if (await saveTripEdit(form, submit, controller, { tripId: trip.id, baseRevision: trip.revision, summary: `${item.title}の概算費用`, patches: [editItemCost(trip, item.id, parseCostInput(input.value, currency.value))] }, report)) form.remove();
       } catch (error) { report(error instanceof Error ? error.message : "金額を確認してください。"); }
     });
     root.append(form); input.focus();

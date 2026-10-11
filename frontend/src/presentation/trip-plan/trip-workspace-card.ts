@@ -1,3 +1,4 @@
+import { saveTripEdit } from "./save-trip-edit";
 import { notifySaved } from "../shared/save-notification";
 import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/reservation";
 import { confirmAction, requestText } from "../shared/app-dialog";
@@ -159,7 +160,6 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     });
   }
   if (!memoInput.readOnly || item.memo) body.append(memoDisclosure);
-  const safe = (action: () => void) => { try { if (controller.current()?.id !== trip.id || controller.source()?.getRole?.() === "viewer") throw new Error("Stale or readonly Trip"); action(); } catch { options.report("この変更では条件・仮定との整合が取れません。会話で変更内容を相談してください。"); } };
   const actions = element("div", "trip-workspace-actions");
   if (options.changeItemDecision) {
     const action = item.decision && !item.decision.needsReconfirmation ? "withdraw" : "confirm";
@@ -224,11 +224,16 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     modeLabel.append(mode);
     const fromLabel = element("label", "", "出発地"), from = element("input"); from.required = true; from.maxLength = 200; fromLabel.append(from);
     const toLabel = element("label", "", "到着地"), to = element("input"); to.required = true; to.maxLength = 200; toLabel.append(to);
-    const submit = element("button", "", "手入力の移動案を確認"); submit.type = "submit";
+    const submit = element("button", "", "確定"); submit.type = "submit";
     const fields = element("div", "trip-manual-transport-fields"); fields.append(modeLabel, fromLabel, toLabel);
     form.append(fields, element("p", "trip-workspace-copy", "便・時刻・所要時間と予約は未確認です。"), submit);
-    form.addEventListener("submit", event => { event.preventDefault(); safe(() => controller.preview(proposeTripItemChange(controller.current()!,
-      { action: "select-manual-transport", itemId: item.id, title: item.title, mode: mode.value as typeof nonRailTransportModes[number], origin: from.value, destination: to.value }))); });
+    form.addEventListener("submit", async event => { event.preventDefault();
+      const current = controller.current();
+      if (!current || current.id !== trip.id || current.revision !== trip.revision) { options.report("旅程が更新されました。最新の予定から編集し直してください。"); return; }
+      try { await saveTripEdit(form, submit, controller, proposeTripItemChange(current,
+        { action: "select-manual-transport", itemId: item.id, title: item.title, mode: mode.value as typeof nonRailTransportModes[number], origin: from.value, destination: to.value }), options.report); }
+      catch (error) { options.report(error instanceof Error ? error.message : "移動を保存できませんでした。"); }
+    });
     const manual = element("details", "trip-manual-transport-disclosure");
     manual.append(element("summary", "", "手入力"), form); body.append(manual);
   }

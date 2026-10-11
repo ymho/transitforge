@@ -1,15 +1,19 @@
-/** Shared modal presentation; proposals and persistence remain owned by the caller. */
+/** The editor lives outside rerendered cards so failed saves retain input and errors. */
 export function openTripEditor(form: HTMLFormElement, title: string): void {
-  let dialog = form.parentElement instanceof HTMLDialogElement ? form.parentElement : undefined;
-  if (!dialog) {
-    dialog = form.ownerDocument.createElement("dialog"); dialog.className = "trip-editor-dialog";
-    dialog.setAttribute("aria-label", title);
-    const heading = form.ownerDocument.createElement("h2"); heading.textContent = title;
-    form.before(dialog); dialog.append(heading, form);
-    const currentDialog = dialog;
-    dialog.addEventListener("close", () => { form.hidden = true; });
-    new MutationObserver(() => { if (form.hidden && currentDialog.open) currentDialog.close(); }).observe(form, { attributes: true, attributeFilter: ["hidden"] });
-  }
-  form.hidden = false;
-  if (!dialog.open) dialog.showModal();
+  const doc = form.ownerDocument;
+  const dialog = doc.createElement("dialog"); dialog.className = "trip-editor-dialog";
+  dialog.setAttribute("aria-label", title);
+  const heading = doc.createElement("h2"); heading.textContent = title;
+  const anchor = doc.createElement("span"); anchor.hidden = true; form.before(anchor);
+  dialog.append(heading, form);
+  (doc.getElementById("app") ?? doc.body).append(dialog);
+  const previous = doc.activeElement as HTMLElement | null;
+  const observer = new MutationObserver(() => { if (form.hidden && dialog.open) dialog.close(); });
+  dialog.addEventListener("close", () => {
+    observer.disconnect(); form.hidden = true;
+    if (anchor.isConnected) anchor.replaceWith(form);
+    dialog.remove(); if (previous?.isConnected) previous.focus();
+  }, { once: true });
+  observer.observe(form, { attributes: true, attributeFilter: ["hidden"] });
+  form.hidden = false; dialog.showModal();
 }

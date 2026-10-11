@@ -5,6 +5,7 @@ import { itemCost } from "@raiquora/trip/item-cost";
 import { createTripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import { createServerTripWorkspaceSource } from "../../usecases/trip-plan/server-trip-workspace-source";
 import { configureTripWorkspace } from "./trip-workspace";
+import { validateWorkspaceWriteConfirmation } from "../../usecases/trip-plan/workspace-write-confirmation";
 import { itemCostCopy } from "./trip-cost-view";
 const button = (root: ParentNode, text: string) => [...root.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === text)!;
 const food: Extract<ItineraryItem, { type: "activity" }> = { id: "food", title: "昼食", type: "activity", category: "food", schedule: { type: "unscheduled" } };
@@ -14,14 +15,14 @@ async function setup() {
     { ...food, id: "visit", title: "観光", category: "sightseeing" },
     { id: "rail", title: "列車", type: "transport", detail: { status: "unresolved", mode: "rail" }, schedule: { type: "unscheduled" } }]);
   const mutate = vi.fn(async (input) => { server = { ...applyTripProposal(server, input.proposal), revision: server.revision + 1 }; return server; });
-  const source = createServerTripWorkspaceSource(server.id, { get: async () => server }, { mutate, newMutationId: () => crypto.randomUUID(), validateConfirmation: async () => {} });
+  const source = createServerTripWorkspaceSource(server.id, { get: async () => server }, { mutate, newMutationId: () => crypto.randomUUID(), validateConfirmation: validateWorkspaceWriteConfirmation });
   const controller = createTripWorkspaceController("a"); controller.attach("a", source); await source.refresh();
   const app = document.createElement("main"), chat = document.createElement("section"), messages = document.createElement("ol"), input = document.createElement("input");
   document.body.append(app); app.append(chat); chat.append(messages, input);
   const ask = vi.fn(), ui = configureTripWorkspace({ app, chat, messages, input, controller, ask, showContext: vi.fn(), returnToConversation: vi.fn(), showMap: vi.fn(), nextItemId: () => "item" });
   return { ui, controller, source, mutate, ask, server: () => server, replace: (value: Trip) => { server = value; } };
 }
-it("reviews, saves and rereads item estimates without an AI forecast, leaving rail and other items untouched", async () => {
+it("directly saves and rereads item estimates without an AI forecast, leaving rail and other items untouched", async () => {
   const f = await setup(), panel = f.ui.panel;
   expect(panel.querySelectorAll(".trip-item-cost")).toHaveLength(2);
   expect(panel.querySelector('[data-item-id="rail"] .trip-item-cost')).toBeNull();
@@ -34,11 +35,11 @@ it("reviews, saves and rereads item estimates without an AI forecast, leaving ra
   form.querySelector("input")!.value = "-100"; form.dispatchEvent(new Event("submit", { cancelable: true }));
   expect(f.controller.proposal()).toBeUndefined(); expect(f.mutate).not.toHaveBeenCalled();
   form.querySelector("input")!.value = "0"; form.dispatchEvent(new Event("submit", { cancelable: true }));
-  expect(f.server().costs).toBeUndefined(); button(panel, "確認して旅程を保存").click();
+  expect(panel.textContent).not.toContain("変更内容を確認");
   await vi.waitFor(() => expect(itemCost(f.server(), food)?.amount.amountMinor).toBe(0));
   await f.source.refresh(); expect(row().textContent).toContain("JPY 0");
   expect(f.server().costs?.forecast).toBeUndefined(); expect(f.ask).not.toHaveBeenCalled();
-  row().querySelector<HTMLButtonElement>('[aria-label="昼食の概算費用を編集"]')!.click(); button(row(), "入力を削除").click(); button(panel, "確認して旅程を保存").click();
+  row().querySelector<HTMLButtonElement>('[aria-label="昼食の概算費用を編集"]')!.click(); button(row(), "入力を削除").click();
   await vi.waitFor(() => expect(itemCost(f.server(), food)).toBeUndefined()); f.ui.destroy();
 });
 it("preserves an interrupted form but rejects outdated revisions and conversations", async () => {
