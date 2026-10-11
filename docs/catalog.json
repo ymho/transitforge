@@ -70,6 +70,10 @@
       "category": "specs"
     },
     {
+      "path": "docs/specs/http-api.md",
+      "category": "specs"
+    },
+    {
       "path": "docs/specs/in-trip.md",
       "category": "specs"
     },

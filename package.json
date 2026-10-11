@@ -44,9 +44,14 @@
     "test:agent:v2:period-live": "vitest run --root . backend/agent-api/src/composition/strands-travel-period-live.test.ts --maxWorkers=1",
     "test:agent:v2:budget-live": "vitest run --root . backend/agent-api/src/composition/strands-budget-condition-live.test.ts --maxWorkers=1",
     "test:agent:v2:free-dialogue-live": "vitest run --root . backend/agent-api/src/composition/strands-free-dialogue.test.ts --maxWorkers=1",
-    "docs:check": "node --test tools/check_documentation.test.mjs && node tools/check_documentation.mjs"
+    "docs:check": "node --test tools/check_documentation.test.mjs && node tools/check_documentation.mjs",
+    "api:generate": "node --import tsx tools/generate_openapi.mjs",
+    "api:check": "node --import tsx tools/generate_openapi.mjs --check && node --import tsx --test tools/openapi-contract.test.mjs"
   },
   "devDependencies": {
-    "tsx": "^4.23.12"
+    "@apidevtools/swagger-parser": "12.1.0",
+    "ajv": "8.17.1",
+    "tsx": "^4.23.12",
+    "typescript-json-schema": "0.67.4"
   }
 }

@@ -24,6 +24,7 @@ TrustedPrincipal.subjectをownerへ写し、bodyのownerId / userId / email / cl
 | EventBridge等のworker / private S3読取 | IAM-only。利用者JWTで起動・全件照会しない |
 
 実行可能なoperationは`backend/agent-api/src/adapters/api-route-policy.ts`と各handlerが正本。
+公開HTTPの入出力・認証搬送・SSEは[OpenAPI契約](../specs/http-api.md)から参照する。
 認証対応の分類と、Terraformが公開するrouteを混同しない。Trip writerは有効だが全個人API factoryのgate解除ではない。
 [Trip保存](../specs/trip-persistence.md)、[Server state](server-state.md)、[旧ingress](authentication.md)を参照する。
 
