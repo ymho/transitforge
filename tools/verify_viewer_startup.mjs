@@ -23,7 +23,7 @@ createTrip("22222222-2222-4222-8222-222222222222", "別の旅", fixture.selected
 trips[0] = { ...trips[0], schemaVersion: 3,
   timeline: { version: 1, logicalDays: [{ id: "d1", label: "1日目" }, { id: "d2", label: "2日目" }], calendarBindings: [] },
   items: trips[0].items.map(item => item.id === "visit" ? { ...item, schedule: { type: "relative", dayId: "d1" } } : item),
-  request: { ...trips[0].request, constraints: [{ id: "dates", strength: "hard", source: "user", scope: { type: "trip" },
+  request: { ...trips[0].request, constraints: [{ id: "dates", strength: "soft", source: "user", scope: { type: "trip" },
     requirement: { type: "dates", start: { earliest: "2026-09-13", latest: "2026-09-13" }, end: { earliest: "2026-09-14", latest: "2026-09-14" } } }] } };
 const weatherItem = trips[0].items[0];
 trips[0] = { ...trips[0], weather: [{ itemId: weatherItem.id, basis: tripWeatherBasis(trips[0], weatherItem), fetchedAt: fixture.selectedAt,

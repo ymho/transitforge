@@ -9,6 +9,8 @@ import { TripResourceError } from "../contracts/trip-api.js";
 import { validateAgentToolInput } from "@raiquora/agent/agent-tool-input-validator";
 import type { AgentToolRegistry } from "@raiquora/agent/tool-registry";
 import { failedAgentToolResult, successfulAgentToolResult } from "@raiquora/agent/tool-contract";
+import type { Trip } from "@raiquora/trip/trip";
+import { datedSearchSelectionTarget } from "@raiquora/trip/search-selection-target";
 
 export interface CanonicalPlanCandidateDraft { selectionItems?: readonly import("@raiquora/trip/trip").ItineraryItem[]; variants: readonly PlanVariant[]; coverage: PlanCoverage }
 export interface CandidateRetentionScope {
@@ -20,6 +22,7 @@ export interface CandidateRetentionScope {
   baseTripRevision: number;
   baseItemIds?: readonly string[];
   baseDayIds?: readonly string[];
+  currentTrip?: Trip;
 }
 export const draftItineraryToolName = "draft_itinerary" as const;
 
@@ -27,7 +30,7 @@ export const draftItineraryToolName = "draft_itinerary" as const;
 export function registerPlanCandidateRetentionTool(tools: AgentToolRegistry, application: PlanCandidateRetentionApplication,
   scope: CandidateRetentionScope | (() => CandidateRetentionScope), publish: (value: RetainedCandidatePlan) => void, currentDayCount?: () => number | undefined): void {
   tools.register<unknown, unknown>({ name: draftItineraryToolName, effect: "proposal", requiredCapabilities: ["agent-v2-proposal"],
-    description: "旅程の作成・反映を依頼された時に、既知の条件から日別の仮旅程を作る。宿泊施設だけの提案・比較依頼はsearch_accommodationsを使う。空のTripでは出発地などの条件受理の後にこのToolを使う。時刻・経路・宿が未選択でも往路・活動・宿泊・帰路の枠を作りunknownsへ残せる。variantsへlabel・dayCount・itemsを指定する。itemsは行程順にkind・title・day（1始まり）を書く。翌日まで続く宿泊等はendDayを指定する。内部ID・参照配列・表示payloadはServerが生成する。確定的な期間条件があればServerがその日数を使う（1泊は2日）。未確認の移動時刻・料金・営業・宿泊を事実として補わない。成功したら最終回答で確認方法と不足条件を短く伝える。Tripへの採用・保存は利用者確認後の別操作で行う。",
+    description: "旅程の作成・反映を依頼された時に、既知の条件から日別の仮旅程を作る。宿泊施設だけの提案・比較依頼はsearch_accommodationsを使う。空のTripでは出発地などの条件受理の後にこのToolを使う。時刻・経路・宿が未選択でも往路・活動・宿泊・帰路の枠を作りunknownsへ残せる。variantsへlabel・dayCount・itemsを指定する。itemsは行程順にkind・title・day（1始まり）を書く。翌日まで続く宿泊等はendDayを指定する。内部ID・参照配列・表示payloadはServerが生成する。確定的な期間条件があればServerがその日数を使う（1泊は2日）。未確認の移動時刻・料金・営業・宿泊を事実として補わない。成功したら最終回答で確認方法と不足条件を短く伝える。Tripへの採用・保存は利用者確認後の別操作で行う。既存旅程への追加は新しく追加する予定だけを指定し、採用済みの移動・宿・観光を再生成しない。変更する未選択の既存予定にはそのbaseItemIdを指定する。選択済みの経路・宿を変更するには検証済み検索候補を使う。",
     inputSchema: candidateProposalInputSchema,
     outputSchema: { type: "object", properties: { candidateSetId: { type: "string" }, revision: { type: "integer" }, presentationId: { type: "string" }, saved: { type: "boolean" }, confirmationRequired: { type: "boolean" }, scope: { type: "string", enum: ["unsaved_itinerary_only"] }, researchPerformed: { type: "boolean", enum: [false] }, tripItemsChanged: { type: "boolean", enum: [false] } },
       required: ["candidateSetId", "revision", "presentationId", "saved", "confirmationRequired", "scope", "researchPerformed", "tripItemsChanged"], additionalProperties: false },
@@ -36,7 +39,7 @@ export function registerPlanCandidateRetentionTool(tools: AgentToolRegistry, app
       try {
         const value = input as ItineraryProposalInput;
         const currentScope = typeof scope === "function" ? scope() : scope;
-        const draft = canonicalItineraryDraft(value, currentScope.baseItemIds ?? [], currentDayCount?.(), currentScope.baseDayIds ?? []);
+        const draft = canonicalItineraryDraft(value, currentScope.baseItemIds ?? [], currentDayCount?.(), currentScope.baseDayIds ?? [], currentScope.currentTrip);
         const retained = await application.retain(currentScope, draft, value.unknowns); publish(retained);
         return successfulAgentToolResult({ candidateSetId: retained.candidateSet.id, revision: retained.candidateSet.revision,
           presentationId: retained.presentation.presentationId, saved: false, confirmationRequired: true,
@@ -71,7 +74,7 @@ export const candidateProposalInputSchema: import("@raiquora/agent/tool-contract
 };
 
 /** The model supplies proposal content; Application owns canonical identities and links. */
-function canonicalItineraryDraft(input: ItineraryProposalInput, baseItemIds: readonly string[], knownDays?: number, baseDayIds: readonly string[] = []): CanonicalPlanCandidateDraft {
+function canonicalItineraryDraft(input: ItineraryProposalInput, baseItemIds: readonly string[], knownDays?: number, baseDayIds: readonly string[] = [], trip?: Trip): CanonicalPlanCandidateDraft {
   const variants: PlanVariant[] = input.variants.map((variant, variantIndex) => {
     const id = `plan-${variantIndex + 1}`, removed = variant.removedBaseItemIds ?? [];
     const dayCount = knownDays ?? variant.dayCount;
@@ -81,16 +84,37 @@ function canonicalItineraryDraft(input: ItineraryProposalInput, baseItemIds: rea
       let dayId = `day-${index + 1}`; while (baseDayIds.includes(dayId)) dayId += "-new";
       return dayId;
     });
+    if (variant.items.some(item => item.day > dayCount || item.endDay !== undefined && (item.endDay < item.day || item.endDay > dayCount))) throw new TripResourceError("invalid-input");
     const replacements = variant.items.flatMap(item => item.baseItemId ? [item.baseItemId] : []);
     if (new Set([...removed, ...replacements]).size !== removed.length + replacements.length ||
         [...removed, ...replacements].some(ref => !baseItemIds.includes(ref))) throw new TripResourceError("invalid-input");
     let anchor = baseItemIds.filter(ref => !removed.includes(ref)).at(-1);
-    const items = variant.items.map((item, itemIndex) => {
+    let pendingAnchor: string | undefined;
+    const placements = new Map<ItineraryProposalInput["variants"][number]["items"][number], string>();
+    const additions = variant.items.filter(item => {
+      if (!trip) return true;
+      const existing = item.baseItemId ? trip.items.find(saved => saved.id === item.baseItemId) : undefined;
+      // A generic draft cannot erase a proven route/hotel. Reselection uses retained search evidence.
+      if (existing && (existing.type === "transport" && existing.detail.status === "selected" || existing.type === "stay" && existing.selection.status === "selected")) throw new TripResourceError("invalid-input");
+      if (item.baseItemId) { pendingAnchor = undefined; return true; }
+      // This only retains an unchanged authored entry; it never uses a title to select a route/place.
+      const repeats = trip.items.filter(saved => !removed.includes(saved.id) && saved.type === item.kind && draftTitle(saved.title) === draftTitle(item.title) &&
+        (saved.schedule.type === "relative" ? saved.schedule.dayId === dayOrder[item.day - 1] &&
+          saved.schedule.endDayId === (item.endDay ? dayOrder[item.endDay - 1] : undefined) && saved.schedule.part === item.part
+          : saved.logicalDayId === dayOrder[item.day - 1] || !!datedSearchSelectionTarget([saved], [{ ...saved, schedule: { type: "relative", dayId: dayOrder[item.day - 1]! } }], trip)));
+      if (repeats.length > 1) throw new TripResourceError("invalid-input");
+      if (repeats.length === 1) pendingAnchor = repeats[0]!.id;
+      else if (pendingAnchor) { placements.set(item, pendingAnchor); pendingAnchor = undefined; }
+      return repeats.length === 0;
+    });
+    if (!additions.length) throw new TripResourceError("invalid-input");
+    const items = additions.map((item, itemIndex) => {
       if (item.day > dayCount || item.endDay !== undefined && (item.endDay < item.day || item.endDay > dayCount)) throw new TripResourceError("invalid-input");
       const componentId = `${id}-item-${itemIndex + 1}`;
+      const afterRef = placements.get(item) ?? anchor;
       const value = { componentId, kind: item.kind, title: item.title,
         schedule: { type: "relative" as const, dayId: dayOrder[item.day - 1]!, ...(item.endDay ? { endDayId: dayOrder[item.endDay - 1]! } : {}), ...(item.part ? { part: item.part } : {}) },
-        evidenceRefs: [], ...(item.baseItemId ? { baseItemId: item.baseItemId } : { placement: anchor ? { afterRef: anchor } : { atBeginning: true as const } }) };
+        evidenceRefs: [], ...(item.baseItemId ? { baseItemId: item.baseItemId } : { placement: afterRef ? { afterRef } : { atBeginning: true as const } }) };
       anchor = componentId;
       return value;
     });
@@ -100,6 +124,8 @@ function canonicalItineraryDraft(input: ItineraryProposalInput, baseItemIds: rea
   });
   return { variants, coverage: { coveredScopes: ["日別の仮旅程"], omittedScopes: [...input.unknowns], complete: input.unknowns.length === 0 } };
 }
+
+function draftTitle(title: string): string { return title.normalize("NFKC").trim().replace(/\s*→\s*/gu, "→").replace(/\s+/gu, " "); }
 export interface RetainedCandidatePlan { candidateSet: ItineraryCandidateSet; presentation: PublicPlanPresentation }
 
 /** Trusted output boundary used by the candidate-generation Tool. IDs/context are server-issued, never copied from model input. */

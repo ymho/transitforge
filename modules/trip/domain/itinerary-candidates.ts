@@ -1,4 +1,5 @@
-import { validateItinerarySchedule, type ItinerarySchedule } from "./itinerary-schedule";
+import { validateItinerarySchedule, bindTimelineFromAnchor, type ItinerarySchedule } from "./itinerary-schedule";
+import { localDate } from "./daily-itinerary";
 import type { Money } from "./money";
 import type { ItineraryItem, Trip, TripUpdateProposal } from "./trip";
 import { applyTripProposal, validateTrip, createTrip } from "./trip";
@@ -173,12 +174,20 @@ export function proposePlanAdoption(input: { candidateSet: ItineraryCandidateSet
       variant.items.some(({ baseItemId }) => baseItemId && variant.retainedBaseItemIds.includes(baseItemId))) throw new Error("Ambiguous candidate base mapping");
   for (const itemId of variant.removedBaseItemIds) patches.push({ type: "remove", itemId });
   const componentToItem = new Map<string, string>();
+  const anchors: { dayId: string; date: string; timeZone: string }[] = [];
   for (const componentId of variant.timeline.itemOrder) {
     const draft = variant.items.find((item) => item.componentId === componentId)!;
-    const item = input.trustedFactory(structuredClone(draft)); componentMap.push({ componentId, itemId: item.id });
+    let item = input.trustedFactory(structuredClone(draft)); componentMap.push({ componentId, itemId: item.id });
     if (draft.baseItemId) {
       if (item.id !== draft.baseItemId) throw new Error("Replacement factory must preserve adopted item ID");
       if (draft.placement) throw new Error("Replacement placement is inherited from its base item");
+      const before = input.currentTrip.items.find(value => value.id === draft.baseItemId)!;
+      const dayId = item.logicalDayId ?? before.logicalDayId ?? (before.schedule.type === "relative" ? before.schedule.dayId : undefined);
+      if (draft.sourceCandidateRef && dayId) {
+        item = { ...item, logicalDayId: dayId };
+        if (item.schedule.type === "fixed") anchors.push({ dayId, date: localDate(item.schedule.startAt), timeZone: item.schedule.startAt.timeZone });
+        else if (item.schedule.type === "day" && item.schedule.timeZone) anchors.push({ dayId, date: item.schedule.date, timeZone: item.schedule.timeZone });
+      }
       patches.push({ type: "replace", itemId: draft.baseItemId, item }); componentToItem.set(componentId, item.id);
     } else {
       if (!draft.placement) throw new Error("New candidate item requires explicit placement");
@@ -187,6 +196,19 @@ export function proposePlanAdoption(input: { candidateSet: ItineraryCandidateSet
       if (!("atBeginning" in draft.placement) && (!afterId || variant.removedBaseItemIds.includes(afterId))) throw new Error("Candidate placement anchor is unavailable");
       patches.push({ type: "add", item, ...(afterId ? { afterId } : {}) }); componentToItem.set(componentId, item.id);
     }
+  }
+  // Adopting a verified dated search result anchors the original ordered days,
+  // without generating/replacing the other items or fabricating any clock times.
+  const timelinePatch = patches.findIndex(patch => patch.type === "timeline");
+  const currentTimelinePatch = timelinePatch >= 0 ? patches[timelinePatch] : undefined;
+  const timeline = currentTimelinePatch?.type === "timeline" ? currentTimelinePatch.timeline : input.currentTrip.timeline;
+  if (timeline && !timeline.calendarBindings.length && anchors.length) {
+    const bound = anchors.map(anchor => bindTimelineFromAnchor({ ...timeline, calendarBindings: [{ logicalDayId: anchor.dayId,
+      date: anchor.date, timeZone: anchor.timeZone, basis: "explicit" }] }, anchor.dayId, anchor.date, anchor.timeZone));
+    const dates = bound.map(value => JSON.stringify(value.calendarBindings.map(binding => [binding.logicalDayId, binding.date, binding.timeZone])));
+    if (new Set(dates).size !== 1) throw new Error("Conflicting dated selection anchors");
+    if (timelinePatch >= 0) patches[timelinePatch] = { type: "timeline", timeline: bound[0] };
+    else patches.unshift({ type: "timeline", timeline: bound[0] });
   }
   const proposal: TripUpdateProposal = { tripId: input.currentTrip.id, baseRevision: input.currentTrip.revision, summary: `候補 ${variant.id} を採用する`, patches };
   // Validate the complete aggregate before exposing an adoption preview; persistence still requires explicit confirmation and CAS.

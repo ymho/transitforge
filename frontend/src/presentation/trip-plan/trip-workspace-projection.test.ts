@@ -10,7 +10,7 @@ describe("Trip V2 workspace projections", () => {
   it("merges partially dated plans into calendar tabs while preserving logical edit targets and unknown precision", () => {
     const trip: Trip = { ...createTrip(placesTripId, "旅", placesAt), schemaVersion: 3,
       timeline: { version: 1, logicalDays: [{ id: "d1", label: "1日目" }, { id: "d2", label: "2日目" }], calendarBindings: [] },
-      request: { constraints: [{ id: "dates", strength: "hard", source: "user", scope: { type: "trip" }, requirement: { type: "dates", start: { earliest: "2026-10-24", latest: "2026-10-24" } } }], assumptions: [] },
+      request: { constraints: [{ id: "dates", strength: "soft", source: "user", scope: { type: "trip" }, requirement: { type: "dates", start: { earliest: "2026-10-24", latest: "2026-10-24" } } }], assumptions: [] },
       items: [{ id: "rail", title: "京都から出雲市", type: "transport", detail: { mode: "rail", status: "unresolved" }, schedule: { type: "relative", dayId: "d1" } },
         { id: "hotel", title: "宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-10-24", endDate: "2026-10-25" } }] };
     const before = structuredClone(trip), view = tripWorkspaceProjection(trip);

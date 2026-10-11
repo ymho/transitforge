@@ -122,6 +122,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
                 proposeVerifiedIntentRequest({ conversationId: scope.conversationId!, trip: trip!, effectiveIntent, receipt: currentIntentReceipt }) ? 1 : 0),
               baseItemIds: trip!.items.map(item => item.id),
               baseDayIds: trip!.timeline?.logicalDays.map(day => day.id),
+              currentTrip: trip!,
             }), value => { retainedCandidatePlan = value; }, () => knownItineraryDayCount(effectiveIntent));
           }
         }

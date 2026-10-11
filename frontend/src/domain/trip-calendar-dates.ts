@@ -16,7 +16,7 @@ export function tripCalendarDates(trip: Trip): ReadonlyMap<string, string> {
   }
   for (const c of effectiveTripConstraints(trip.request)) {
     const r = c.requirement;
-    if (c.strength === "hard" && c.scope.type === "trip" && r.type === "dates" && r.start.earliest === r.start.latest) {
+    if (c.source === "user" && c.scope.type === "trip" && !c.scope.participantIds?.length && r.type === "dates" && r.start.earliest === r.start.latest) {
       anchors.push({ index: 0, date: r.start.earliest });
       if (r.end && r.end.earliest === r.end.latest) anchors.push({ index: days.length - 1, date: r.end.earliest });
     }

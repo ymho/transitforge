@@ -5,9 +5,9 @@ import { tripCalendarDates } from "./trip-calendar-dates";
 
 const trip = (): Trip => ({ ...createTrip(placesTripId, "旅", placesAt), schemaVersion: 3,
   timeline: { version: 1, logicalDays: [{ id: "d1" }, { id: "d2" }, { id: "d3" }], calendarBindings: [] } });
-it("uses an exact saved trip start across month/year boundaries without editing schedules", () => {
+it.each(["hard", "soft"] as const)("uses an exact saved user start (%s) across month/year boundaries without editing schedules", strength => {
   const base = trip();
-  const current: Trip = { ...base, request: { ...base.request, constraints: [{ id: "date", scope: { type: "trip" }, strength: "hard", source: "user",
+  const current: Trip = { ...base, request: { ...base.request, constraints: [{ id: "date", scope: { type: "trip" }, strength, source: "user",
     requirement: { type: "dates", start: { earliest: "2026-12-31", latest: "2026-12-31" } } }] } };
   const before = structuredClone(current);
   expect([...tripCalendarDates(current).values()]).toEqual(["2026-12-31", "2027-01-01", "2027-01-02"]);
