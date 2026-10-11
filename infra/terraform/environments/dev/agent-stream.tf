@@ -165,7 +165,7 @@ resource "aws_lambda_function" "agent_stream" {
   architectures                  = ["arm64"]
   memory_size                    = 1024
   timeout                        = 240
-  reserved_concurrent_executions = 1
+  reserved_concurrent_executions = 2 # One bounded old stream may overlap the next consultation.
   environment {
     variables = {
       SERVER_STATE_TABLE_NAME            = aws_dynamodb_table.server_state.name
