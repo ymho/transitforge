@@ -84,7 +84,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
   it("consults at the clicked day's first gap with a single free-text input, closing the modal without mutating Trip", () => {
     const trip = multiCityTrip(), before = structuredClone(trip), f = setup({ getCurrentTrip: () => trip }); f.ui.showPlan();
     const gap = f.ui.panel.querySelector<HTMLButtonElement>(".trip-timeline-add")!; gap.click();
-    const form = f.ui.panel.querySelector<HTMLFormElement>(".trip-workspace-add")!, dialog = form.closest("dialog")!;
+    const form = document.querySelector<HTMLFormElement>("dialog .trip-workspace-add")!, dialog = form.closest("dialog")!;
     expect(dialog.open).toBe(true); expect(form.querySelector("select")).toBeNull();
     expect(form.textContent).not.toContain("追加案を確認"); expect(f.ui.panel.textContent).not.toContain("この後に追加");
     form.querySelector("textarea")!.value = "湖畔の景色のいいところで休憩したい";
@@ -99,7 +99,7 @@ describe("Trip workspace DOM and mobile navigation", () => {
   it("keeps an empty trip's addition unscheduled and prevents viewer additions", () => {
     const trip = createTrip(placesTripId, "未定の旅", placesAt), f = setup({ getCurrentTrip: () => trip });
     button(f.ui.panel, "＋ 予定を追加").click();
-    const form = f.ui.panel.querySelector<HTMLFormElement>(".trip-workspace-add")!;
+    const form = document.querySelector<HTMLFormElement>("dialog .trip-workspace-add")!;
     form.querySelector("textarea")!.value = "温泉に行きたい"; form.dispatchEvent(new Event("submit", { cancelable: true }));
     expect(f.ask).toHaveBeenCalledWith(expect.stringContaining("日時未定の旅程"));
     const viewer = setup({ getCurrentTrip: multiCityTrip, getRole: () => "viewer" });
@@ -224,10 +224,11 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(header.querySelector(".trip-item-toggle")?.getAttribute("aria-expanded")).toBe("true");
     expect(trip.items.find(item => item.id === route.id)?.title).toBe(title);
   });
-  it("groups manual transport fields with Japanese choices and omits an empty route disclosure", () => {
+  it("groups manual transport fields and saves directly without a proposal panel", async () => {
     const base = multiCityTrip(), route = base.items.find(item => item.type === "transport")!;
     const trip = { ...base, items: base.items.map(item => item.id === route.id ? { ...item, detail: { status: "unresolved" as const } } : item) };
-    const f = setup({ getCurrentTrip: () => trip });
+    const save = vi.fn(async (_proposal: import("@raiquora/trip/trip").TripUpdateProposal) => {});
+    const f = setup({ getCurrentTrip: () => trip, confirmProposal: save });
     const card = f.ui.panel.querySelector<HTMLElement>(`[data-item-id="${route.id}"]`)!;
     expect(card.querySelector(".trip-route")).toBeNull();
     const form = card.querySelector<HTMLFormElement>(".trip-workspace-manual-transport")!;
@@ -239,7 +240,8 @@ describe("Trip workspace DOM and mobile navigation", () => {
     form.querySelector("select")!.value = "air";
     const fields = form.querySelectorAll("input"); fields[0]!.value = "大阪"; fields[1]!.value = "東京";
     form.dispatchEvent(new Event("submit", { cancelable: true }));
-    expect(f.controller.proposal()?.patches[0]).toMatchObject({ type: "replace", item: { detail: { mode: "air", origin: { name: "大阪" }, destination: { name: "東京" } } } });
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0]![0].patches[0]).toMatchObject({ type: "replace", item: { detail: { mode: "air", origin: { name: "大阪" }, destination: { name: "東京" } } } });
   });
   it("preserves input, session, both scroll positions, focus, collapse and proposal through chat/trip/chat", () => {
     const f = setup({ getCurrentTrip: multiCityTrip }); f.input.value = "編集中の文章"; f.messages.scrollTop = 240; f.input.focus();

@@ -1,3 +1,4 @@
+import { saveTripEdit } from "./save-trip-edit";
 import { openTripEditor } from "./trip-editor-dialog";
 import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
 import type { DayEntry } from "@raiquora/trip/daily-itinerary";
@@ -34,16 +35,17 @@ export function renderTripTimeEditor(trip: Trip, item: ItineraryItem, entry: Day
   advanced.append(element("summary", "", "タイムゾーン・夏時間の設定"), zone.parentElement!, offset.parentElement!);
   advanced.open = zone.value !== "Asia/Tokyo";
   form.append(advanced);
-  const submit = element("button", "", "時刻の変更案を確認"); submit.type = "submit";
+  const submit = element("button", "", "確定"); submit.type = "submit";
   form.append(submit, control("取消", () => { form.hidden = true; trigger.focus(); }));
-  form.addEventListener("submit", event => {
+  form.addEventListener("submit", async event => {
     event.preventDefault(); const latest = controller.current();
     if (!latest || latest.id !== trip.id || JSON.stringify(latest.items.find(i => i.id === item.id)) !== JSON.stringify(item) || controller.sessionId() !== session) { report("旅程が更新されました。最新の予定から時刻を入力し直してください。"); return; }
     try {
       const at = plannedTimeInput(date.value, start.value, zone.value, offset.value || undefined);
-      controller.preview(proposeTripItemChange(latest, item.type === "stay"
+      const proposal = proposeTripItemChange(latest, item.type === "stay"
         ? { action: "set-stay-planned-time", itemId: item.id, plannedTiming: { ...item.plannedTiming, [role!]: at } }
-        : { action: "set-planned-time", itemId: item.id, startAt: at, ...(end?.value ? { endAt: plannedTimeInput(endDate?.value || date.value, end.value, zone.value, offset.value || undefined) } : {}) }));
+        : { action: "set-planned-time", itemId: item.id, startAt: at, ...(end?.value ? { endAt: plannedTimeInput(endDate?.value || date.value, end.value, zone.value, offset.value || undefined) } : {}) });
+      if (await saveTripEdit(form, submit, controller, proposal, report)) { form.hidden = true; const dialog = form.closest("dialog"); if (dialog?.open) dialog.close(); }
     } catch (error) { report(error instanceof Error && /[ぁ-んァ-ヶ一-龠]/u.test(error.message) ? error.message : "予定の日付とタイムゾーンを確認してください。日程未定の宿は先に宿泊日を設定してください。"); }
   });
   root.append(trigger, form); return root;

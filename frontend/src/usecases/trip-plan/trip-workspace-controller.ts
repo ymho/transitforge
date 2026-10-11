@@ -38,7 +38,7 @@ export interface TripWorkspaceSource {
 }
 export function createTripWorkspaceController(initialSessionId: string, now: () => Date = () => new Date()) {
   let sessionId = initialSessionId;
-  const sessions = new Map<string, { source: TripWorkspaceSource; itemId?: string; proposal?: TripUpdateProposal; base?: string; confirming?: boolean; plan?: PublicPlanPresentation }>();
+  const sessions = new Map<string, { source: TripWorkspaceSource; itemId?: string; proposal?: TripUpdateProposal; base?: string; confirming?: boolean; direct?: boolean; plan?: PublicPlanPresentation }>();
   const subscriptions = new Map<string, () => void>();
   const listeners = new Set<() => void>();
   const savedListeners = new Set<(proposal: TripUpdateProposal) => void>();
@@ -139,15 +139,16 @@ export function createTripWorkspaceController(initialSessionId: string, now: () 
       const itemId = state()?.itemId;
       return itemId && current()?.items.some((i) => i.id === itemId) ? { itemId } : undefined;
     },
-    proposal() { return state()?.proposal ? structuredClone(state()!.proposal!) : undefined; },
+    proposal() { return !state()?.direct && state()?.proposal ? structuredClone(state()!.proposal!) : undefined; },
     preview,
     async applyConfirmed(proposal: TripUpdateProposal, confirmation?: TripProposalConfirmation) {
       const s = state();
       if (!s || s.proposal || s.confirming) throw new Error("別の変更を処理中です。先に完了してください。");
       preview(proposal, false);
+      s.direct = true;
       const shown = s.proposal;
       try { await this.confirm(confirmation); }
-      finally { if (s.proposal === shown) { delete s.proposal; delete s.base; } publish(); }
+      finally { if (s.proposal === shown) { delete s.proposal; delete s.base; } delete s.direct; publish(); }
     },
     propose(summary: string, patches: readonly TripPatch[]) {
       const trip = current();
