@@ -59,7 +59,7 @@ decision classへ送ることで安定した。
 ## 確認
 
 2026-09-09の拡張20ケースによる反復測定と既知の限界は
-[旅行調査の統合検証](../architecture/travel-research-integration-verification.md)を参照する。
+[旅行調査の統合検証](../operations/testing.md)を参照する。
 検証済みの事実がある入力を一律decisionへ送る案も比較したが、出発日の確認が退行したため採用しない。
 今回の修正は既存の候補発見phaseと実装の整合を直すものであり、モデルの全面的な格上げや性能改善を主張しない。
 

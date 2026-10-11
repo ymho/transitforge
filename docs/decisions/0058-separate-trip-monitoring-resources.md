@@ -50,4 +50,4 @@ Trip tableに限定したConditionCheckItem権限を追加する。PutItem権限
 後続#407で[ADR 0059](0059-deliver-trip-changes-with-a-transactional-outbox.md)のtransactional outboxを採用した。
 #393のprojection/diff/reconcileは変更せず、配送を追加する。
 #394/#408が決定論的Impact評価、#395が通知・episode/dedupe・配送、#396/#397が旅行中Context/replanを担う。
-契約・制限・試験は[Trip monitoring](../architecture/trip-monitoring.md)を参照する。
+契約・制限・試験は[Trip monitoring](../specs/trip-monitoring.md)を参照する。

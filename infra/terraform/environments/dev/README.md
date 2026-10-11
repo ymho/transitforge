@@ -39,7 +39,7 @@ terraform plan
 相談のAgent LambdaはStrands v2専用で、`AGENT_RUNTIME=strands-v2`と`bedrock_model_id`を使う。
 旧Runtime選択と旧Semanticフラグは撤去した。devのCDはSonnetを明示する。
 地点詳細など他LambdaのBedrock設定は独立して保持する。復旧は
-[Agent v2実環境運用](../../../../docs/architecture/agent-v2-development-cutover.md)に従う。
+[Agent v2実環境運用](../../../../docs/operations/agent-deployment.md)に従う。
 
 手動の`Agent Eval / Strands v2 Live`は同じ`dev` environmentのOIDC trustを使うが、
 `transitforge-dev-github-agent-eval`へ直接認証する。このRoleはBedrockのsystem inference profile参照と
@@ -205,7 +205,7 @@ Refresh TokenをsessionStorageへタブ単位で保持して失効前と401時�
 Terraform単体の`enable_fixed_egress_provider`既定はfalseだが、Server構成はtrueを必須とし、CDで明示する。
 Agent roleからProvider LambdaへのIAM Invokeを接続し、既存NAT / EIPを使う。専用Secretの値はTerraformで管理しない。
 導入記録は[固定egress Provider](../../../../docs/architecture/fixed-egress-provider.md)、
-Current構成は[Server Agent](../../../../docs/architecture/server-agent-cutover.md)を参照する。
+Current構成は[Server Agent](../../../../docs/architecture/agent-runtime.md)を参照する。
 
 ## Server Agent Streaming
 
@@ -213,7 +213,7 @@ Regional REST、Server Agent、personal-state、Trip APIとCloudFront behavior�
 既存resource addressを保つためfor_each keyは`"stream"`で固定する。短命の`agent_stream_enabled` gateは撤去済みである。
 正本は`agent-stream.tf`で、experiment rootのfixture構成には依存しない。
 AWS applyせず確認する手順と公開経路のCurrent / Historical区別は
-[Streaming実装記録](../../../../docs/architecture/agent-streaming-production.md)を参照。
+[Streaming実装記録](../../../../docs/architecture/agent-streaming.md)を参照。
 `terraform test -filter=tests/agent-stream.tftest.hcl`はmock providerのoffline planだけを実行する。
 
 相談条件のTrip反映はServer Agent自身が`DynamoDbTripRepository.applyMutation`を通じて行う。
@@ -236,7 +236,7 @@ offline testはこのIAM契約を検査する。実モデルテストでもDB fi
 手動`CD / Deploy`のmode既定は`plan`。本番の保護された認証入力でplanを作り、値を含まない
 resource action一覧をstep summaryへ出す。AWS lockfileも作らず、apply/S3配信/invalidationは行わない。
 `deploy`を明示した手動実行とmain CI成功時だけ、再plan・guard後に従来のapply/配信を実施する。
-今回このworkflowは起動しない。詳細は[cutover契約](../../../../docs/architecture/server-agent-cutover.md)を参照する。
+今回このworkflowは起動しない。詳細は[cutover契約](../../../../docs/architecture/agent-runtime.md)を参照する。
 
 stream Lambdaの`SERVER_AGENT_MAX_EXECUTION_MS`はTerraformの`server_agent_max_execution_ms`
 から生成する。推奨・既定150000ms、許容範囲は整数1000〜180000ms。Lambda240秒とは別のbusiness
@@ -248,4 +248,4 @@ Cognito管理者が公式用アカウントを作成し、その`sub`をdev Envi
 `OFFICIAL_PUBLISHER_SUBJECTS_JSON`へJSON配列で設定する。CDは`TF_VAR_official_publisher_subjects`として渡す。
 未設定時は空配列で、一般ユーザーには公開操作を出さない。Frontendへsubject一覧を渡さない。
 次回デプロイ後、公式アカウントは通常の旅程画面から「共有」→「公式しおりとして公開・更新」を行う。
-公開は通常の共有Grantと独立した全ユーザー向けsnapshot。詳細は[公式しおり仕様](../../../../docs/architecture/official-guides.md)。
+公開は通常の共有Grantと独立した全ユーザー向けsnapshot。詳細は[公式しおり仕様](../../../../docs/specs/official-guides.md)。

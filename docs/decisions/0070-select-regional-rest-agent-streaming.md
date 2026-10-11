@@ -40,7 +40,7 @@ HTTP APIは最大30秒でstreaming非対応のため、この長時間turnには
 
 ## 測定と制約
 
-一次資料、現在経路の棚卸し、再現手順、結果の詳細は[検証記録](../experiments/agent-stream-462.md)に集約する。
+一次資料、現在経路の棚卸し、再現手順、結果の詳細は[検証記録](../architecture/agent-streaming.md)に集約する。
 2026-09-18、Chromium 151のlocalhost実受信では、35秒streamのTTFBは約13ms、TTFI/completionは約35.008秒。
 同じ35秒のbuffered fixtureはTTFB約35.008秒、TTFI/completion約35.015秒だった。
 90秒streamは約90.009秒、180秒streamは約180.008秒で完了し、最大無通信は約10.004秒だった。

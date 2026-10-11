@@ -26,7 +26,7 @@ Tripの永続状態の所有者を分けたまま、各PRが向かう最終契�
 ## 決定
 
 選択肢3を採用する。具体的な型、invariant、変更適用、移行順序、ACとの対応は
-[Tripライフサイクル契約](../architecture/trip-lifecycle.md)を唯一の詳細設計とする。
+[Tripライフサイクル契約](../specs/trip-model.md)を唯一の詳細設計とする。
 
 - 将来の編集正本は`Trip`。`TripRequest`はその子value objectで、独立Repositoryを作らない。
 - planningStateとlifecycleStateはTripが所有する。状態は現在地を表し、Tool/質問順を固定しない。
@@ -77,7 +77,7 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 
 同じTripへoptionalな採用確認metadataを追加し、readyとは分離する。
 仮保存・採用意思・成立性認定・実績・予定上の時間位置の対応と互換読込は
-[Trip採用契約](../architecture/trip-adoption.md)を参照する。旧readyを自動で明示採用へ移行しない。
+[Trip採用契約](../specs/trip-model.md)を参照する。旧readyを自動で明示採用へ移行しない。
 採用・撤回は既存typed ProposalとCAS、終了・中止は既存lifecycle確認を使う。
 別planStatus state machineやUI側の分類正本は作らない。
 
@@ -97,43 +97,43 @@ V2へ変わったという記述にはしない。#368/#380の残務は既に#38
 
 ## 検証
 
-#393の[監視境界](../architecture/trip-monitoring.md)はTripと外部観測・影響を分離したまま導入する。
+#393の[監視境界](../specs/trip-monitoring.md)はTripと外部観測・影響を分離したまま導入する。
 Watch保存/逆引き・再処理の判断は[ADR 0058](0058-separate-trip-monitoring-resources.md)。公開writer gateは解除しない。
 
-#385の段階実装と検証は[コア導入記録](../architecture/trip-v2-core.md)を参照する。
+#385の段階実装と検証は[コア導入記録](../specs/trip-model.md)を参照する。
 最終契約は変更せず、Trip型と採用境界の導入を本番writer切替とは分離している。
-#414の同じPlace型への統合と保存制約・legacy変換は[Place導入記録](../architecture/trip-place-snapshot.md)を参照する。
+#414の同じPlace型への統合と保存制約・legacy変換は[Place導入記録](../specs/trip-places.md)を参照する。
 #386の共通schedule、ZonedInstant、鉄道/宿泊projection、既存converter拡張は
-[Schedule導入記録](../architecture/trip-schedule.md)を参照する。本番writerのgateは解除しない。
+[Schedule導入記録](../specs/trip-schedule.md)を参照する。本番writerのgateは解除しない。
 #387の同じTrip.request、仮定/出所、最小評価、Agent投影と旧条件の部分変換は
-[Request導入記録](../architecture/trip-request.md)を参照する。別Request RepositoryやTripContextへのdual-writeは追加しない。
+[Request導入記録](../specs/trip-conditions.md)を参照する。別Request RepositoryやTripContextへのdual-writeは追加しない。
 #383の同じTripへのplanning/lifecycle、注入Clockによる精度別評価、確認Proposalとlegacy mappingは
-[状態導入記録](../architecture/trip-state.md)を参照する。状態をTool routerにせず、ready認定は#402の[派生成立性評価](../architecture/trip-feasibility.md)でApplicationが検証し、
+[状態導入記録](../specs/trip-model.md)を参照する。状態をTool routerにせず、ready認定は#402の[派生成立性評価](../specs/trip-feasibility.md)でApplicationが検証し、
 completedは今は明示確認のみ。時刻だけで実績を生成せず、writer gateも解除しない。
 
-#384の[Ask + Progress導入記録](../architecture/ask-progress.md)では、同じTripの読み取りと既存Proposalを
+#384の[Ask + Progress導入記録](../specs/agent-publication.md)では、同じTripの読み取りと既存Proposalを
 production Agent Runtimeへ接続する。回答outcomeは一時的観測であり、Trip/Conversationの新しい進行正本ではない。
 LLMがTool/質問/推薦を選び、既存Domain検証・Evidence・Viewer Action・実行上限を維持する。writer gateは解除しない。
 
-#410の[Activity導入記録](../architecture/trip-activity.md)では、同じItineraryItemへactivity、同じPatchへaddを追加する。
+#410の[Activity導入記録](../specs/trip-items.md)では、同じItineraryItemへactivity、同じPatchへaddを追加する。
 Place/schedule/PlanAssumption/VisibleProgressを再利用し、Provider候補の採用と原子的previewを検証する。
 Reservation/Money、CAS/永続化、全面UIの責務は後続へ残し、writer gateは解除しない。
 
 #415は設計変更だけなので本番モデル・Tool・migrationは実行しない。
-#411の[TripParty導入記録](../architecture/trip-party.md)では、同じTrip.request.partyと既存PlanAssumptionを統合した。
+#411の[TripParty導入記録](../specs/trip-conditions.md)では、同じTrip.request.partyと既存PlanAssumptionを統合した。
 Profile・legacy・モデル仮置きと今回ユーザー人数を分離し、未知年齢を保持する。モデル由来のsource=assumptionは
 既存constraintと同じ相互参照を使う。Provider別の年齢必須条件はAdapter、writer/CASは後続のままとする。
 
-#413の[Transport導入記録](../architecture/trip-transport.md)では、同じtransportを非鉄道へ広げる。
+#413の[Transport導入記録](../specs/trip-items.md)では、同じtransportを非鉄道へ広げる。
 manualはselected予定＋manual provenance、Provider採用はID解決・許諾・durable Evidenceの検証を経る。
 両端はdetail内（railはlegs）に保持し、時刻は共通schedule。本文の計画/観測/予約分離とwriter gateは維持する。
 
 `npm test`、`npm run build`、`npm run architecture:check`、`npm run workspace:check`を実行する。
-#400の[宿泊Snapshot導入記録](../architecture/trip-accommodation.md)では、同じselected stayをAccommodationSnapshotへ統合する。
+#400の[宿泊Snapshot導入記録](../specs/trip-accommodation.md)では、同じselected stayをAccommodationSnapshotへ統合する。
 商品identityと施設Place identityを別に解決し、保持許諾・出所・採用時点を検証する。価格・空室・画像・review・予約導線は
 Offering側に留め、Money/Reservationは後続へ残す。legacyの証拠不足を捏造せず、writer gateも解除しない。
 
-#412の[Money導入記録](../architecture/trip-money.md)では、同じOffering/Trip/Requestへ原通貨Moneyと観測を導入する。
+#412の[Money導入記録](../specs/trip-costs.md)では、同じOffering/Trip/Requestへ原通貨Moneyと観測を導入する。
 公式リストから確認した6通貨のminor unitを固定し、未対応通貨を拒否する。曖昧だった観測日時は必須とし、
 日時不明のlegacy価格はPriceObservationへ昇格させない。保持根拠は既存Snapshot.sourcesを再利用する。
 価格の明示許諾と時系列を検証し、別通貨を合算せず、FX/予算内保証/本番writerを追加しない。
@@ -141,7 +141,7 @@ Offering側に留め、Money/Reservationは後続へ残す。legacyの証拠不�
 後続PRのmigration/invalid/retry/partial failure/backward compatibility試験は
 詳細契約の適合ケース表に割り当てる。#415のACは設計として自己レビューし、#415だけを閉じるPRにする。
 
-#403の[地点projection導入記録](../architecture/trip-places.md)では、同じTripへ表示専用summaryDestinationを追加した。
+#403の[地点projection導入記録](../specs/trip-places.md)では、同じTripへ表示専用summaryDestinationを追加した。
 希望destinations、採用済みitems由来の順序付き地点、表示要約を分離する。再訪を保持し、unique表示は既存Place identityだけを使う。
 legacy destinationはsummary以外へ昇格させず、V2 Contextの単一destination fallbackを撤去する。
 Tool/Plannerを追加せず、成立性・国都市推定・全面UI・本番writerは導入しない。

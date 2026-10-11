@@ -44,7 +44,7 @@ JWT検証だけでは発行済みtokenの即時失効を保証しない。
 transport追加時は共通error mappingも同時に接続する。公開writerのgateは解除しない。
 Cognito User Pool/App Client/scope Terraform、Managed Login/PKCE、失効・logout・cache方針も次段階とする。
 本PRは本番の認証済み稼働や全API保護の完成を主張しない。
-route分類と後続の接続規則は[認証境界](../architecture/authentication-boundary.md)を正とする。
+route分類と後続の接続規則は[認証境界](../architecture/authentication.md)を正とする。
 
 ## 根拠
 

@@ -38,4 +38,4 @@ ConversationSession は `tripId?` だけで Trip を参照し、会話削除/evi
 archive と会話は別の寿命を持つ。source 所有権を読み込み成否から分離し、通信失敗時の legacy 二重 writer を防ぐ。
 公開認証・認証切替・競合と再送・完全な legacy 撤去は未完成であることを UI/文書へ明示する。
 
-契約、migration ownership、制約、AC は [実装記録](../architecture/trip-server-persistence.md)を参照する。
+契約、migration ownership、制約、AC は [実装記録](../specs/trip-persistence.md)を参照する。

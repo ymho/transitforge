@@ -47,7 +47,7 @@ Pythonが所有する。TypeScriptのAgent Applicationは計算を呼ぶPortとT
 - 言語間はversioned HTTP contractと共有scenarioの適合試験で接続する
 
 重複を許すのはparse serialize 入力検証 表示projectionと境界テストに限定する
-所有マトリクスは[Domainの所有権](../architecture/domain-ownership.md)を正本とする
+所有マトリクスは[Domainの所有権](../architecture/module-boundaries.md)を正本とする
 
 ## 影響
 

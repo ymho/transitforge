@@ -1,7 +1,7 @@
 # ADR 0035: 旅行プロフィールを端末内へ保存する
 
 - ステータス: Superseded
-- 置換: [Server state保存](../architecture/server-state-persistence.md)、[ADR 0086](0086-resolve-profile-as-versioned-reference-only-preferences.md)、[Profile V3](../architecture/travel-profile.md)。端末保存・旧field・送信境界は履歴であり現行契約ではない。
+- 置換: [Server state保存](../architecture/server-state.md)、[ADR 0086](0086-resolve-profile-as-versioned-reference-only-preferences.md)、[Profile V3](../specs/profile.md)。端末保存・旧field・送信境界は履歴であり現行契約ではない。
 - 日付: 2026-08-16
 
 今回条件のTripContext正本は[ADR 0052](0052-establish-trip-v2-contract-and-migration.md)の
@@ -39,4 +39,4 @@ TripRequestへ移行する設計を採用した（#387で実装）。Profileの�
 自由記述メモの旧値は端末だけに保持する。#457追加指示により、利用者が項目ごとにAI送信へ同意して保存した場合だけ、各240文字/最大4項目を既存Agent Contextへ投影する。
 モデルへの送信同意とログ保存は分離する。該当turnのTraceから自由文とTool payloadを除外し、サーバーのmodel-call Traceにも会話本文を残さない。今回条件を優先し、メモ内の命令やHTMLは実行しない。
 人数はContextでusualPartySizeHintと明記し、TripPartyや予約人数へ自動昇格しない。
-詳しくは[Profile編集契約](../architecture/travel-profile.md)を参照する。
+詳しくは[Profile編集契約](../specs/profile.md)を参照する。

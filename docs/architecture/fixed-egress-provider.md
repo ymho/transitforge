@@ -1,24 +1,4 @@
-# Fixed-egress Accommodation Provider（#480 Phase B）
-
-専用Secret分離と実InvokeはCurrent deployment safetyのread-only planとprovider contractで確認する。
-旧mixed Secretを変更せず保持し、Browser gateをfalseのまま新経路だけを検証する。
-
-## main監査と範囲
-
-基点は最新main `09956ed`（#490まで）。ADR 0019/0020/0068と既存Adapter、
-Server Tool組成、`ai-egress.tf`、`bedrock-agent.tf`を確認した。
-
-| Provider | 固定IP境界 | 根拠・判断 |
-| --- | --- | --- |
-| Travel/Accommodation（宿泊候補と日付別空室） | 対象 | 依頼のallowlist要件、ADR 0019、既存HttpAccommodationProvider |
-| 天気・気象庁・Mapbox POI/Navigation・Web検索/ページ読解・飲食店 | 対象外 | repositoryに固定送信元IP要件がなく、通常Internet accessで接続する |
-| Bedrock | 対象外 | Agentのモデル接続であり宿泊Providerのallowlistとは無関係 |
-
-実際のProvider名/URL/allowlist登録値はSecret/外部運用であり、repositoryにはない。
-今回Secret値・稼働AWS・Provider管理画面は読まない。Travel Providerのallowlist要件は
-依頼とADRを前提にする。他Providerの契約変更は別途監査する。
-既存`bedrock_agent`はVPC内、共有Secret読取りを持つ。これを今回外さない。
-Server組成はweather + additionalToolsを受け付ける未cutover状態であり、宿泊Toolを自動登録しない。
+# Fixed-egress Accommodation Provider
 
 ## 呼出しと契約
 
@@ -45,7 +25,7 @@ requestIdは任意の英数字・ハイフン・アンダースコア128文字�
 成功は`{ok:true, accommodations: AccommodationOffering[]}`のallowlist DTO。
 候補数は最大5件、日程一致・ID/名称・数値範囲・価格観測・安全なHTTPSリンクを再検証する。
 Provider raw JSON、追加フィールド、内部例外は返さない。
-本番Rakuten adapterのサービス識別子は`rakuten-travel`、`providerItemId`は正の整数の施設番号`hotelNo`である。移行互換の`travel-provider`も受信できるがサービス/施設の同定済みとは扱わず、選択保存用の証拠を生成しない。保持方針は[宿泊Snapshot](trip-accommodation.md)を参照する。
+本番Rakuten adapterのサービス識別子は`rakuten-travel`、`providerItemId`は正の整数の施設番号`hotelNo`である。移行互換の`travel-provider`も受信できるがサービス/施設の同定済みとは扱わず、選択保存用の証拠を生成しない。保持方針は[宿泊Snapshot](../specs/trip-accommodation.md)を参照する。
 失敗は`{ok:false,error:{code,retryable}}`のみ。
 
 | code | retryable |
@@ -86,31 +66,4 @@ retryableを維持する。Runtimeは全体deadlineとTool回数上限内でモ�
 自動の下位retryを重ねない。Runtimeの期限が先に切れる/Browserが切断する場合、Invokeのabortは
 遠隔Lambdaを停止しないため最大25秒までProvider処理が残り得る。検索はread-only。
 
-## #480統合に残す手順
-
-1. Phase AのVPC外Server roleを確定し、default-off flagとcaller roleを明示的に設定する。
-2. 宿泊専用Secretを運用手順で用意する。既存共有Secretから宿泊キーを移すタイミングは旧AI経路停止と合わせる。
-   移行期間中の旧AIは共有Secretを読むが、新Serverに宿泊キーへのread grantは与えない。
-3. Server宿泊Toolのoperationに上記factoryを注入し、既存descriptorとEvidence mapperを登録する。
-4. 実planでEIP replacementなし・NAT route・IAM・artifactを確認し、既存allowlist IPとの一致を確認する。
-5. 認証済みE2E/代表Provider通信・遅着・タイムアウトを検証してからtrafficを切り替える。
-6. 旧AIの宿泊credentials読取り/VPC依存を整理する。切戻しは旧経路と共有Secretを維持している期間に明示操作で行う。
-
-今回はplan/apply/deploy/allowlist変更/traffic切替を行わず、Issue #480は閉じない。
-
-## Offline検証
-
-- Adapter/handler隣接test: Usecase→fake Invoke→typed handler、正常/入力不正/未知operation/
-  URL注入/timeout/4xx/5xx/429/不正JSON/過大応答/secret非露出/空室fallback。
-- `npm run test --workspace @raiquora/agent-api`
-- `npm run build --workspace @raiquora/agent-api`、`npm run lambda:check --workspace @raiquora/agent-api`
-- `npm run architecture:check`
-- `python3 -m unittest tests.infra.test_fixed_egress_provider -v`
-- `terraform fmt -check -recursive infra/terraform`、devの`init -backend=false` / `validate`
-
-root全量test/buildはGitHub CIへ委ねる。専用format/lint scriptはなく、既存styleとarchitecture checkを使う。
-Smoke/Full/Live Evalは意思決定ロジックを変更しないため省略する。実AWSテストは統合gateへ残す。
-
-宿泊候補の詳細リンクはProviderの`planListUrl`を優先し、楽天トラベルの宿泊プランページへ検索時のチェックイン・チェックアウト日、大人人数、1室を渡す。施設URLのみの場合は施設番号を保ったプランページへ変換する。アフィリエイトURLは帰属情報を保持し、内包する遷移先へ条件を付与する。生成したURLは検索候補から採用済み旅程にも保存される。空室APIが未設定・失敗・該当施設を返さない場合は`unknown`を維持し、満室とは断定しない。
-
-固定egressの宿泊応答は任意の`description`（施設特色）と`reviewExcerpt`（口コミの投稿例）を各300文字以内の単一行で許可する。ProviderのHTMLを除去し、長文は文境界を優先して抜粋する。空室確認で特色・口コミが欠落した場合は同じ施設番号の施設検索結果を引き継ぐ。
+モデル設定とSDKの境界は[Server Agent](agent-runtime.md)、読み戻し・復旧は[運用手順](../operations/agent-deployment.md)を参照する。

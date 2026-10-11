@@ -5,13 +5,13 @@
 コードを技術ではなく責務から探せる状態にし 変更理由の異なるモジュールを分離する
 この文書は現在の構成とimport方向の正本である
 
-Trip V2の現行契約と責務分担は [Tripライフサイクル](trip-lifecycle.md)（#382/#415）を参照する。
+Trip V2の現行契約と責務分担は [Tripライフサイクル](../specs/trip-model.md)（#382/#415）を参照する。
 Trip/TripRequest/Itineraryのpure契約は`modules/trip/domain`、BackendのTripRepository portは
 既存規則に従い`backend/agent-api/src/ports`、CRUD / CAS / 採用は`usecases`、DB/Browser/HTTPは各Adapterへ置く。
 本設計採用だけでは新しいpackageやRepository実装を追加せず、旧型とV2を二重正本にしない。
 
 Issue #203で採用した次期構成と段階移行は[ADR 0037](../decisions/0037-adopt-typescript-workspaces-and-shared-domain-modules.md)と
-[TypeScript構成移行台帳](typescript-migration-inventory.md)を参照する。この文書は現在稼働している境界を説明する。
+[TypeScript構成移行台帳](module-boundaries.md)を参照する。この文書は現在稼働している境界を説明する。
 
 ## 現行構成
 
@@ -74,7 +74,7 @@ Conversation metadataの`tripId`が唯一のTrip参照であり、旧TripPlan re
 
 外側から内側へ依存する。Domainは最も内側に置き 外部サービスの都合を持ち込まない
 Agentは推論とToolのオーケストレーションを担当し 鉄道の計算はDomain Serviceへ委譲する
-正本と重複のルールは[Domainの所有権](domain-ownership.md)を参照する
+正本と重複のルールは[Domainの所有権](module-boundaries.md)を参照する
 
 外部旅行情報も同じ依存方向を使う。Server側のToolが入力検証と実行結果の収集を所有する。共有Evidence変換は
 `@raiquora/agent/external-travel-evidence`へ委譲し、`adapters/bedrock`はモデル形式との変換を行う。
@@ -122,7 +122,7 @@ Viewer UIは`presentation`の機能別ディレクトリに置く
 - `presentation/train-viewer`: 列車選択 詳細 時刻表 Three.js描画
 - `presentation/shared`: Sheet遷移やLoading Screenなど複数画面で共有する小さなUI
 
-CSSの所有範囲と表示比較は`docs/architecture/viewer-styles.md`を正本とする
+CSSの所有範囲と表示比較は`docs/specs/brand.md`を正本とする
 
 ## 依存方向の例外
 
@@ -143,7 +143,7 @@ npm run build
 
 新しいサービス Vendor SDK 状態管理方式を追加する場合は 先に責務と依存方向をADRへ記録する
 
-## 宿泊Providerの固定出口（#480 Phase B）
+## 宿泊Providerの固定出口
 
 Currentの[専用Provider境界](fixed-egress-provider.md)はServer Toolから接続済み。
 Serverは既存AccommodationProvider PortをLambdaAccommodationProviderへ差し替えられる。
@@ -151,11 +151,79 @@ Serverは既存AccommodationProvider PortをLambdaAccommodationProviderへ差し
 専用Lambdaだけが宿泊credentialsとHttpAccommodationProviderを所有し、Tool/Evidence/Stateは移さない。
 AgentはVPC外、Provider Lambdaだけが既存NAT / EIPを使う。
 
-## Regional REST Streaming構成（#480 Phase A）
+## Regional REST Streaming構成
 
 ADR 0070のRegional REST Streamingはproductionへ接続済み。短命cutover gateは撤去した。
 `agent-stream-lambda.ts`はVPC外のStreaming入口とし、transport adapterがHTTP/SSEの配送を所有する。
 Server Agent Runtimeはtransport非依存のturn実行とTool組成を所有し、固定IPが必要な宿泊通信は
 AccommodationProvider Portの先の専用Provider Lambdaへ分離する。Streaming Lambdaへ宿泊credentialsや
 VPC依存を持ち込まない。両Lambdaのpackageは別artifactとしてbuild・検証し、production compositionはこの境界を使う。
-[Streaming構成](agent-streaming-production.md)にCurrentの公開経路とHistoricalの導入・検証記録を分離して記録する。
+[Streaming構成](agent-streaming.md)にCurrentの公開経路とHistoricalの導入・検証記録を分離して記録する。
+
+## Domainの所有権
+
+### 目的
+
+本サービスはTypeScriptを唯一のBackend正本とし 正本と境界契約をこの文書で定める
+
+Issue #203ではBackendをTypeScriptへ統一し shared Domainを`modules`へ移す判断を採用した。
+移行記録は[TypeScript構成移行台帳](module-boundaries.md)を参照する。
+
+所有権は言語ではなく実行責務で決める
+LLMは曖昧な要求の理解とToolの選択を担い 鉄道と旅行の計算結果を生成しない
+
+旅行の正本は #382/#415 と [Trip V2契約](../specs/trip-model.md)の Server Trip V2 である。
+Browser LocalStorage はUI表示状態だけに限り、Trip本文・採用状態・revision・migration markerは保持しない。
+Candidate・Reservation・外部観測・通知をTrip本体へ混ぜない。
+Bedrockは判断とProposalを担うがTrip永続状態の所有者ではない。
+
+## 所有マトリクス
+
+| 能力 | 正本 | 利用側と境界 | 整合性の確認 |
+| --- | --- | --- | --- |
+| 列車 駅 停車時刻 経路座標と業務時刻 | `modules/train/domain`とdata-builder生成入力 | Browser Adapterがviewer-inputをDomainへ変換 | shared moduleの隣接テストとviewer-input fixture |
+| 遅延 混雑 運休 行き先変更と列車への状態適用 | `modules/operation/domain`とdata-builder生成入力 | HTTP Adapterが外部payloadを検証してDomainへ変換 | shared moduleとtraffic Adapterの隣接テスト |
+| 表示日時 業務時刻 列車フォーカス | `frontend/src/domain`と`frontend/src/usecases/viewer` | PresentationがUsecase Portを利用 | TypeScriptの隣接テスト |
+| 経路条件 候補 比較 直通検索 CSA 乗換判定 順位付け | `modules/journey/domain` | Node Agent APIが日付別indexをAdapterから渡す | shared moduleとjourney search scenario |
+| 遅延予測 遅延と混雑の履歴分析 | `modules/journey/domain`と`modules/operation/domain` | Agent Toolは計算済みの応答を変更せず利用 | shared module test Agent Eval |
+| 旅行候補 既知価格の費用集計 Profile TripContext 旅程 外部旅行情報のEvidenceと鮮度 天気 Place 再確認 | `modules/trip/domain` | Server保存と外部Providerを境界の外へ分離。端末の経路設定・表示状態は別 | shared module / Server owner・CAS / Provider contractのテスト |
+| Agent Runtime Tool Evidence Trace Policy | `modules/agent/runtime`、実行責務はBackend Application | Backend AdapterのStrands v2 loopとServer Toolへ接続。Browserは入力・表示・HTTPだけ | core隣接testとServer fake/Bedrock-weather縦切り |
+| HTTP Bedrock AWS 外部提供者の形式 | `frontend/src/adapters`と`backend/agent-api/src/adapters` | Domainへ変換してからUsecaseへ渡す | Adapter contract testとLambda package check |
+| 会話metadata・履歴 | `backend/agent-api` のConversation Application | BrowserはHTTP clientとmemory read modelで表示・選択する。永続状態はDynamoDB | owner-scoped Application/APIとfrontend controller test |
+
+## BackendとDomainの境界
+
+TypeScriptの`JourneySearchService`と探索engineは`modules/journey`が公開する正本である
+日付別時刻表とprivateな運行データの取得だけをBackend Adapterへ分離する
+ブラウザとLLMは返された候補を表示 比較 フォーカスできるが CSAや乗換判定を再実装しない
+
+FrontendとBackendの通信境界はversioned HTTP contractである。Provider非依存のContext / Tool / Evidence契約は[ADR 0068](../decisions/0068-place-agent-runtime-in-server-application.md)に従い明示workspaceで共有する
+シナリオfixtureは境界をまたぐ期待挙動の適合試験として扱う
+
+## 重複を許容する範囲
+
+- wire形式のparse serializeと入力検証
+- Domain値から各画面へ変換する表示projection
+- 同じfixtureを読む境界適合テスト
+
+## 重複を禁止する範囲
+
+- CSA 直通検索 乗換可否 順位付けをFrontend AdapterやLLMへ再実装すること
+- 遅延予測や混雑集計をAgent ToolやLLM promptで再計算すること
+- 宿泊費の集計や不明価格の補完をPresentationで行うこと
+- Provider固有payloadをDomain型として扱うこと
+- 廃止したAgent → Viewer ActionをUIイベント経由で再導入すること
+
+## Agentからの利用
+
+本番Strands v2 AgentはServer Tool Adapterから`JourneySearchService`を利用する。
+UI向けの経路 旅行 会話型への変換は鉄道探索を再実装せず 検証済みTool結果を投影する。
+
+Agent APIは外部APIとLambda entrypointを維持したまま Domain Application Adapterへ分ける
+ファイル移動だけで責務が変わったことにせず 依存方向とテストで所有権を確認する
+
+外部旅行Toolの登録・実行はBackendが所有する。天気descriptorと外部Evidence変換は`modules/agent/runtime`を正本とし、Server Toolも同じ契約を使う。
+Bedrock AdapterはToolを再定義せず 共通Registryへ登録する。Provider固有payloadの取得と正規化は
+`backend/agent-api/src/adapters`が所有し 認証情報はProviderごとのPortからだけ参照する。
+
+判断の背景は[ADR 0036](../decisions/0036-own-domain-logic-by-execution-boundary.md)を参照する

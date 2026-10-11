@@ -30,4 +30,4 @@ Trip remove/replace時はApplicationが予約を照会し、bookedならProposal
 Tripと予約を跨ぐ原子性は未保証、削除後のlinkと元予約は保持する。公開rollout時に並行操作方針を再確認する。
 Provider取得/保持許諾が未確認の情報やlegacy bookingUrlから予約を作らない。
 
-詳細・AC・失敗時の扱いは [Reservation導入記録](../architecture/trip-reservation.md) を参照する。
+詳細・AC・失敗時の扱いは [Reservation導入記録](../specs/trip-reservations.md) を参照する。

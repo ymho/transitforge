@@ -1,7 +1,7 @@
 # ADR 0087: 普段の好み設定をcompactな自動保存UIにする
 
 - ステータス: Accepted（UI項目・旧schema保持は部分置換）
-- Current: [Profile V3](../architecture/travel-profile.md)。Server CAS自動保存・IME / draft / account保護は維持し、5カテゴリ・AI同意・旧v2 round-tripは置換済み。以下は2026-09-25当時の判断。
+- Current: [Profile V3](../specs/profile.md)。Server CAS自動保存・IME / draft / account保護は維持し、5カテゴリ・AI同意・旧v2 round-tripは置換済み。以下は2026-09-25当時の判断。
 - 日付: 2026-09-25
 - 関連: #658、#659、Epic #631、ADR 0086
 

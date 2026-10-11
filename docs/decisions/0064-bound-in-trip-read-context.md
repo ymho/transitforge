@@ -169,4 +169,4 @@ ALのEvalはweather/hazard両方の本文・適用範囲/有効期間の未確�
 ## 残す責務
 
 #397の残り旅程Patch、完了保護、予約変更確認、#399の認可rolloutは別。Trip・Reservation・通知stateを更新しない。
-大規模UI、background GPS、Provider再検索は対象外。実装と検証は[導入記録](../architecture/in-trip-context.md)。
+大規模UI、background GPS、Provider再検索は対象外。実装と検証は[導入記録](../specs/in-trip.md)。

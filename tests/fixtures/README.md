@@ -16,7 +16,7 @@
 既存のsynthetic rail fixtureと本番Converse/Runtime/Default generatorを接続する。
 正常経路・架空所要時間・別日付の3ケースを反復し、非unknown Claimを分母にGrounded/Unsupported率を測る。
 実Providerデータや内部思考は録音しない。実行手順は
-[一般回答のGrounding](../../docs/architecture/general-answer-grounding.md)を参照する。
+[一般回答のGrounding](../../docs/specs/agent-publication.md)を参照する。
 
 ## UI比較用の参照
 
@@ -40,7 +40,7 @@ colocateする`frontend/src/adapters/bedrock/travel-progress-scenarios.fixture.t
 #384のA〜G fixtureと`modules/trip/domain/selected-rail-journey.fixture.ts`を再利用し、
 架空の地点・宿・時刻表だけを与える。実Providerの録音・本番会話・画像は含めない。
 Smokeは15件、FullはA〜AEの31件（K/LはActivity、M/NはTripParty、O/PはTransport、Q/RはAccommodation、SはEUR価格観測、T/Uは多都市、V〜Zは候補評価、AAはUI focus、ABは予約、AC〜AEはTrip成立性）。地点順序の共有fixtureは`modules/trip/domain/trip-places.fixture.ts`に置く。地名だけを使うsyntheticデータで実時刻表・宿泊商品ではない。JSON/Markdownの同じ指標を出力し、詳細定義は
-[Trip Progress評価](../../docs/architecture/trip-progress-evaluation.md)を参照する。
+[Trip Progress評価](../../docs/operations/testing.md)を参照する。
 
 ## 経路検索シナリオ
 

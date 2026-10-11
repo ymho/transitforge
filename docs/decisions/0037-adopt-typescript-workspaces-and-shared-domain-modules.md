@@ -67,7 +67,7 @@ Domainは外部Adapterをimportしない。Adapterはusecaseが定義するPort�
 ## 段階移行
 
 移行順と各責務の撤去条件は
-[TypeScript構成移行台帳](../architecture/typescript-migration-inventory.md)を正本とする。
+[TypeScript構成移行台帳](../architecture/module-boundaries.md)を正本とする。
 
 Node Backendは全operationのcontract parityを確認して既存Lambda resourceをin-placeでNode.js runtimeへ更新する。
 2026-08-27にdev配備を確認し Python実装を撤去した。

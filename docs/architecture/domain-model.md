@@ -1,10 +1,9 @@
-# 標準データモデル（Current）
+# 標準データモデル
 
-利用者の予約済・予約不要の自己申告は[予定の予約マーク](trip-booking-marks.md)を参照する。独立Reservationの仕様とは区別する。
+利用者の予約済・予約不要の自己申告は[予定の予約マーク](../specs/trip-booking-marks.md)を参照する。独立Reservationの仕様とは区別する。
 
-基準: main `32d51f68487a1cdc8aa56d9d732738cc90024eb9`、2026-10-05。
 型・validator・Application・Terraformを正本とし、この文書は保存先と所有境界への入口とする。
-旧型の導入経緯は[Trip lifecycleのHistorical節](trip-lifecycle.md#9-段階migrationとownership)と[ADR索引](../decisions/README.md)に残す。
+旧型の導入経緯は[Trip lifecycleのHistorical節](../specs/trip-model.md)と[ADR索引](../decisions/README.md)に残す。
 
 ## 正本と保存先
 
@@ -24,7 +23,7 @@
 Conversation / Profile / TripをLocalStorageへ保存・復元するwriter、legacy migration、dual-write、障害時fallbackはない。
 Profileや会話を変更・削除してもTripを暗黙更新・削除しない。
 ContextWorkspaceの状態を保存するAdapterの存在と、現在の画面配置は分ける。専用旅程一覧・日別タイムラインが
-現行UIであり、旧3ペイン配置を保存仕様から推定しない。[workspace](trip-workspace.md)を参照する。
+現行UIであり、旧3ペイン配置を保存仕様から推定しない。[workspace](../specs/trip-workspace.md)を参照する。
 
 ## 時刻表・運行・検索
 
@@ -35,7 +34,7 @@ Trainは`service_uid`、Pathは`path_id`、運行スナップショットとの�
 
 `JourneySearchService`とCSA / 比較は`modules/journey/domain`が所有し、Server ToolがBackendの検索operationへ接続する。
 Browserの残存`/api/agent` read clientと、相談用Server Toolの組成は別である。
-入力形式は[Viewer入力](../data/viewer-input.md)、Tool登録は[Server Agent](server-agent-cutover.md)を参照する。
+入力形式は[Viewer入力](../data/viewer-input.md)、Tool登録は[Server Agent](agent-runtime.md)を参照する。
 
 ## Trip・Profile・会話
 
@@ -46,7 +45,7 @@ Domain schema、wire `trip-api-v1`、DB storageVersion、編集revisionは別概
 
 `UserProfile version: 3`は`usualOrigin` / `interests` / `considerations`と更新metadataだけ。
 同行者・ペース・予算・AI同意field等の旧v2を読込・round-tripしない。旧recordの一括削除もしない。
-ProfileはEffective Intentのreference-only soft hintで、今回の明示条件が優先する。[Profile V3](travel-profile.md)を参照する。
+ProfileはEffective Intentのreference-only soft hintで、今回の明示条件が優先する。[Profile V3](../specs/profile.md)を参照する。
 
 Server Context Loaderは同ownerのTrip、Profile、直近最大12件のtext履歴とworking stateを復元する。
 TripRequestと受理済み条件・仮定・Profile hintを分離し、本文から正本を再構築しない。
@@ -67,7 +66,7 @@ live SSE・履歴・replayを同じrendererへ渡し、raw Provider payload・�
 Trace / feedbackの過去の保存契約と残存schemaはproductionの送信口と区別する。
 旧`/api/agent`のconversation / feedback / traceは410。現行Server診断は
 `strands-runtime-diagnostics.ts` / `server-agent-diagnostics.ts`で機微情報を抑制する。
-[Security / Privacy](agent-security-privacy.md)と[旧ingress閉鎖](server-agent-legacy-ingress-closure.md)を参照する。
+[Security / Privacy](security-privacy.md)と[旧ingress閉鎖](authentication.md)を参照する。
 
 ## 実装と検証への導線
 
@@ -80,7 +79,7 @@ Trace / feedbackの過去の保存契約と残存schemaはproductionの送信口
 | 認証・route | `infra/terraform/environments/dev/cognito.tf` / `agent-stream.tf`、`backend/agent-api/src/adapters/api-route-policy.ts` |
 | v2表示 | `frontend/src/domain/assistant-turn-view.ts`、`frontend/src/usecases/concierge/assistant-turn-projection.ts`と隣接test |
 
-詳細は[Domain所有権](domain-ownership.md)、[Module境界](module-boundaries.md)、[Server state](server-state-persistence.md)、
-[Trip保存](trip-server-persistence.md)、[テストガイド](../../tests/README.md)を参照する。
+詳細は[Domain所有権](module-boundaries.md)、[Module境界](module-boundaries.md)、[Server state](server-state.md)、
+[Trip保存](../specs/trip-persistence.md)、[テストガイド](../../tests/README.md)を参照する。
 
-Tripには任意の[保存済み天気](trip-weather.md)を保持できる。予定ID・場所と日時のbasis・取得日時・有効期限を束ねた予報観測であり、リアルタイムの状態や安全性の判定ではない。
+Tripには任意の[保存済み天気](../specs/trip-weather.md)を保持できる。予定ID・場所と日時のbasis・取得日時・有効期限を束ねた予報観測であり、リアルタイムの状態や安全性の判定ではない。

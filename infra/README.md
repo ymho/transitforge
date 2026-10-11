@@ -58,7 +58,7 @@ credential tfstate tfvarsの内容をIssue PR logへ貼らない
 専用roleへのtable限定権限を定義する。公開routeは`agent-stream.tf`が既存Regional RESTの`POST /api/trips/v1`へ接続する。
 Cognito authorizer / Backend verifier → TrustedPrincipal → 専用Trip API hostが本番writer / CASを提供する。
 Conversation / Profile V3はpersonal-state host、相談はStrands v2専用stream hostに分離する。
-Scan・Browser writer・legacy migrationを導入しない。詳細は[Trip保存](../docs/architecture/trip-server-persistence.md)。
+Scan・Browser writer・legacy migrationを導入しない。詳細は[Trip保存](../docs/specs/trip-persistence.md)。
 PITRは再生成できない計画の回復性を優先し、保存量に応じた費用を許容する。TTLで自動削除しない。
 
 ## TripChanged内部配送（#407）
@@ -66,4 +66,4 @@ PITRは再生成できない計画の回復性を優先し、保存量に応じ�
 `trip-changed.tf`はoutbox用sparse GSI、専用Lambda、1分の配送timer、起動失敗SQS DLQ、IAM、alarmを定義する。
 Trip変更本体のretry/deadは同じDynamoDB内に期限なしで保持する。公開worker endpointは追加しない。
 通常buildが`packaging/trip-changed.json`の別bundleを生成する。
-運用・redriveと#394/#409への境界は[TripChanged配送](../docs/architecture/trip-changed-delivery.md)を参照する。
+運用・redriveと#394/#409への境界は[TripChanged配送](../docs/specs/trip-monitoring.md)を参照する。

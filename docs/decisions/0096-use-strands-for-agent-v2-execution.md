@@ -54,7 +54,7 @@ V1の内部クラス、Prompt repair、planning guard、fallbackの挙動は互�
 
 #706で、利用者が未対応機能・品質低下を許容する開発用切替を承認した。現在のdev実サービスはCDの明示設定でV2を選ぶ。これは一般公開の品質合格や#703/#681の完了ではない。
 旧Semantic IntentはOFF、Agentの業務Toolはread-onlyを維持し、V1への自動fallbackは追加しない。V1は緊急時の明示的な復帰用に一時保持する。
-設定の読み戻し、既知の未完了、復帰と実装順は[Agent v2開発用実環境切替](../architecture/agent-v2-development-cutover.md)を参照する。
+設定の読み戻し、既知の未完了、復帰と実装順は[Agent v2開発用実環境切替](../operations/agent-deployment.md)を参照する。
 
 ### 2026-10-04 V1実行エンジン撤去（#788）
 

@@ -30,4 +30,4 @@ coverageはTripの採用意思、ready、予約状態ではない。宿の選択
 
 ## 関連
 
-#450 / #452 / #453、ADR 0052、[対応範囲契約](../architecture/travel-coverage.md)。
+#450 / #452 / #453、ADR 0052、[対応範囲契約](../specs/travel-discovery.md)。
