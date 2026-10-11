@@ -10,7 +10,7 @@ import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itine
 import { renderTripTimeEditor } from "./trip-time-editor";
 import { transportModeLabel } from "../../usecases/trip-plan/transport-preview";
 import { renderTripRouteTimeline } from "./trip-route-timeline";
-import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
+import type { Trip, ItineraryItem, TripUpdateProposal } from "@raiquora/trip/trip";
 import type { TripWorkspaceController } from "../../usecases/trip-plan/trip-workspace-controller";
 import { proposeTripItemChange } from "@raiquora/trip/trip-item-proposal";
 import { nonRailTransportModes } from "@raiquora/trip/transport-detail";
@@ -25,6 +25,8 @@ import { researchDateLabel } from "../../usecases/trip-plan/research-date";
 
 export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController,
   options: { entry?: DayEntry; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
+    saveMetadata?: (build: (current: Trip) => TripUpdateProposal) => Promise<void>;
+    memoDrafts?: Map<string, { value: string; base?: string }>;
     refreshWeather?: (trip: Trip, itemId: string) => Promise<void>;
     changeItemDecision?: (trip: Trip, item: ItineraryItem, action: "confirm" | "withdraw") => Promise<void> }, issues: TripFeasibilityIssue[] = []): HTMLElement {
   const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id; card.dataset.itemType = item.type;
@@ -63,8 +65,9 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   }
   const warning = renderTripWarnings([...issues.map(feasibilityIssueText), ...itemAssumptions(trip, item.id).map(a => a.text)]);
   if (warning) body.append(warning);
+  const saveMetadata = options.saveMetadata ?? (async (build: (current: Trip) => TripUpdateProposal) => { const current = controller.current(); if (!current) throw new Error("Trip unavailable"); await controller.applyConfirmed(build(current)); });
   const booking = element("label", "trip-item-booking", "予約 ");
-  const bookingInput = element("select"); bookingInput.setAttribute("aria-label", `${item.title}の予約状態`);
+  const bookingInput = element("select", "ds-control"); bookingInput.setAttribute("aria-label", `${item.title}の予約状態`);
   for (const [value, text] of [["", "未確認"], ["booked", "予約済"], ["not-required", "予約不要"]]) {
     const option = element("option", "", text); option.value = value!; bookingInput.append(option);
   }
@@ -74,8 +77,11 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     const status = bookingInput.value as "booked" | "not-required" | "";
     bookingInput.disabled = true;
     try {
-      await controller.applyConfirmed({ tripId: trip.id, baseRevision: trip.revision, summary: "予約状態を変更",
-        patches: [{ type: "item_booking", itemId: item.id, ...(status ? { status } : {}) }] });
+      await saveMetadata(current => {
+        if (current.items.find(value => value.id === item.id)?.bookingStatus !== item.bookingStatus) throw new Error("予約状態が更新されました");
+        return { tripId: current.id, baseRevision: current.revision, summary: "予約状態を変更",
+          patches: [{ type: "item_booking", itemId: item.id, ...(status ? { status } : {}) }] };
+      });
       options.report("予約状態を保存しました。");
     } catch { bookingInput.value = item.bookingStatus ?? ""; options.report("予約状態を保存できませんでした。最新の旅程を確認してください。"); }
     finally { bookingInput.disabled = !controller.canConfirm(); }
@@ -98,19 +104,34 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   const memoLabel = element("label", "", "メモ"), memoInput = element("textarea", "ds-control");
   memoInput.value = item.memo ?? ""; memoInput.rows = 3; memoInput.maxLength = 4000;
   memoInput.readOnly = controller.source()?.getRole?.() === "viewer";
+  const memoKey = `${trip.id}:${item.id}`;
+  const draft = options.memoDrafts?.get(memoKey);
+  let memoBase = item.memo;
+  if (draft && (draft.value === (item.memo ?? "") || !draft.value.trim() && item.memo === undefined)) options.memoDrafts?.delete(memoKey);
+  else if (draft && !memoInput.readOnly) { memoInput.value = draft.value; memoBase = draft.base; }
+  memoInput.addEventListener("input", () => {
+    if (!memoInput.readOnly) options.memoDrafts?.set(memoKey, { value: memoInput.value, base: memoBase });
+  });
   memoLabel.append(memoInput); memoForm.append(memoLabel);
   if (!memoInput.readOnly) {
-    const saveMemo = element("button", "ds-button", "保存"); saveMemo.type = "submit"; memoForm.append(saveMemo);
-    memoForm.addEventListener("submit", async event => {
-      event.preventDefault();
-      const current = controller.current();
-      if (!current || controller.sessionId() !== memoSession || controller.source() !== memoSource || current.id !== trip.id || current.revision !== trip.revision || controller.source()?.getRole?.() === "viewer") {
-        options.report("旅程が更新されたか、編集できません。開き直してください。"); return;
+    let memoSaving = false;
+    memoForm.addEventListener("submit", event => event.preventDefault());
+    memoInput.addEventListener("blur", async () => {
+      if (memoSaving || memoInput.value === (item.memo ?? "")) return;
+      const current = controller.current(), latestItem = current?.items.find(value => value.id === item.id);
+      if (!current || !latestItem || controller.sessionId() !== memoSession || controller.source() !== memoSource || current.id !== trip.id ||
+          latestItem.memo !== memoBase || controller.source()?.getRole?.() === "viewer") {
+        options.report("旅程が更新されたか、編集できません。メモを確認して開き直してください。"); return;
       }
-      saveMemo.disabled = true;
-      try { await controller.applyConfirmed(proposeTripItemChange(current, { action: "set-memo", itemId: item.id, memo: memoInput.value })); }
-      catch { options.report("メモを保存できませんでした。最新の旅程を確認してください。"); }
-      finally { saveMemo.disabled = false; }
+      const value = memoInput.value;
+      options.memoDrafts?.set(memoKey, { value, base: memoBase });
+      memoSaving = true; memoInput.readOnly = true;
+      try { await saveMetadata(latest => {
+        if (latest.items.find(value => value.id === item.id)?.memo !== memoBase) throw new Error("メモが更新されました");
+        return proposeTripItemChange(latest, { action: "set-memo", itemId: item.id, memo: value });
+      }); }
+      catch { options.report("メモを保存できませんでした。入力内容を確認してください。"); }
+      finally { memoSaving = false; memoInput.readOnly = controller.source()?.getRole?.() === "viewer"; }
     });
   }
   if (!memoInput.readOnly || item.memo) body.append(memoForm);

@@ -7,7 +7,7 @@ import { resolve, extname } from "node:path";
 import { tripWeatherTargets, tripWeatherBasis } from "../modules/trip/domain/trip-weather.ts";
 import { consultationDesignFixture } from "../frontend/src/presentation/concierge/consultation-design.fixture.ts";
 import { officialGuideSnapshot } from "../modules/trip/domain/official-guide.ts";
-import { createTrip } from "../modules/trip/domain/trip.ts";
+import { createTrip, applyTripProposal } from "../modules/trip/domain/trip.ts";
 import { railSelectionFixture } from "../modules/trip/domain/selected-rail-journey.fixture.ts";
 import { selectRailJourney, projectRailSchedule } from "../modules/trip/domain/selected-rail-journey.ts";
 const fixture = railSelectionFixture();
@@ -48,6 +48,7 @@ const key = `raiquora.auth.${config.clientId}.session`;
 const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of [{ width: 360, height: 844 }, { width: 390, height: 844 }, { width: 768, height: 1000 }, { width: 1280, height: 900 }, { width: 1440, height: 900 }]) {
+    trips[0] = { ...trips[0], revision: 0, items: trips[0].items.map(({ bookingStatus: _booking, memo: _memo, ...item }) => item) };
     const context = await browser.newContext({ viewport });
     const page = await context.newPage(), errors = [], apiCalls = [], dataCalls = [], failures = [], consoleErrors = [];
     page.on("requestfailed", request => failures.push(new URL(request.url()).pathname));
@@ -64,6 +65,12 @@ try {
       const path = new URL(route.request().url()).pathname;
       const command = route.request().postDataJSON();
       const trip = trips.find(t => t.id === command?.tripId || t.id === command?.conversationId);
+      if (path === "/api/trips/v1" && command?.operation === "mutate") {
+        assert.equal(command.baseRevision, trip.revision);
+        const updated = { ...applyTripProposal(trip, command.proposal), revision: trip.revision + 1 };
+        trips[trips.findIndex(value => value.id === trip.id)] = updated;
+        return route.fulfill({ json: { version: "trip-api-v1", trip: updated, revision: updated.revision, mutationId: command.mutationId } });
+      }
       const json = path === "/api/profile/v1" ? { version: "profile-api-v1", profile: null }
         : path === "/api/trips/v1" ? { version: "trip-api-v1", ...(command?.operation === "get" ? { trip, role: "owner" } : { trips }) }
         : path === "/api/trips/sharing/v1" ? { version: "trip-sharing-v1", ...(command?.operation === "official-list" ? { guides: [guide] } : command?.operation === "official-get" ? { guide } : command?.operation === "official-capabilities" ? { publisher: false } : command?.operation === "manage" ? { participants: [], grants: [] } : { trips: [{ trip: trips[0], role: "owner" }] }) }
@@ -183,7 +190,26 @@ try {
     assert.equal(await weatherCard.locator('.trip-item-weather p').count(), 2);
     assert.match(await weatherCard.locator('.trip-item-weather').textContent(), /出発.*雨.*到着.*雨/s);
     assert.equal(await weatherCard.getByRole("button", { name: "天気を更新", exact: true }).isVisible(), true);
-    await checkLayout("trip-weather");
+    assert.ok(await weatherCard.locator(".trip-item-booking select").evaluate(el => el.getBoundingClientRect().height) <= 34);
+    await weatherCard.locator(".trip-item-booking select").selectOption("booked");
+    await page.waitForFunction(() => document.querySelector('[data-item-id="rail"] .trip-item-booking select')?.value === "booked" && !document.querySelector('[data-item-id="rail"] .trip-item-booking select')?.disabled);
+    assert.equal(trips[0].items[0].bookingStatus, "booked");
+    const memoField = weatherCard.locator(".trip-item-memo textarea");
+    assert.equal(await weatherCard.locator(".trip-item-memo button").count(), 0);
+    await memoField.fill("ブラウザからの自動保存メモ");
+    await weatherCard.locator(".trip-item-booking select").focus();
+    await page.waitForFunction(() => document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.value === "ブラウザからの自動保存メモ" && !document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.readOnly);
+    assert.equal(trips[0].items[0].memo, "ブラウザからの自動保存メモ");
+    await memoField.fill("自動保存メモを再編集");
+    await weatherCard.locator(".trip-item-booking select").focus();
+    await page.waitForFunction(() => document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.value === "自動保存メモを再編集" && !document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.readOnly);
+    assert.equal(trips[0].items[0].memo, "自動保存メモを再編集");
+    const heroBalance = await page.locator(".trip-header-content").evaluate(content => {
+      const box = content.getBoundingClientRect(), nodes = [...content.children].map(node => node.getBoundingClientRect());
+      return Math.abs((Math.min(...nodes.map(node => node.top)) - box.top) - (box.bottom - Math.max(...nodes.map(node => node.bottom))));
+    });
+    assert.ok(heroBalance <= 3, `Header vertical padding differs by ${heroBalance}px`);
+    await checkLayout("trip-metadata-save");
     await weatherCard.locator('.trip-item-toggle').click();
     await page.getByRole("button", { name: "共有", exact: true }).click();
     await page.locator(".trip-sharing-panel[open]").waitFor();

@@ -371,14 +371,15 @@ it("saves item memo directly as plain text and gives viewers a read-only field",
   const f = setup({ getCurrentTrip: () => trip, confirmProposal: save });
   const form = f.ui.panel.querySelector<HTMLFormElement>('[data-item-id="activity"] .trip-item-memo')!;
   form.querySelector("textarea")!.value = "集合場所\n<script>unsafe()</script> **そのまま**";
-  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  form.querySelector("textarea")!.dispatchEvent(new Event("blur"));
   await vi.waitFor(() => expect(trip.items[2]?.memo).toBe("集合場所\n<script>unsafe()</script> **そのまま**"));
   expect(f.controller.proposal()).toBeUndefined(); expect(f.ui.panel.querySelector(".trip-item-memo script")).toBeNull();
+  expect(form.querySelector("button")).toBeNull();
   const viewer = setup({ getCurrentTrip: () => trip, getRole: () => "viewer" });
   const field = viewer.ui.panel.querySelector<HTMLTextAreaElement>('[data-item-id="activity"] .trip-item-memo textarea')!;
   expect(field.readOnly).toBe(true); expect(field.value).toBe(trip.items[2]?.memo);
   expect(field.closest("form")!.querySelector("button")).toBeNull();
-  form.dispatchEvent(new Event("submit", { cancelable: true }));
+  form.querySelector("textarea")!.dispatchEvent(new Event("blur"));
   expect(save).toHaveBeenCalledOnce();
 });
 
@@ -408,4 +409,41 @@ it("saves booking marks through a revision-bound proposal and disables them for 
  f.app.remove();
  const viewer = setup({ getCurrentTrip: () => trip, confirmProposal, getRole: () => "viewer" });
  expect(viewer.ui.panel.querySelector<HTMLSelectElement>(".trip-item-booking select")!.disabled).toBe(true);
+});
+
+it("keeps failed memo drafts in memory and never overwrites a newer shared memo", async () => {
+ const original = multiCityTrip(); let current: typeof original | undefined = original;
+ const save = vi.fn(async () => { current = undefined; throw new Error("network"); });
+ const f = setup({ getCurrentTrip: () => current, confirmProposal: save });
+ const field = f.ui.panel.querySelector<HTMLTextAreaElement>('[data-item-id="activity"] .trip-item-memo textarea')!;
+ field.value = "入力を保持"; field.dispatchEvent(new Event("input")); field.dispatchEvent(new Event("blur"));
+ await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+ await vi.waitFor(() => expect(f.controller.proposal()).toBeUndefined());
+ current = original; f.controller.refresh();
+ expect(f.ui.panel.querySelector<HTMLTextAreaElement>('[data-item-id="activity"] .trip-item-memo textarea')!.value).toBe("入力を保持");
+ current = { ...original, revision: original.revision + 1, items: original.items.map(item => item.id === "activity" ? { ...item, memo: "別の編集者のメモ" } : item) }; f.controller.refresh();
+ const recovered = f.ui.panel.querySelector<HTMLTextAreaElement>('[data-item-id="activity"] .trip-item-memo textarea')!;
+ expect(recovered.value).toBe("入力を保持"); recovered.dispatchEvent(new Event("blur"));
+ await Promise.resolve(); expect(save).toHaveBeenCalledOnce(); expect(current.items.find(item => item.id === "activity")!.memo).toBe("別の編集者のメモ");
+});
+
+it("serializes memo blur and booking changes using the latest saved revision", async () => {
+ let trip = multiCityTrip();
+ const save = vi.fn(async proposal => {
+   await Promise.resolve();
+   expect(proposal.baseRevision).toBe(trip.revision);
+   trip = { ...applyTripProposal(trip, proposal), revision: trip.revision + 1 };
+ });
+ const f = setup({ getCurrentTrip: () => trip, confirmProposal: save });
+ const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
+ const memo = card.querySelector<HTMLTextAreaElement>(".trip-item-memo textarea")!;
+ memo.value = "集合場所"; memo.dispatchEvent(new Event("blur"));
+ const booking = card.querySelector<HTMLSelectElement>(".trip-item-booking select")!;
+ booking.value = "booked"; booking.dispatchEvent(new Event("change"));
+ await vi.waitFor(() => expect(trip.items.find(item => item.id === "activity")).toMatchObject({ memo: "集合場所", bookingStatus: "booked" }));
+ expect(save).toHaveBeenCalledTimes(2); expect(f.controller.proposal()).toBeUndefined();
+ const updatedMemo = f.ui.panel.querySelector<HTMLTextAreaElement>('[data-item-id="activity"] .trip-item-memo textarea')!;
+ updatedMemo.value = "集合場所を更新"; updatedMemo.dispatchEvent(new Event("blur"));
+ await vi.waitFor(() => expect(trip.items.find(item => item.id === "activity")!.memo).toBe("集合場所を更新"));
+ expect(save).toHaveBeenCalledTimes(3);
 });
