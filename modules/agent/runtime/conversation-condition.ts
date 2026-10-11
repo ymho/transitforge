@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { EffectiveIntent } from "./effective-intent";
 import { parseAcceptedIntentDelta, type AcceptedIntentDelta, type ConversationIntentOverlay, type IntentValue } from "@raiquora/trip/conversation-intent";
 import { validateTripParty } from "@raiquora/trip/trip-party";
 import { parseIntentApplicationReceipt, type IntentApplicationReceipt } from "./conversation-intent-reducer";
@@ -59,13 +60,21 @@ export const budgetConditionUpdateInputSchema = z.strictObject({
 
 const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
 export const periodDateExpressionSchema = z.strictObject({
-  kind: z.enum(["calendar_date", "relative_date"]),
+  kind: z.enum(["calendar_date", "relative_date", "relative_weekday"]),
   year: z.number().int().min(2000).max(2100).optional()
     .describe("利用者が年を明示した場合だけ設定する。未指定の年はApplicationが決める。"),
   month: z.number().int().min(1).max(12).optional(),
   day: z.number().int().min(1).max(31).optional(),
   relation: z.enum(["today", "tomorrow", "day_after_tomorrow"]).optional(),
+  week: z.enum(["this", "next", "after_next"]).optional().describe("今週・来週・再来週。週は月曜始まりでApplicationが解決する。"),
+  weekday: z.number().int().min(1).max(7).optional().describe("月曜=1、日曜=7。利用者が明示した曜日。"),
 }).superRefine((value, context) => {
+  if (value.kind === "relative_weekday") {
+    if (value.week === undefined || value.weekday === undefined || value.year !== undefined || value.month !== undefined || value.day !== undefined || value.relation !== undefined)
+      context.addIssue({ code: "custom", message: "relative_weekday requires only week and weekday" });
+    return;
+  }
+  if (value.week !== undefined || value.weekday !== undefined) context.addIssue({ code: "custom", message: "week and weekday require relative_weekday" });
   if (value.kind === "relative_date") {
     if (value.relation === undefined || value.year !== undefined || value.month !== undefined || value.day !== undefined)
       context.addIssue({ code: "custom", message: "relative_date requires only relation" });
@@ -112,7 +121,7 @@ export const tripScenarioInputSchema = z.strictObject({
 const resolvedDateSchema = z.strictObject({
   kind: z.literal("local_date"),
   date: localDate,
-  expression: z.enum(["today", "tomorrow", "day_after_tomorrow"]).optional(),
+  expression: z.enum(["today", "tomorrow", "day_after_tomorrow", "relative_weekday"]).optional(),
   anchorDate: localDate.optional(),
   resolverVersion: z.literal("calendar-v1").optional(),
 });
@@ -244,18 +253,34 @@ export function conditionDelta(change: ConversationConditionChange, turnId: stri
 
 function travelPeriodDelta(change: Extract<ConversationConditionChange, { target: "travel_period" }>, turnId: string,
   overlay: ConversationIntentOverlay, mutationId: string): AcceptedIntentDelta {
+  const previous = (target: "start_date" | "end_date" | "duration") => {
+    const facts = overlay.facts.filter(fact => fact.target === target && fact.frame === "actual" &&
+      fact.scope.type === "conversation" && fact.precision === "exact" && ["required", "preferred", "acceptable"].includes(fact.modality));
+    return facts.length === 1 ? facts[0] : undefined;
+  };
+  const priorStart = previous("start_date"), priorEnd = previous("end_date"), priorDuration = previous("duration");
+  const period = change.period;
+  const completed = completeTravelPeriod(period, {
+    ...(priorStart?.value.kind === "local_date" ? { start: priorStart.value } : {}),
+    ...(priorEnd?.value.kind === "local_date" ? { end: priorEnd.value } : {}),
+    ...(priorDuration?.value.kind === "quantity" && priorDuration.value.unit !== "people" &&
+      Number.isInteger(priorDuration.value.amount) && priorDuration.value.amount >= 1 && priorDuration.value.amount <= 90
+      ? { duration: { amount: priorDuration.value.amount, unit: priorDuration.value.unit } } : {}),
+  });
+  const start = completed?.start, end = completed?.end, duration = completed?.duration;
   const values: Record<"start_date" | "end_date" | "duration", IntentValue | undefined> = {
-    start_date: change.period?.start,
-    end_date: change.period?.end,
-    duration: change.period?.duration ? { kind: "quantity", amount: change.period.duration.amount, unit: change.period.duration.unit } : undefined,
+    start_date: start, end_date: end,
+    duration: duration ? { kind: "quantity", amount: duration.amount, unit: duration.unit } : undefined,
   };
   const operations = (["start_date", "end_date", "duration"] as const).map(target => {
-    const value = values[target], operationId = `${mutationId}:${target}`;
+    const value = values[target], operationId = `${mutationId}:${target}`, prior = previous(target);
+    const stated = target === "start_date" ? period?.start : target === "end_date" ? period?.end : period?.duration;
     return {
       operationId, groupId: mutationId, target, action: value === undefined ? "retract" as const : "set" as const,
       scope: { type: "conversation" as const }, frame: "actual" as const,
       ...(value === undefined ? {} : { value, modality: "preferred" as const, precision: "exact" as const }),
-      provenance: { kind: "user_turn" as const, turnId, quote: change.quote },
+      provenance: !stated && value !== undefined && prior && JSON.stringify(value) === JSON.stringify(prior.value)
+        ? prior.provenance : { kind: "user_turn" as const, turnId, quote: change.quote },
     };
   });
   return parseAcceptedIntentDelta({ version: 1, mutationId, baseIntentRevision: overlay.intentRevision,
@@ -350,11 +375,12 @@ function amountExpression(amount: number): string {
 function resolveTravelPeriod(value: z.infer<typeof travelPeriodValueSchema>, quote: string, anchor?: string): z.infer<typeof resolvedPeriodSchema> {
   if (!anchor || !validDate(anchor)) {
     if (value.start?.kind === "relative_date" || value.end?.kind === "relative_date" ||
+        value.start?.kind === "relative_weekday" || value.end?.kind === "relative_weekday" ||
         value.start?.kind === "calendar_date" && value.start.year === undefined ||
         value.end?.kind === "calendar_date" && value.end.year === undefined) throw new ConditionUpdateRejectedError("invalid_condition");
   }
   const start = value.start ? resolvePeriodDate(value.start, quote, anchor) : undefined;
-  const end = value.end ? resolvePeriodDate(value.end, quote, anchor, start?.date) : undefined;
+  let end = value.end ? resolvePeriodDate(value.end, quote, anchor, start?.date) : undefined;
   const duration = value.duration ? resolveDuration(value.duration, quote, start !== undefined || end !== undefined) : undefined;
   if (!start && !end && value.duration && !duration) throw new ConditionUpdateRejectedError("invalid_source");
   if (start && end && end.date < start.date) throw new ConditionUpdateRejectedError("invalid_condition");
@@ -363,12 +389,17 @@ function resolveTravelPeriod(value: z.infer<typeof travelPeriodValueSchema>, quo
     const expected = duration.unit === "nights" ? days : days + 1;
     if (expected !== duration.amount) throw new ConditionUpdateRejectedError("invalid_condition");
   }
+  if (start && duration && !end) end = { kind: "local_date", date: stepDate(start.date, durationOffset(duration)) };
   return { ...(start ? { start } : {}), ...(end ? { end } : {}), ...(duration ? { duration } : {}) };
 }
 
 function resolveDuration(value: z.infer<typeof travelDurationSchema>, commandQuote: string,
   mayOmit: boolean): z.infer<typeof resolvedDurationSchema> | undefined {
-  const grounded = value.unit === "nights" ? nightsAppear(commandQuote, value.amount) : durationDaysAppear(commandQuote, value.amount);
+  const normalized = commandQuote.normalize("NFKC");
+  const stay = normalized.match(/(?:^|[^0-9一二三四五六七八九十])([0-9]+|[一二三四五六七八九十]+)泊\s*([0-9]+|[一二三四五六七八九十]+)日/u);
+  const nights = stay ? smallInteger(stay[1]!) : undefined, days = stay ? smallInteger(stay[2]!) : undefined;
+  if (nights !== undefined && days !== undefined && days !== nights + 1) throw new ConditionUpdateRejectedError("invalid_condition");
+  const grounded = value.unit === "nights" ? nightsAppear(commandQuote, value.amount) : durationDaysAppear(commandQuote, value.amount) || days === value.amount;
   if (!grounded) {
     if (mayOmit) return undefined;
     throw new ConditionUpdateRejectedError("invalid_source");
@@ -378,6 +409,18 @@ function resolveDuration(value: z.infer<typeof travelDurationSchema>, commandQuo
 
 function resolvePeriodDate(value: z.infer<typeof periodDateExpressionSchema>, commandQuote: string, anchor?: string,
   sameMonthReference?: string): z.infer<typeof resolvedDateSchema> {
+  if (value.kind === "relative_weekday") {
+    if (!anchor || !validDate(anchor)) throw new ConditionUpdateRejectedError("invalid_condition");
+    const markers = { this: "今週", next: "来週", after_next: "再来週" };
+    const expressions = [...commandQuote.matchAll(/(再来週|来週|今週)\s*(?:の|は)?\s*([月火水木金土日])曜(?:日)?/gu)];
+    if (!value.week || value.weekday === undefined || !expressions.some(match =>
+      match[1] === markers[value.week!] && match[2] === "月火水木金土日"[value.weekday! - 1]))
+      throw new ConditionUpdateRejectedError("invalid_source");
+    const anchorWeekday = (new Date(`${anchor}T12:00:00Z`).getUTCDay() + 6) % 7;
+    const weekOffset = value.week === "this" ? 0 : value.week === "next" ? 7 : 14;
+    return { kind: "local_date", date: stepDate(anchor, -anchorWeekday + weekOffset + value.weekday - 1),
+      expression: "relative_weekday", anchorDate: anchor, resolverVersion: "calendar-v1" };
+  }
   if (value.kind === "relative_date") {
     if (!value.relation || !anchor || !validDate(anchor) || !relativeDateAppears(commandQuote, value.relation))
       throw new ConditionUpdateRejectedError(anchor ? "invalid_source" : "invalid_condition");
@@ -430,13 +473,14 @@ function yearAppears(quote: string, year: number): boolean {
   return quote.normalize("NFKC").includes(String(year));
 }
 function nightsAppear(quote: string, amount: number): boolean {
-  return quote.normalize("NFKC").includes(`${amount}泊`);
+  return new RegExp(`(?:^|[^0-9一二三四五六七八九十])(?:${numberForms(amount).join("|")})泊`, "u").test(quote.normalize("NFKC"));
 }
 function durationDaysAppear(quote: string, amount: number): boolean {
   const normalized = quote.normalize("NFKC");
   if (amount === 1 && normalized.includes("日帰り")) return true;
-  return normalized.trim() === `${amount}日` || [`${amount}日間`, `${amount}日で`, `${amount}日ほど`,
-    `${amount}日くらい`, `${amount}日程度`, `${amount}日旅行`].some(marker => normalized.includes(marker));
+  const forms = numberForms(amount);
+  return forms.some(number => normalized.trim() === `${number}日`) ||
+    new RegExp(`(?:^|[^0-9一二三四五六七八九十])(?:${forms.join("|")})日(?:間|で|ほど|くらい|程度|旅行)`, "u").test(normalized);
 }
 function isoDate(year: number, month: number, day: number): string | undefined {
   const value = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -452,4 +496,62 @@ function stepDate(value: string, days: number): string {
 }
 function differenceInDays(start: string, end: string): number {
   return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000);
+}
+
+function durationOffset(duration: { amount: number; unit: "days" | "nights" }): number {
+  return duration.unit === "nights" ? duration.amount : duration.amount - 1;
+}
+function numberForms(amount: number): string[] {
+  const digits = "〇一二三四五六七八九";
+  const kanji = amount < 10 ? digits[amount] : `${amount >= 20 ? digits[Math.floor(amount / 10)] : ""}十${amount % 10 ? digits[amount % 10] : ""}`;
+  return [String(amount), kanji!];
+}
+function smallInteger(value: string): number | undefined {
+  return Array.from({ length: 90 }, (_, index) => index + 1).find(amount => numberForms(amount).includes(value));
+}
+
+function completeTravelPeriod(period: z.infer<typeof resolvedPeriodSchema> | null,
+  previous: z.infer<typeof resolvedPeriodSchema>): z.infer<typeof resolvedPeriodSchema> | null {
+  if (!period) return null;
+  const start = period.start ?? previous.start;
+  let duration = period.duration ?? previous.duration;
+  let end = period.end;
+  // A newly stated end supersedes an old duration that no longer describes the range.
+  if (end && start && duration && !period.duration && durationOffset(duration) !== differenceInDays(start.date, end.date)) duration = undefined;
+  if (!end && start && duration) end = { kind: "local_date", date: stepDate(start.date, durationOffset(duration)) };
+  else if (!end && !period.start && previous.end) end = previous.end;
+  if (start && end && (end.date < start.date || duration && differenceInDays(start.date, end.date) !== durationOffset(duration)))
+    throw new ConditionUpdateRejectedError("invalid_condition");
+  return { ...(start ? { start } : {}), ...(end ? { end } : {}), ...(duration ? { duration } : {}) };
+}
+
+/** Only authenticated Application context may supplement a newly grounded update.
+ * The model never submits previous values as if they occurred in the new quote. */
+export function completeConditionFromCurrentIntent(change: ConversationConditionChange, intent?: EffectiveIntent): ConversationConditionChange {
+  if (change.target !== "travel_period" || !change.period || !intent) return change;
+  const previous: z.infer<typeof resolvedPeriodSchema> = {};
+  for (const target of ["start_date", "end_date", "duration"] as const) {
+    if (intent.retractions.some(fact => fact.target === target && fact.frame === "actual" && fact.scope.type === "conversation")) continue;
+    const actual = intent.actualConversationFacts.filter(fact => fact.target === target && fact.frame === "actual" &&
+      ["conversation", "trip"].includes(fact.scope.type));
+    const eligible = actual.filter(fact => fact.precision === "exact" && ["preferred", "required", "acceptable"].includes(fact.modality));
+    const candidates: IntentValue[] = actual.length ? eligible.map(fact => fact.value) : intent.activeBaseFacts.flatMap(fact => {
+      if (fact.authority !== "persisted_user" || !["trip", "all-days"].includes(fact.scope.type) || fact.scope.participantIds?.length) return [];
+      const requirement = fact.requirement;
+      if (target === "duration" && requirement.type === "duration" && requirement.minimum === requirement.maximum)
+        return [{ kind: "quantity", amount: requirement.minimum, unit: requirement.unit } as IntentValue];
+      if (target !== "duration" && requirement.type === "dates") {
+        const bound = target === "start_date" ? requirement.start : requirement.end;
+        if (bound?.earliest && bound.earliest === bound.latest) return [{ kind: "local_date", date: bound.earliest } as IntentValue];
+      }
+      return [];
+    });
+    const unique = [...new Map(candidates.map(value => [JSON.stringify(value), value])).values()];
+    if (unique.length !== 1) continue;
+    const value = unique[0]!;
+    if (target !== "duration" && value.kind === "local_date") previous[target === "start_date" ? "start" : "end"] = value;
+    if (target === "duration" && value.kind === "quantity" && value.unit !== "people" && Number.isInteger(value.amount) && value.amount >= 1 && value.amount <= 90)
+      previous.duration = { amount: value.amount, unit: value.unit };
+  }
+  return { ...change, period: completeTravelPeriod(change.period, previous) };
 }

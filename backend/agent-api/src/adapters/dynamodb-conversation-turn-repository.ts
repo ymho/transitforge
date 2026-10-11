@@ -3,7 +3,8 @@ import { parsePublicAccommodationPresentation } from "@raiquora/agent/public-acc
 import { parsePublicCostProposal } from "@raiquora/trip/public-cost-proposal";
 import { parseConsultationRequestProposal } from "@raiquora/trip/consultation-request-proposal";
 import { parsePublicTripProposal } from "@raiquora/trip/public-trip-proposal";
-import { conditionDelta, conditionPayload, conversationConditionSchema, parseConditionJournal,
+import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
+import { completeConditionFromCurrentIntent, conditionDelta, conditionPayload, conversationConditionSchema, parseConditionJournal,
   type ConditionOperationJournal, type ConditionOperationRecord, type ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 import type { ConversationConditionRepository } from "../ports/conversation-condition-repository.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -273,7 +274,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     return this.commitIntent(input, snapshot, lease, () => delta);
   }
 
-  async acceptCondition(identity: ConversationTurnIdentity, lease: ConversationTurnLease, candidate: ConversationConditionChange): Promise<IntentApplicationReceipt> {
+  async acceptCondition(identity: ConversationTurnIdentity, lease: ConversationTurnLease, candidate: ConversationConditionChange, currentIntent?: EffectiveIntent): Promise<IntentApplicationReceipt> {
     const input = this.identity(identity), change = conversationConditionSchema.parse(candidate), snapshot = await this.read(input);
     this.validateLease(snapshot.turn, lease);
     const turn = snapshot.turn!;
@@ -283,7 +284,7 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     const recorded = turn.conditionUpdates?.operations.find(({ target, payloadHash: hash }) => target === change.target && hash === payloadHash);
     if (recorded) return structuredClone(recorded.receipt);
     const occurrence = turn.conditionUpdates?.operations.filter(({ target }) => target === change.target).length ?? 0;
-    return this.commitIntent(input, snapshot, lease, overlay => conditionDelta(change, input.turnId, overlay, occurrence),
+    return this.commitIntent(input, snapshot, lease, overlay => conditionDelta(completeConditionFromCurrentIntent(change, currentIntent), input.turnId, overlay, occurrence),
       { target: change.target, payloadHash });
   }
 

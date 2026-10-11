@@ -1,4 +1,5 @@
 import { admitConditionChange, ConditionUpdateRejectedError, type ConversationConditionInput } from "@raiquora/agent/conversation-condition";
+import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { ConversationConditionRepository } from "../../ports/conversation-condition-repository.js";
 import type { ConversationTurnIdentity, ConversationTurnLease } from "../../ports/conversation-turn-repository.js";
 import { requireStatePrincipal, stateId, StateError } from "../../contracts/server-state.js";
@@ -9,9 +10,11 @@ export function createConversationConditionApplication(repository: ConversationC
   identity: ConversationTurnIdentity, lease: ConversationTurnLease, userMessage: string, calendarDate?: string) {
   requireStatePrincipal(identity.principal); stateId(identity.conversationId); stateId(identity.turnId);
   const scope = structuredClone(identity), executionLease = structuredClone(lease);
-  return async (value: ConversationConditionInput) => {
+  return async (value: ConversationConditionInput, currentIntent?: EffectiveIntent) => {
     const change = admitConditionChange(value, userMessage, calendarDate);
-    try { return await repository.acceptCondition(scope, executionLease, change); }
+    try { return await (currentIntent
+      ? repository.acceptCondition(scope, executionLease, change, currentIntent)
+      : repository.acceptCondition(scope, executionLease, change)); }
     catch (error) {
       if (error instanceof StateError && error.code === "conflict") throw new ConditionUpdateRejectedError("condition_conflict");
       if (error instanceof StateError && error.code === "invalid-input") throw new ConditionUpdateRejectedError("invalid_condition");

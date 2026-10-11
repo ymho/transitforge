@@ -1,3 +1,4 @@
+import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { ConversationConditionChange } from "@raiquora/agent/conversation-condition";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import type { ConversationTurnIdentity, ConversationTurnLease } from "./conversation-turn-repository.js";
@@ -6,5 +7,5 @@ import type { ConversationTurnIdentity, ConversationTurnLease } from "./conversa
  * Conversation overlay. The turn identity/lease is Application-owned, never Tool input. */
 export interface ConversationConditionRepository {
   acceptCondition(identity: ConversationTurnIdentity, lease: ConversationTurnLease,
-    change: ConversationConditionChange): Promise<IntentApplicationReceipt>;
+    change: ConversationConditionChange, currentIntent?: EffectiveIntent): Promise<IntentApplicationReceipt>;
 }

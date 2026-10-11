@@ -1,3 +1,4 @@
+import { compileEffectiveIntent } from "@raiquora/agent/effective-intent";
 import { describe, expect, it } from "vitest";
 import { DynamoDbConversationTurnRepository, conversationTurnLimits } from "./dynamodb-conversation-turn-repository.js";
 import { stateDynamoFixture, stateA, stateB, conversationId, secondId, stateMetadata } from "./state-dynamodb.fixture.js";
@@ -77,6 +78,26 @@ describe("condition-operation acceptance and replay", () => {
     expect(corrected.mutationId).toBe(`condition:${turnId}:travel_period:2`);
     expect((await overlay(f))?.facts.filter(({ target }) => ["start_date","end_date"].includes(target)).map(({ value }) => value))
       .toEqual(expect.arrayContaining([{ kind: "local_date", date: "2026-10-04" }, { kind: "local_date", date: "2026-10-05" }]));
+  });
+  it("atomically derives the end when a duration is added and replays without rolling back later corrections", async () => {
+    const f = await setup();
+    const start = { target: "travel_period" as const, period: { start: { kind: "local_date" as const, date: "2026-10-12" } }, quote: "10/12" };
+    const first = await f.turns.acceptCondition(identity, f.lease, start);
+    const duration = { target: "travel_period" as const, period: { duration: { amount: 1, unit: "nights" as const } }, quote: "1泊2日" };
+    const receipt = await f.turns.acceptCondition(identity, f.lease, duration);
+    expect(receipt.operations).toHaveLength(3);
+    expect((await overlay(f))?.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target: "start_date", value: { kind: "local_date", date: "2026-10-12" } }),
+      expect.objectContaining({ target: "end_date", value: { kind: "local_date", date: "2026-10-13" } }),
+    ]));
+    expect(await f.fresh().acceptCondition(identity, f.lease, start)).toEqual(first);
+    expect((await overlay(f))?.intentRevision).toBe(2);
+    await f.turns.acceptCondition(identity, f.lease, { ...start, period: { start: { kind: "local_date", date: "2026-10-17" } }, quote: "10/17へ変更" });
+    expect((await overlay(f))?.facts.find(fact => fact.target === "end_date")?.value).toEqual({ kind: "local_date", date: "2026-10-18" });
+    expect(await f.fresh().acceptCondition(identity, f.lease, duration)).toEqual(receipt);
+    const current = compileEffectiveIntent({ overlay: (await overlay(f))! });
+    expect(await f.fresh().acceptCondition(identity, f.lease, start, current)).toEqual(first);
+    expect((await overlay(f))?.facts.find(fact => fact.target === "end_date")?.value).toEqual({ kind: "local_date", date: "2026-10-18" });
   });
   it("never persists a partial travel period when its single A-commit transaction fails", async () => {
     const f = await setup();

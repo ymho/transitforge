@@ -159,24 +159,26 @@ start/end/durationを複数Toolへ分けない。1回の呼出しをApplication�
 
 検索依頼に新しく述べた実際の人数・日程も条件writerで受理してから検索する。登録という別指示を待たず、受理済みで変わらない条件だけを再利用する。
 
-`action=set`のperiodには利用者が今回の発言で明示した全要素だけを一度に入れる。例えば「2026年10月24日から25日の1泊」は省略表記の終了日25日も含め、start/end/durationの全体をquoteに含める。省略した要素は未設定へ戻し、以前の期間値と黙って混在させない。
+`action=set`のperiodには利用者が今回の発言で明示した全要素だけを一度に入れる。例えば「2026年10月24日から25日の1泊」は省略表記の終了日25日も含め、start/end/durationの全体をquoteに含める。モデルは今回明示された要素だけを送る。Applicationは同じConversationで既に受理したexactな開始日・期間（既にTripへ反映済みのuser条件も含む）を保持し、日付と泊数/日数が別turnで追加された場合も組み合わせる。モデルが前turnの値を現在のquoteへ複製する必要はない。Profile・legacy・仮定・幅のある期間は補完に使わない。journalのpayload identityは今回groundingした入力だけから作り、現在条件による補完はreplay照合後のatomic commit内で行う。同じ入力の再送を、条件が変わった後の新規操作として扱わない。
 
-日付入力は`calendar_date`または`relative_date`だけとする。
+日付入力は`calendar_date`、`relative_date`、`relative_weekday`とする。
 
 - `calendar_date`: dayは必須。monthは明示された場合、またはendがstartと同月で日だけ明示された場合に使う。yearは利用者が年を明示した場合だけ権威を持つ。
 - `relative_date`: 今日 / 明日 / 明後日。
+- `relative_weekday`: 今週 / 来週 / 再来週と明示された曜日。月曜始まりの週としてtrusted `calendarDate`から解決する。基準日2026-10-11（日曜）の「来週の土曜日」は2026-10-17となる。週・曜日はquoteに対応する組があることを検証し、モデルが計算した月日を発言に直接書かれた日付として要求しない。単に「週末」等の幅のある希望から日を捏造しない。
 
-旅行期間全体のquoteを唯一のsource substringとして使い、Applicationがそこに月・日・泊数/日数が実在するか決定論的に検証する。前turnのdurationなど、今回発言に根拠がない任意要素は今回のperiodへ持ち越さない。モデルへ日付ごとのquote切り出しは要求しない。
+旅行期間全体のquoteを唯一のsource substringとして使い、Applicationがそこに月・日・泊数/日数が実在するか決定論的に検証する。モデルが今回発言に根拠のない任意要素を入力へ補完しても、その補完値は受理しない。前turnの受理済み値の保持と、開始日＋期間による終了日の算出はApplicationの責務である。モデルへ日付ごとのquote切り出しは要求しない。
 
 年が明示されていない月日は、Applicationがtrusted `calendarDate`を基準に**その日以降で最初に到来する月日**へ機械的に解決する。たとえば基準日2026-09-26なら12/25は2026-12-25、1/21は2027-01-21である。モデルが推測したyear値は対応する部分quoteに年が無ければ無視する。明示年がある場合だけその年を使う。相対表現にcalendar anchorが無ければ受理しない。
 
-日数は`days`または`nights`で、今回発言に明示された整数だけを受け取る。「日帰り」は1日（days / amount=1）として受理し、開始日と同じperiodで保持する。泊数0や未設定へ変換せず、終了日や出発時刻は生成しない。
+日数は`days`または`nights`で、今回発言に明示された整数だけを受け取る。「日帰り」は1日（days / amount=1）として受理し、開始日と同じperiodで保持する。泊数0や未設定へ変換せず、日帰りの終了日は開始日と同日にする。1泊2日（一泊二日）等は両端を含む日数を解釈し、泊数と日数が矛盾する指定は拒否する。出発時刻は生成しない。
 
 ### 整合性
 
 - startとendが両方ある場合、end < startは拒否する。
 - start/end/durationがすべて明示されている場合、nightsは日付差、daysは両端を含む日数と一致しなければ拒否する。
-- start+durationだけからendを生成しない。
+- exactなstart+durationからendを算出する。nightsはstartに泊数を加算し、daysは日数−1を加算する。月末・年末・閏日も暦計算で扱う。日付または期間の訂正時は終了日を再計算し、以前の終了日を残さない。
+- 新しくendを明示して既存durationと矛盾する場合、その古いdurationは撤回する。startの訂正時にdurationが無ければ以前のendは未定へ戻す。幅・仮定・Profile値から終了日を確定しない。
 - start+endだけからdurationを生成しない。
 - 期間全体のclearはstart_date/end_date/durationを同一atomic groupでretractする。
 
