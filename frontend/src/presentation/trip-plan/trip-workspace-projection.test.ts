@@ -7,6 +7,20 @@ import { transportModes } from "@raiquora/trip/transport-detail";
 import { itineraryDay, itineraryItemCopy, tripWorkspaceProjection, tripProposalProjection } from "./trip-workspace-projection";
 
 describe("Trip V2 workspace projections", () => {
+  it("merges partially dated plans into calendar tabs while preserving logical edit targets and unknown precision", () => {
+    const trip: Trip = { ...createTrip(placesTripId, "旅", placesAt), schemaVersion: 3,
+      timeline: { version: 1, logicalDays: [{ id: "d1", label: "1日目" }, { id: "d2", label: "2日目" }], calendarBindings: [] },
+      request: { constraints: [{ id: "dates", strength: "soft", source: "user", scope: { type: "trip" }, requirement: { type: "dates", start: { earliest: "2026-10-24", latest: "2026-10-24" } } }], assumptions: [] },
+      items: [{ id: "rail", title: "京都から出雲市", type: "transport", detail: { mode: "rail", status: "unresolved" }, schedule: { type: "relative", dayId: "d1" } },
+        { id: "hotel", title: "宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-10-24", endDate: "2026-10-25" } }] };
+    const before = structuredClone(trip), view = tripWorkspaceProjection(trip);
+    expect(view.timelineDays.map(([, entries, label]) => [label, entries.map(entry => [entry.sourceItemId, entry.role])])).toEqual([
+      ["2026-10-24", [["rail", "visit"], ["hotel", "start"]]], ["2026-10-25", [["hotel", "end"]]],
+    ]);
+    expect(view.timelineDays[0]![1][0]).toMatchObject({ placement: "unbound", logicalDayId: "d1", sourceDayKey: "logical:d1" });
+    expect(view.timelineDays[0]![1][0]?.localDate).toBeUndefined();
+    expect(trip).toEqual(before);
+  });
   it("marks schedule/place/selection/party assumptions only while unconfirmed", () => {
     const trip: Trip = { ...multiCityTrip(), items: [...multiCityTrip().items, { id: "unselected", title: "宿未定", type: "stay", schedule: { type: "unscheduled" }, selection: { status: "unselected" } }, placeActivity("unknown")],
       request: { constraints: [], party: { adults: 1, children: [], source: "assumption", assumptionId: "party" }, assumptions: [

@@ -54,7 +54,9 @@ try {
     assert.equal(await page.locator(".consultation-page").isVisible(), false);
     await capture("trip");
     await page.locator(".trip-header-actions").getByRole("button", { name: "相談", exact: true }).click();
-    await page.getByRole("dialog", { name: "どれについて相談しますか？" }).getByRole("button", { name: "ほかのことを相談", exact: true }).click();
+    const consultation = page.getByRole("dialog", { name: "どれについて相談しますか？" });
+    await consultation.getByLabel("ほかのことを相談", { exact: true }).fill("次に決めることを相談したい");
+    await consultation.getByRole("button", { name: "相談する", exact: true }).click();
     assert.equal(await page.locator(".home-hero").isVisible(), false);
     assert.equal(await page.locator(".consultation-page").isVisible(), true);
     assert.match(await page.locator(".consultation-identity").innerText(), /出雲旅行/);

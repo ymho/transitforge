@@ -9,6 +9,21 @@ export interface TripConsultationTopic {
   readonly section: "undecided" | "review";
 }
 
+/** A few varied examples, with unresolved decisions ahead of reviewing saved choices. */
+export function tripConsultationExamples(trip: Trip): TripConsultationTopic[] {
+  const topics = tripConsultationTopics(trip).sort((a, b) => Number(a.section === "review") - Number(b.section === "review"));
+  const examples: TripConsultationTopic[] = [];
+  for (const topic of topics) {
+    if (!examples.some(example => topic.itemId ? example.itemId === topic.itemId : example.label === topic.label)) examples.push(topic);
+    if (examples.length === 3) return examples;
+  }
+  for (const topic of topics) {
+    if (!examples.includes(topic)) examples.push(topic);
+    if (examples.length === 3) break;
+  }
+  return examples;
+}
+
 /** Read-only suggestions from saved facts; never creates a place, time or booking. */
 export function tripConsultationTopics(trip: Trip): TripConsultationTopic[] {
   const result: TripConsultationTopic[] = [];

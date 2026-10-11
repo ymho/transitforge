@@ -19,6 +19,12 @@ const trips = [createTrip("11111111-1111-4111-8111-111111111111", "乗換のあ�
   { id: "stay", title: "町の宿", type: "stay", selection: { status: "unselected" }, schedule: { type: "day", date: "2026-09-13", endDate: "2026-09-14" } }
 ], { constraints: [], assumptions: [], party: { adults: 2, children: [{ age: 7 }], source: "user" } }),
 createTrip("22222222-2222-4222-8222-222222222222", "別の旅", fixture.selectedAt)];
+// A date selected after a logical itinerary must replace duplicate logical/calendar tabs.
+trips[0] = { ...trips[0], schemaVersion: 3,
+  timeline: { version: 1, logicalDays: [{ id: "d1", label: "1日目" }, { id: "d2", label: "2日目" }], calendarBindings: [] },
+  items: trips[0].items.map(item => item.id === "visit" ? { ...item, schedule: { type: "relative", dayId: "d1" } } : item),
+  request: { ...trips[0].request, constraints: [{ id: "dates", strength: "soft", source: "user", scope: { type: "trip" },
+    requirement: { type: "dates", start: { earliest: "2026-09-13", latest: "2026-09-13" }, end: { earliest: "2026-09-14", latest: "2026-09-14" } } }] } };
 const weatherItem = trips[0].items[0];
 trips[0] = { ...trips[0], weather: [{ itemId: weatherItem.id, basis: tripWeatherBasis(trips[0], weatherItem), fetchedAt: fixture.selectedAt,
   validUntil: new Date(Date.parse(fixture.selectedAt) + 3_600_000).toISOString(), provider: "open-meteo", sourceUrl: "https://open-meteo.com/",
@@ -206,6 +212,7 @@ try {
     assert.equal(await page.locator(".trip-route-leg").count(), 2);
     assert.match(await page.locator(".trip-route-transfer").textContent(), /乗換10分/);
     assert.match(await page.locator(".trip-itinerary-dates").textContent(), /9月13日ー9月14日・1泊2日/);
+    assert.deepEqual(await page.locator(".trip-day-tabs [role=tab]").allTextContents(), ["9月13日(日)", "9月14日(月)"]);
     await checkLayout("timeline");
     const weatherCard = page.locator('.trip-workspace-day:not([hidden]) [data-item-id="rail"]');
     if (await weatherCard.locator('.trip-item-toggle').getAttribute('aria-expanded') === 'false') await weatherCard.locator('.trip-item-toggle').click();
@@ -310,6 +317,24 @@ try {
     await page.locator(".trip-header-actions").getByRole("button", { name: "相談", exact: true }).click();
     const consultation = page.getByRole("dialog", { name: "どれについて相談しますか？", exact: true });
     await consultation.waitFor();
+    assert.ok(await consultation.locator(".trip-consultation-options button").count() <= 3);
+    assert.equal(await consultation.getByRole("button", { name: "相談する", exact: true }).isDisabled(), true);
+    const exampleStyle = await consultation.locator(".trip-consultation-options button").first().evaluate(button => ({
+      size: parseFloat(getComputedStyle(button).fontSize), background: getComputedStyle(button).backgroundColor,
+    }));
+    assert.ok(exampleStyle.size <= 13);
+    assert.equal(exampleStyle.background, "rgba(0, 0, 0, 0)");
+    const freeInput = consultation.getByLabel("ほかのことを相談", { exact: true });
+    await freeInput.fill("前後の予定に余裕がありますか？");
+    assert.equal(await consultation.getByRole("button", { name: "相談する", exact: true }).isDisabled(), false);
+    const spacing = await consultation.evaluate(dialog => {
+      const examples = dialog.querySelector(".trip-consultation-options").getBoundingClientRect();
+      const form = dialog.querySelector(".trip-consultation-form").getBoundingClientRect();
+      const input = dialog.querySelector("textarea").getBoundingClientRect();
+      const actions = dialog.querySelector(".trip-consultation-actions").getBoundingClientRect();
+      return { formGap: form.top - examples.bottom, actionsGap: actions.top - input.bottom };
+    });
+    assert.ok(spacing.formGap >= 20 && spacing.actionsGap >= 16, `Consultation spacing: ${JSON.stringify(spacing)}`);
     await checkLayout("consultation-topics");
     await consultation.getByRole("button", { name: /経路を選び直す/ }).first().click();
     await page.locator(".consultation-messages .journey-presentation").waitFor();

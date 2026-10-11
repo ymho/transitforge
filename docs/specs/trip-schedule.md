@@ -33,7 +33,7 @@ ZonedInstantは明示offsetとIANA zoneを検証し、端末timezoneや今日で
 - `relative`: logical dayと任意の概念的時間帯・duration range。calendar dateはbindingがあるときだけ得る。
 - `unscheduled`: 日にも配置されていない。
 
-bindingの生成は明示anchor・date・zoneを必須とする。タイトルや地名からzoneを推測しない。sequential bindingはpureに解除でき、
+bindingの生成は明示anchor・date・zoneを必須とする。既存の相対枠へ検証済みの日付入り経路・宿を明示採用した場合も、その枠の論理日と取得済みdate・zoneをanchorとして同じProposalで未対応timelineをbindする。他の予定を再生成せず、既存のbindingは暗黙変更しない。タイトルや地名からzoneを推測しない。sequential bindingはpureに解除でき、
 logical day参照は変わらない。異なるlogical dayが同じlocal dateになることを禁止しない。
 
 ## 日別projection

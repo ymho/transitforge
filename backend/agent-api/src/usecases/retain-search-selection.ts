@@ -23,9 +23,11 @@ export function searchSelectionDraft(items: readonly ItineraryItem[], trip: Trip
   const dated = !focused && !reselection && slots.length > 1 ? datedSearchSelectionTarget(items, slots, trip) : undefined;
   if (!focused && !reselection && slots.length > 1 && !dated) return undefined;
   const target = focused ?? reselection ?? dated ?? slots[0];
+  const logicalDayId = target?.logicalDayId ?? (target?.schedule.type === "relative" ? target.schedule.dayId : undefined);
   return { selectionItems: structuredClone(items), coverage: { coveredScopes: ["取得済み候補の旅程への採用"], omittedScopes: [], complete: true },
     variants: items.map((item, index) => ({ id: `option-${index + 1}`, label: item.title, timeline: { dayOrder: [], itemOrder: ["selection-item"] },
       items: [{ componentId: "selection-item", kind: item.type, title: item.title, schedule: structuredClone(item.schedule),
+        ...(logicalDayId ? { logicalDayId } : {}),
         sourceCandidateRef: item.id, evidenceRefs: [], ...(target ? { baseItemId: target.id } : {
           placement: trip.items.length ? { afterRef: focusedItemId ?? trip.items.at(-1)!.id } : { atBeginning: true as const } }) }],
       assumptionRefs: [], assessmentRefs: [], changedComponentIds: ["selection-item"], removedBaseItemIds: [],

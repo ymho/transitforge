@@ -449,18 +449,23 @@ it("serializes memo blur and booking changes using the latest saved revision", a
  expect(save).toHaveBeenCalledTimes(3);
 });
 
-it("clears item focus for other consultation and closes stale dialogs on session changes", () => {
+it("sends typed consultation with cleared focus and closes stale dialogs on session changes", () => {
   const trip = multiCityTrip(), f = setup({ getCurrentTrip: () => trip });
   f.ui.showPlan(); f.controller.focus("hotel");
   button(f.ui.panel, "相談").click();
-  button(document.querySelector("dialog.trip-consultation-dialog")!, "ほかのことを相談").click();
-  expect(f.controller.uiFocus()).toBeUndefined(); expect(f.ask).not.toHaveBeenCalled();
+  const dialog = document.querySelector("dialog.trip-consultation-dialog")!;
+  const submit = button(dialog, "相談する"), input = dialog.querySelector("textarea")!;
+  expect(submit.disabled).toBe(true);
+  input.value = "  "; input.dispatchEvent(new Event("input")); expect(submit.disabled).toBe(true);
+  input.value = " 前後の移動に余裕がありますか？ "; input.dispatchEvent(new Event("input")); expect(submit.disabled).toBe(false);
+  dialog.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
+  expect(f.controller.uiFocus()).toBeUndefined(); expect(f.ask).toHaveBeenCalledExactlyOnceWith("前後の移動に余裕がありますか？");
   expect(f.app.dataset.tripWorkspaceView).toBe("chat");
   f.ui.showPlan(); button(f.ui.panel, "相談").click();
   f.controller.attach("other", { getCurrentTrip: () => createTrip("22222222-2222-4222-8222-222222222222", "別の旅", placesAt) });
   f.controller.activateSession("other");
   expect(document.querySelector("dialog.trip-consultation-dialog")).toBeNull();
-  expect(f.ask).not.toHaveBeenCalled();
+  expect(f.ask).toHaveBeenCalledTimes(1);
 });
 
 it("moves sharing and owner-only deletion to details and returns to the list only after success", async () => {

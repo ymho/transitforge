@@ -1,13 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { createTrip, type ActivityItineraryItem } from "@raiquora/trip/trip";
 import { multiCityTrip, placesAt, placesTripId, placeStay } from "../../../modules/trip/domain/trip-places.fixture";
-import { tripConsultationTopics } from "./trip-consultation-topics";
+import { tripConsultationTopics, tripConsultationExamples } from "./trip-consultation-topics";
 
 const instant = (time: string) => ({ at: `2026-09-22T${time}:00+09:00`, timeZone: "Asia/Tokyo" });
 const visit = (id: string, start: string, end?: string): ActivityItineraryItem => ({ id, title: "観光", type: "activity", category: "sightseeing", place: { name: id, sources: [] }, schedule: { type: "fixed", startAt: instant(start), ...(end ? { endAt: instant(end) } : {}) } });
 const tripWith = (items: Parameters<typeof createTrip>[3]) => createTrip(placesTripId, "旅", placesAt, items);
 
 describe("saved Trip consultation topics", () => {
+  it("shows at most three varied examples and fills from real saved decisions only", () => {
+    const base = multiCityTrip();
+    const trip = { ...base, items: [...base.items,
+      { id: "outbound", title: "行き", type: "transport" as const, schedule: { type: "unscheduled" as const }, detail: { status: "unresolved" as const, mode: "rail" as const } }] };
+    const before = structuredClone(trip), examples = tripConsultationExamples(trip);
+    expect(examples).toHaveLength(3);
+    expect(new Set(examples.map(topic => topic.itemId)).size).toBe(3);
+    expect(examples.every(topic => topic.section === "undecided")).toBe(true);
+    expect(tripConsultationExamples(tripWith([placeStay("hotel", "宿")]))).toHaveLength(3);
+    expect(tripConsultationExamples(tripWith([]))).toEqual([]);
+    expect(trip).toEqual(before);
+  });
   it("distinguishes unresolved choices from selected content without mutating saved facts", () => {
     const base = multiCityTrip();
     const trip = { ...base, items: [...base.items,

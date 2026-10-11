@@ -326,9 +326,20 @@ dialog.trip-order-editor :focus-visible { outline: 2px solid #37675f; outline-of
   & .trip-header-menu button { display: block; width: 100%; min-height: 34px; margin: 0; padding: 6px 9px; border: 0; background: transparent; color: var(--tf-ink); font-size: 12px; text-align: left; }
   & .trip-header-menu button[hidden] { display: none; }
   & .trip-consultation-dialog { max-height: 80dvh; overflow-y: auto; }
-  & .trip-consultation-dialog h3 { margin: 18px 0 8px; color: var(--tf-muted); font-size: 12px; }
-  & .trip-consultation-options { display: grid; gap: 6px; }
-  & .trip-consultation-options button { width: 100%; padding: 10px 12px; font-size: 13px; text-align: left; overflow-wrap: anywhere; }
+  & .trip-consultation-dialog h2 { margin-bottom: 18px; font-size: 16px; line-height: 1.5; }
+  & .trip-consultation-caption { margin: 0 0 4px; color: var(--tf-muted); font-size: 11px; }
+  & .trip-consultation-options { display: grid; gap: 0; }
+  & .trip-consultation-options button { width: 100%; min-height: 44px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--tf-line); border-radius: 0; background: transparent; box-shadow: none; color: var(--tf-ink); font-size: 12px; line-height: 1.6; text-align: left; overflow-wrap: anywhere; }
+  & .trip-consultation-options button:hover { color: var(--tf-red); }
+  & .trip-consultation-options button:focus-visible { outline: 2px solid var(--tf-blue); outline-offset: 3px; }
+  & .trip-consultation-dialog > .trip-consultation-form { display: block; margin-top: 24px; }
+  & .trip-consultation-form > label { display: block; color: var(--tf-muted); font-size: 12px; }
+  & .trip-consultation-form textarea { display: block; box-sizing: border-box; width: 100%; min-height: 88px; margin-top: 8px; padding: 10px 12px; resize: vertical; border: 1px solid var(--tf-line); border-radius: 8px; background: var(--tf-bg); color: var(--tf-ink); font-family: inherit; font-size: 16px; line-height: 1.5; }
+  & .trip-consultation-actions { margin-top: 20px; align-items: center; }
+  & .trip-consultation-actions button { min-height: 36px; padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+  & .trip-consultation-actions button:first-child { justify-self: start; border: 0; padding-left: 0; }
+  & .trip-consultation-actions button[type="submit"] { justify-self: end; }
+  & .trip-consultation-actions button:disabled { opacity: .45; }
 }
 
-#app[data-primary-view]:is([data-primary-view]) .trip-consultation-context { display: block; margin-bottom: 3px; color: var(--tf-muted); font-size: 11px; }
+#app[data-primary-view]:is([data-primary-view]) .trip-consultation-context { display: block; margin-bottom: 2px; color: var(--tf-muted); font-size: 10px; }
