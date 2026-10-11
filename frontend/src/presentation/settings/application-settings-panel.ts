@@ -1,15 +1,10 @@
+import { externalServiceNote, renderExternalServiceList, type AccommodationProviderAttribution } from "./external-service-list";
+
 export interface ApplicationSettingsPanelDependencies {
   travelProfileToggle: HTMLButtonElement;
   transferPace: HTMLSelectElement;
   rankingPreference: HTMLSelectElement;
   accommodationProviderAttribution: AccommodationProviderAttribution | null;
-}
-
-export interface AccommodationProviderAttribution {
-  displayName: string;
-  creditUrl: string;
-  creditImageUrl: string;
-  creditAlt: string;
 }
 
 export function configureApplicationSettingsPanel(
@@ -25,7 +20,8 @@ export function configureApplicationSettingsPanel(
   const openers = [
     required<HTMLButtonElement>(root, "#sidebar-account-settings"),
   ];
-  renderAccommodationProviderAttribution(dialog, dependencies.accommodationProviderAttribution);
+  renderExternalServiceList(required<HTMLUListElement>(dialog, ".external-service-list"), dependencies.accommodationProviderAttribution);
+  required<HTMLElement>(dialog, ".external-service-note").textContent = externalServiceNote;
 
   const selectTab = (tab: string) => {
     for (const button of tabs) {
@@ -66,25 +62,6 @@ export function configureApplicationSettingsPanel(
     updateCanonicalSelect(dependencies.rankingPreference, settingsRankingPreference.value));
   dependencies.transferPace.addEventListener("change", synchronizeJourneyPreferences);
   dependencies.rankingPreference.addEventListener("change", synchronizeJourneyPreferences);
-}
-
-function renderAccommodationProviderAttribution(
-  root: ParentNode,
-  attribution: AccommodationProviderAttribution | null,
-): void {
-  if (!attribution) return;
-
-  const row = required<HTMLLIElement>(root, "#settings-accommodation-provider");
-  const name = required<HTMLElement>(row, "#settings-accommodation-provider-name");
-  const link = required<HTMLAnchorElement>(row, "#settings-accommodation-provider-credit-link");
-  const image = required<HTMLImageElement>(row, "#settings-accommodation-provider-credit-image");
-  name.textContent = attribution.displayName;
-  link.href = attribution.creditUrl;
-  link.title = attribution.creditAlt;
-  image.src = attribution.creditImageUrl;
-  image.alt = attribution.creditAlt;
-  image.title = attribution.creditAlt;
-  row.hidden = false;
 }
 
 function required<Element extends globalThis.Element>(

@@ -8,9 +8,11 @@ import { tripCoverImage } from "../shared/trip-cover";
 import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
 import { partyMarkup } from "../trip-plan/trip-party-control";
 import type { AuthState } from "../../usecases/auth/auth-session";
+import { externalServiceNote, renderExternalServiceList, type AccommodationProviderAttribution } from "../settings/external-service-list";
 
 export type PrimaryView = "chat" | "trips" | "my";
 export interface AiFirstShellPorts {
+  accommodationProviderAttribution?: AccommodationProviderAttribution | null;
   library?: TripLibraryClient;
   librarySession?(): number;
   read(): HomeReadInput;
@@ -54,7 +56,7 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     <section class="trip-route-progress" data-trip-route-progress role="status" hidden></section>
     <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("", "旅のしおり")}</div><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="設定" hidden><div class="my-shell">${pageHeadingMarkup("", "設定")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="いつもの好み設定"></div></section>
-    <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス</h2><p>旅の案内に利用する情報提供元です。</p><ul><li>GTFS-JP・公共交通オープンデータ</li><li>気象庁防災情報XML</li><li>ホットペッパーグルメ Webサービス</li><li>Wikipedia / Wikimedia Commons</li></ul></section></div></div></section>`;
+    <section class="home-card" data-signed-in-only><h2>通知</h2><div class="my-actions"><button type="button" data-notifications>通知 <span aria-hidden="true">→</span></button></div></section><section class="home-card account-journey-settings"><h2>経路検索の設定</h2><p>相談で経路を比較するときの既定値です。</p><label>乗換ペース<select data-account-transfer-pace><option value="hurried">急ぐ</option><option value="standard">普通</option><option value="relaxed">ゆっくり</option></select></label><label>経路の優先<select data-account-ranking-preference><option value="balanced">バランス</option><option value="earliest-arrival">早く着く</option><option value="latest-departure">遅く出る</option><option value="fewest-transfers">乗換少なめ</option></select></label></section><section class="home-card account-services"><h2>外部サービス・データソース</h2><p>案内・表示・ログインに利用するサービスと、参照対象の資料です。</p><ul></ul><p class="external-service-note"></p></section></div></div></section>`;
   app.prepend(root);
   const dismissTripMenus = (event: Event) => {
     const target = event.target;
@@ -66,8 +68,8 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   document.addEventListener("click", dismissTripMenus, true);
 
   const services = root.querySelector<HTMLUListElement>(".account-services ul")!;
-  services.className = "external-service-list";
-  services.innerHTML = `<li><strong>Mapbox</strong><span>地図・徒歩と車の移動</span><a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">地図の帰属表示</a></li><li><strong>OpenStreetMap contributors</strong><span>地図データ</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">著作権とライセンス</a></li><li><strong>Open-Meteo</strong><span>天気予報</span><a href="https://open-meteo.com/" target="_blank" rel="noreferrer">提供元</a></li><li><strong>気象庁</strong><span>警報・防災情報</span><a href="https://xml.kishou.go.jp/" target="_blank" rel="noreferrer">気象庁防災情報XML</a></li><li><strong>ホットペッパーグルメ Webサービス</strong><span>飲食店候補</span><a href="https://webservice.recruit.co.jp/" target="_blank" rel="noreferrer"><img src="https://webservice.recruit.co.jp/banner/hotpepper-s.gif" width="135" height="17" alt="ホットペッパーグルメ Webサービス" /></a></li><li><strong>Wikipedia / Wikimedia Commons</strong><span>観光情報・画像</span><a href="https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use" target="_blank" rel="noreferrer">利用条件</a></li><li><strong>Amazon Bedrock</strong><span>コンシェルジュの言語モデル</span></li>`;
+  renderExternalServiceList(services, ports.accommodationProviderAttribution);
+  root.querySelector<HTMLElement>(".account-services .external-service-note")!.textContent = externalServiceNote;
   const settings = root.querySelector<HTMLElement>(".my-grid")!;
   const settingsSections: Array<[string, string, ProductIconName]> = [[".account-profile-card", "いつもの好み", "account"], [".account-journey-settings", "経路検索", "train"], ["[data-notifications]", "通知", "notifications"], [".my-account-card", "アカウント", "account"], [".account-services", "このサービスについて", "info"]];
   for (const [selector, label, icon] of settingsSections) {
