@@ -235,8 +235,8 @@ offline testはこのIAM契約を検査する。実モデルテストでもDB fi
 
 手動`CD / Deploy`のmode既定は`plan`。本番の保護された認証入力でplanを作り、値を含まない
 resource action一覧をstep summaryへ出す。AWS lockfileも作らず、apply/S3配信/invalidationは行わない。
-`deploy`を明示した手動実行とmain CI成功時だけ、再plan・guard後に従来のapply/配信を実施する。
-今回このworkflowは起動しない。詳細は[cutover契約](../../../../docs/architecture/agent-runtime.md)を参照する。
+`deploy`を明示した手動実行とmain CI成功時だけ、再plan・guard後に従来のapply/配信を実施する。初回の`japan-prepare`は以下の先行配布だけを行い、Viewer assetsは同期しない。
+詳細は[cutover契約](../../../../docs/architecture/agent-runtime.md)を参照する。
 
 stream Lambdaの`SERVER_AGENT_MAX_EXECUTION_MS`はTerraformの`server_agent_max_execution_ms`
 から生成する。推奨・既定150000ms、許容範囲は整数1000〜180000ms。Lambda240秒とは別のbusiness
@@ -256,9 +256,11 @@ Cognito管理者が公式用アカウントを作成し、その`sub`をdev Envi
 
 API Gatewayの全POSTはCognitoとscopeに加え、CloudFront origin custom headerの`x-api-key`を要求する。AWSが生成するorigin専用値をBrowser・環境ファイル・出力・ログへ公開しない。値はTerraform stateとAWS設定に存在するため、既存の非公開state/IAM境界を維持する。利用者認可は引き続きCognitoが担う。
 
-初回は`require_cloudfront_origin_key=false`でorigin keyとCloudFront headerを先に配布する。国内から全APIの疎通と国ヘッダーを確認し、その後既定の`true`でAPI要求を有効にする。最終状態では国外のWeb/API利用とAPI URLへの直接要求を拒否する。単一applyで先にAPI要求を有効にするとCloudFront更新中に国内APIも一時拒否されるため、初回は二段階とする。公開CDはこれらの実アクセス確認を代替しない。
+初回はmainの`CD / Deploy`を手動で`mode=japan-prepare`として実行する。protected dev Environmentの既存OIDC認証・plan guardを使い、`require_cloudfront_origin_key=false`と`enforce_japan_country=false`でorigin keyとCloudFront headerを先に配布する。国制限も保留するため、国ヘッダー未設定による国内利用の遮断を避ける。TerraformがCloudFront反映を待った後、実AWSからキーとusage plan、CloudFrontのDeployed状態・origin header一致、5つのPOSTのCognito認証とキー必須化保留を読み戻す。キーの値・生の応答・AWSエラーはログへ出さず、確認用AWS呼出は最大10回で自動再試行しない。このmodeはAPI認証の初回準備用であり、通常配信の代わりにしない。
 
-`CD / Deploy`のdeployはdev Environmentの`JAPAN_ACCESS_ROLLOUT_READY`が厳密に`true`の場合だけ進む。未設定ではAWS認証・変更前に停止し、planのみの確認は利用できる。初回の`require_cloudfront_origin_key=false`による配布は上記の手動Terraform手順で行い、CloudFrontの反映完了・国ヘッダー・国内の全API疎通を確認してから変数を`true`にする。その後のCDが既定のorigin key必須化を反映する。コードのマージだけではこの準備完了を扱わない。
+準備中のCloudflare/mTLS入口は`HEAD /__japan-access-check`だけで、信頼した国コードを`x-kaiho-visitor-country`へ返す。未取得・複数値は`unknown`、応答は保存しない。国内からこの応答が`JP`であることと、ログイン済みの利用者による画面・Conversation/Profile/Trip/共有の読み取り・相談APIの疎通を確認する。自動読み戻しは国内からの認証済み実アクセスを代替しない。確認時に旅程の作成・更新・削除を行う必要はない。
+
+`CD / Deploy`のdeployはdev Environmentの`JAPAN_ACCESS_ROLLOUT_READY`が厳密に`true`の場合だけ進む。未設定ではAWS認証・変更前に停止し、planのみの確認は利用できる。先行配布と国内確認後に変数を`true`にし、mainで`mode=deploy`を実行する。既定の国制限とorigin key必須化を反映し、国外のWeb/API利用とAPI URLへの直接要求を拒否する。準備用の国コードprobeは外し、再度国内の認証済み疎通を確認する。コードのマージだけでは準備完了を扱わない。単一applyでAPIを先に必須化するとCloudFront更新中に国内APIも一時拒否されるため、初回はこの二段階とする。
 
 ## OTP入力の拡張
 

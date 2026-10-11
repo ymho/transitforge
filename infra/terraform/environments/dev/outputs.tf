@@ -1,3 +1,17 @@
+output "japan_access_preparation" {
+  description = "Non-secret references for initial origin-key readback; never contains key values."
+  value = {
+    rest_api_id = aws_api_gateway_rest_api.agent_stream["stream"].id
+    stage_name  = var.environment
+    api_key_id  = aws_api_gateway_api_key.cloudfront_origin["stream"].id
+    distribution_ids = concat(
+      var.legacy_cloudfront_redirect_enabled ? [] : [aws_cloudfront_distribution.website.id],
+      var.cloudflare_front_door_enabled ? [aws_cloudfront_distribution.viewer[0].id] : [],
+    )
+    viewer_url = var.cloudflare_front_door_enabled ? "https://${var.viewer_domain_name}" : "https://${aws_cloudfront_distribution.website.domain_name}"
+  }
+}
+
 output "website_bucket_name" {
   description = "Vite成果物とviewer-inputを配置するS3バケット名。"
   value       = aws_s3_bucket.website.id

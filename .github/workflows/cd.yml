@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Plan only (no AWS changes), or deploy after validation
+        description: Plan only, prepare origin keys without enforcement, or deploy after validation
         type: choice
-        options: [plan, deploy]
+        options: [plan, japan-prepare, deploy]
         default: plan
         required: true
 
@@ -38,6 +38,8 @@ jobs:
     env:
       CD_MODE: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.mode || 'plan' }}
       JAPAN_ACCESS_ROLLOUT_READY: ${{ vars.JAPAN_ACCESS_ROLLOUT_READY || 'false' }}
+      TF_VAR_require_cloudfront_origin_key: ${{ inputs.mode == 'japan-prepare' && 'false' || 'true' }}
+      TF_VAR_enforce_japan_country: ${{ inputs.mode == 'japan-prepare' && 'false' || 'true' }}
       TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
       # #706: development-service cutover, not a general-availability quality gate.
       # #785: independently verified consultation flow, native adaptive thinking/medium.
@@ -73,7 +75,9 @@ jobs:
           cache: npm
 
       - name: Validate deployment safety inputs
-        run: node tools/deployment/cutover-gates.mjs inputs
+        run: |
+          node tools/deployment/cutover-gates.mjs inputs
+          node tools/deployment/cutover-gates.mjs japan-inputs
 
       - name: Require completed Japan access preparation
         if: env.CD_MODE == 'deploy'
@@ -124,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          case "$CD_MODE" in plan|deploy) ;; *) exit 1 ;; esac
+          case "$CD_MODE" in plan|japan-prepare|deploy) ;; *) exit 1 ;; esac
           lock=true
           if [ "$CD_MODE" = plan ]; then lock=false; fi
           terraform init -input=false \
@@ -139,9 +143,14 @@ jobs:
           cat plan-summary.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Apply validated Terraform plan
-        if: env.CD_MODE == 'deploy'
+        if: env.CD_MODE == 'deploy' || env.CD_MODE == 'japan-prepare'
         working-directory: infra/terraform/environments/dev
         run: terraform apply -input=false -auto-approve dev.tfplan
+
+      - name: Verify prepared origin keys without logging values
+        if: env.CD_MODE == 'japan-prepare'
+        working-directory: infra/terraform/environments/dev
+        run: terraform output -json japan_access_preparation | node ../../../../tools/deployment/verify-japan-access-preparation.mjs | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Remove detached legacy Basic auth function
         if: env.CD_MODE == 'deploy'

@@ -121,7 +121,7 @@ resource "aws_cloudfront_distribution" "viewer" {
       response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
       function_association {
         event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.japan_only[0].arn
+        function_arn = local.japan_viewer_function_arn
       }
     }
   }
@@ -138,7 +138,7 @@ resource "aws_cloudfront_distribution" "viewer" {
       response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
       function_association {
         event_type   = "viewer-request"
-        function_arn = aws_cloudfront_function.japan_only[0].arn
+        function_arn = local.japan_viewer_function_arn
       }
       compress = true
       # Cognito Bearer is forwarded to the origin.
@@ -176,7 +176,7 @@ resource "aws_cloudfront_distribution" "viewer" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
     function_association {
       event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.japan_only[0].arn
+      function_arn = local.japan_viewer_function_arn
     }
     target_origin_id       = local.ai_agent_origin
     viewer_protocol_policy = "https-only"
@@ -191,7 +191,7 @@ resource "aws_cloudfront_distribution" "viewer" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
     function_association {
       event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.japan_only[0].arn
+      function_arn = local.japan_viewer_function_arn
     }
     target_origin_id       = local.website_origin
     viewer_protocol_policy = "https-only"
@@ -205,7 +205,7 @@ resource "aws_cloudfront_distribution" "viewer" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
     function_association {
       event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.japan_only[0].arn
+      function_arn = local.japan_viewer_function_arn
     }
     target_origin_id       = local.website_origin
     viewer_protocol_policy = "https-only"
