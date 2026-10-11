@@ -11,6 +11,7 @@ import { compileEffectiveIntent, effectiveProfileContext } from "@raiquora/agent
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import { summarizeConditionReceipts } from "@raiquora/agent/conversation-condition";
+import { savedTransportSearchConstraints } from "@raiquora/agent/saved-transport-search-context";
 
 export const serverStateContextLimits = { historyMessages: 12, conversationJsonCharacters: 12_000 } as const;
 export interface ServerStateContextReferences {
@@ -84,6 +85,7 @@ export function createServerStateContextLoader(readers: ServerStateContextReader
       ...(taskContext?.requestRevision === undefined ? {} : { baseRevision: taskContext.requestRevision }),
       ...(profile?.profile ? { profile: profile.profile, profileRevision: profile.revision } : {}),
       overlay: intentWorkingState?.semantic?.overlay ?? { version: 1, intentRevision: 0, facts: [], tombstones: [], appliedMutationIds: [] },
+      ...(trip && itemId ? { searchContextConstraints: savedTransportSearchConstraints(trip, itemId) } : {}),
     }) : undefined;
     const effectiveProfile = effectiveIntent ? effectiveProfileContext(effectiveIntent) : undefined;
     if (effectiveIntent) options.onEffectiveIntent?.({ effectiveIntent: structuredClone(effectiveIntent),

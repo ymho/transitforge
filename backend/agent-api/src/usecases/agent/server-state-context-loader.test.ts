@@ -11,6 +11,8 @@ import { tripDynamoFixture } from "../../adapters/trip-dynamodb.fixture.js";
 import { DynamoDbConversationTurnRepository } from "../../adapters/dynamodb-conversation-turn-repository.js";
 import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
 import { TripApplication } from "../trip-application.js";
+import { createSearchJourneysTool } from "@raiquora/agent/search-journeys-tool";
+import { validateToolIntentUse } from "@raiquora/agent/intent-action-policy";
 
 function setup() {
   const state = stateDynamoFixture(), trips = tripDynamoFixture();
@@ -80,6 +82,21 @@ it("projects current route conditions against the latest Trip after an itinerary
 });
 
 describe("Server State Context Loader", () => {
+  it("supplies focused saved transport conditions without a new user message or a write", async () => {
+    const f = setup();
+    const movement = { id: "outward", type: "transport" as const, title: "向日町駅 → 姫路駅（13:00着予定）",
+      detail: { status: "unresolved" as const, mode: "rail" as const }, schedule: { type: "day" as const, date: "2026-11-02" } };
+    f.trips.seed(createTrip(tripId, "リンゴ狩り2026", "2026-09-18T00:00:00Z", [movement],
+      { goal: "リンゴ狩り", constraints: [], assumptions: [] }), a.subject);
+    await f.conversations.create(a, metadata());
+    const stateBefore = structuredClone(f.records), tripsBefore = structuredClone(f.trips.records);
+    const context = await f.load({ principal: a, conversationId: id, uiContext: { itemId: movement.id } });
+    expect(context.featureContext?.uiFocus?.item).toMatchObject({ origin: "向日町駅", destination: "姫路駅", originIsProvisional: true });
+    expect(validateToolIntentUse(createSearchJourneysTool({} as never), { originStation: "向日町駅", destinationStation: "姫路駅",
+      serviceDate: "2026-11-02", departureTimeMinutes: 680 }, context.effectiveIntent).accepted).toBe(true);
+    expect(context.currentTrip?.request?.constraints).toEqual([]);
+    expect(f.records).toEqual(stateBefore); expect(f.trips.records).toEqual(tripsBefore);
+  });
   it("restores metadata/history, existing profile projection and owner Trip without writes", async () => {
     const f = setup(); await f.conversations.create(a, { ...stateMetadata(), resolvedTopics: ["行先"], pendingTopics: ["日程"] });
     await f.conversations.append(a, id, 0, [{ role: "user", text: "履歴" }, { role: "assistant", text: "回答" }]);

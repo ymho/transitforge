@@ -9,6 +9,7 @@ import { agentTripPlaces, type AgentTripPlaces } from "./agent-trip-places";
 import { projectDailyItinerary, type DailyItineraryProjection } from "@raiquora/trip/daily-itinerary";
 import { projectTripStructure, type TripStructureProjection } from "@raiquora/trip/trip-structure";
 import { measureTripWorkload, type TripWorkload } from "@raiquora/trip/trip-workload";
+import { savedTransportEndpoints } from "./saved-transport-search-context";
 
 export interface AgentContextSnapshot {
   /** Added by the read application only for lifecycle=in_trip, never persisted with Trip. */
@@ -134,7 +135,12 @@ function selectedTripItemCore(item: ItineraryItem): AgentTripScheduleItem {
           summary: bounded(place?.name ?? item.title, 100) ?? "宿泊",
           ...(place ? { placeName: bounded(place.name, 100), area: bounded(place.area, 100) } : {}) };
       }
-      if (item.detail.status === "unresolved") return { ...(item.memo ? { memo: item.memo } : {}), itemId: item.id, type: "transport", schedule, mode: item.detail.mode, summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
+      if (item.detail.status === "unresolved") {
+        const endpoints = savedTransportEndpoints(item);
+        return { ...(item.memo ? { memo: item.memo } : {}), itemId: item.id, type: "transport", schedule, mode: item.detail.mode,
+          ...(endpoints ? { origin: endpoints.origin, destination: endpoints.destination, originIsProvisional: true } : {}),
+          summary: bounded(item.title, 100) ?? "移動", selectionStatus: "unresolved" };
+      }
       if (item.detail.mode !== "rail") return { ...(item.memo ? { memo: item.memo } : {}), itemId: item.id, type: "transport", schedule, mode: item.detail.mode,
         origin: item.detail.origin.name, destination: item.detail.destination.name, provenanceType: item.detail.provenance.type,
         selectionStatus: "selected", summary: bounded(item.title, 100) ?? "移動" };
