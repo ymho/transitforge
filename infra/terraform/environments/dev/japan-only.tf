@@ -18,7 +18,10 @@ resource "aws_cloudfront_function" "japan_only" {
 }
 
 resource "aws_cloudfront_function" "japan_access_probe" {
-  count   = var.cloudflare_front_door_enabled && !var.enforce_japan_country ? 1 : 0
+  // Keep the probe while switching associations. CloudFront rejects deletion
+  // until every distribution has finished deploying the replacement function.
+  // Enforcement selects japan_only above; the retained probe serves no traffic.
+  count   = var.cloudflare_front_door_enabled ? 1 : 0
   name    = "${local.resource_prefix}-japan-access-probe"
   runtime = "cloudfront-js-2.0"
   comment = "Temporary country-header probe during protected initial preparation; preserves existing access"

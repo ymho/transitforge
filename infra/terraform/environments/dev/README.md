@@ -260,7 +260,7 @@ API Gatewayの全POSTはCognitoとscopeに加え、CloudFront origin custom head
 
 準備中のCloudflare/mTLS入口は`HEAD /__japan-access-check`だけで、信頼した国コードを`x-kaiho-visitor-country`へ返す。未取得・複数値は`unknown`、応答は保存しない。国内からこの応答が`JP`であることと、ログイン済みの利用者による画面・Conversation/Profile/Trip/共有の読み取り・相談APIの疎通を確認する。自動読み戻しは国内からの認証済み実アクセスを代替しない。確認時に旅程の作成・更新・削除を行う必要はない。
 
-`CD / Deploy`のdeployはdev Environmentの`JAPAN_ACCESS_ROLLOUT_READY`が厳密に`true`の場合だけ進む。未設定ではAWS認証・変更前に停止し、planのみの確認は利用できる。先行配布と国内確認後に変数を`true`にし、mainで`mode=deploy`を実行する。既定の国制限とorigin key必須化を反映し、国外のWeb/API利用とAPI URLへの直接要求を拒否する。準備用の国コードprobeは外し、再度国内の認証済み疎通を確認する。コードのマージだけでは準備完了を扱わない。単一applyでAPIを先に必須化するとCloudFront更新中に国内APIも一時拒否されるため、初回はこの二段階とする。
+`CD / Deploy`のdeployはdev Environmentの`JAPAN_ACCESS_ROLLOUT_READY`が厳密に`true`の場合だけ進む。未設定ではAWS認証・変更前に停止し、planのみの確認は利用できる。先行配布と国内確認後に変数を`true`にし、mainで`mode=deploy`を実行する。既定の国制限とorigin key必須化を反映し、国外のWeb/API利用とAPI URLへの直接要求を拒否する。準備用の国コードprobeは全behaviorから外し、再度国内の認証済み疎通を確認する。probeのFunction resourceは未関連付けのまま保持する。国制限の切替と同じapplyで削除すると、旧関連付けが反映中のCloudFrontが`FunctionInUse`を返して配布を止めるためである。コードのマージだけでは準備完了を扱わない。単一applyでAPIを先に必須化するとCloudFront更新中に国内APIも一時拒否されるため、初回はこの二段階とする。
 
 ## OTP入力の拡張
 
