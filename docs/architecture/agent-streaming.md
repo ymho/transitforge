@@ -35,3 +35,7 @@ Node 22 streamingのLambdaは、保存と送信をawaitした後にSDKのkeepali
 `callbackWaitsForEmptyEventLoop=false`をAdapterで設定する。同時実行数1の設定は変更しない。
 診断WorkflowはGateway 5xxのstatus / integration status / response typeとLambda REPORTの最大実行時間も集計する。
 生の例外、本文、ヘッダー、利用者識別子は公開しない。実際の終了時間と500の原因は本番ログで検証する。
+LambdaのINIT_REPORT、許可したRuntimeエラー分類、60秒単位のInvocations / Errors / Throttles / ConcurrentExecutionsを
+同じ2時間窓で照合する。2026-10-11の19:12 JSTの500に対し、直前のLambdaは19:09:55にREPORTを出していたため、
+前の実行が240秒まで残ったという仮説は根因として確定していない。過去のGatewayログにintegration statusがなければ
+推定で補完せず、Lambda初期化・呼び出し制限と、新しいログの実測を分けて扱う。
