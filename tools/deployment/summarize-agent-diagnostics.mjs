@@ -14,9 +14,11 @@ const diagnostics = diagnosticMessages
     occurredAt: timestamp(occurredAt),
   }));
 const streams = messages(streamPath)
-  .filter((value) => value.eventSource === "agent_stream")
-  .map(({ event, status, latencyMs }) => ({
+  .filter((value) => value.eventSource === "agent_stream" &&
+    ["request_started", "stream_started", "final_sent", "completed", "error", "rejected", "disconnected"].includes(value.event))
+  .map(({ event, status, latencyMs, occurredAt }) => ({
     event: text(event),
+    occurredAt: timestamp(occurredAt),
     status: Number.isSafeInteger(status) ? status : undefined,
     latencyMs: Number.isFinite(latencyMs) ? Math.round(latencyMs) : undefined,
   }));
@@ -46,6 +48,10 @@ table(["Reason", "Stop reason", "Local limit", "Samples", "Model calls", "Read T
   executionSummaryRows(diagnosticMessages));
 console.log("");
 table(["Stream event", "HTTP status", "Count", "Max latency (ms)"], groupedStreams(streams));
+console.log("\n### Latest stream events (up to twenty)");
+table(["At (UTC)", "Stream event", "HTTP status", "Elapsed (ms)"], streams
+  .sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? "")).slice(0, 20)
+  .map(value => [value.occurredAt ?? "not_recorded", value.event, value.status ?? "-", value.latencyMs ?? "not_recorded"]));
 console.log("");
 console.log("### Limited executions (up to four latest)");
 console.log("Execution IDs and conversation content are omitted. Only bounded counts and registered Tool names are displayed.");
@@ -85,8 +91,8 @@ if (modelCallPath && invocationFailurePath) {
   const steps = [...messages(modelCallPath).filter(value => value.event === "agent_model_call"),
     ...(toolCallPath ? messages(toolCallPath).filter(value => value.event === "agent_tool_call") : []),
     ...(replyValidationPath ? messages(replyValidationPath).filter(value => value.event === "agent_reply_validation") : [])];
-  table(["Stopped (UTC)", "At (UTC)", "Call", "Stage", "Outcome", "Tools / reply kind", "Code", "Elapsed (ms)", "Output tokens", "Reasoning blocks", "Evidence collisions", "Conflicting observations"],
-    failures.flatMap(failure => steps.filter(value => value.executionId === failure.executionId)
+  const stepHeaders = ["Stopped (UTC)", "At (UTC)", "Call", "Stage", "Outcome", "Tools / reply kind", "Code", "Elapsed (ms)", "Output tokens", "Reasoning blocks", "Evidence collisions", "Conflicting observations"];
+  const stepRows = executions => executions.flatMap(failure => steps.filter(value => value.executionId === failure.executionId)
       .sort((a, b) => (a.occurredAt ?? "").localeCompare(b.occurredAt ?? "")).slice(0, 80).map(value => [
         timestamp(failure.occurredAt) ?? "-", timestamp(value.occurredAt) ?? "-", number(value.modelCall),
         value.event === "agent_model_call" ? "model" : value.event === "agent_tool_call" ? "tool" : "reply_validation",
@@ -94,7 +100,12 @@ if (modelCallPath && invocationFailurePath) {
         value.event === "agent_model_call" ? (Array.isArray(value.tools) ? value.tools.slice(0, 32).map(name => tools.has(name) ? name : "unknown_tool").join(", ") || "none" : "not_recorded") :
           value.event === "agent_tool_call" ? tools.has(value.tool) ? value.tool : "unknown_tool" : kinds.has(value.replyKind) ? value.replyKind : "unknown",
         codes.has(value.code) ? value.code : "-", number(value.elapsedMs), number(value.outputTokens), number(value.reasoningBlocks), number(value.collisionCount), number(value.conflictCount),
-      ])));
+      ]));
+  table(stepHeaders, stepRows(failures));
+  console.log("\n### Latest completed invocation steps (up to four latest)");
+  const completed = diagnosticMessages.filter(value => value.phase === "execution" && value.reason === "completed" && typeof value.executionId === "string")
+    .sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? "")).slice(0, 4);
+  table(stepHeaders, stepRows(completed));
   console.log("\n### Reply reference membership (same failed or limited invocations)");
   table(["Stopped (UTC)", "Call", "Outcome", "Code", "Evidence", "Retained", "Omitted", "Reply references", "Unknown references", "Omitted references", "Duplicate references"],
     failures.flatMap(failure => steps.filter(value => value.executionId === failure.executionId && value.event === "agent_reply_validation")
@@ -109,9 +120,15 @@ function messages(path) {
   const encoded = JSON.parse(readFileSync(path, "utf8"));
   if (!Array.isArray(encoded)) throw new Error("Expected a JSON array of CloudWatch messages");
   return encoded.flatMap((message) => {
-    if (typeof message !== "string") return [];
-    const value = decodedMessage(message);
-    return value ? [value] : [];
+    const raw = typeof message === "string" ? message : message && typeof message.message === "string" ? message.message : undefined;
+    if (raw === undefined) return [];
+    const value = decodedMessage(raw);
+    if (!value) return [];
+    // CloudWatch timestamps are transport metadata, independent of application logs.
+    // Existing string-only files remain valid; absent timestamps stay unrecorded.
+    const observedAt = typeof message === "object" && message !== null && Number.isSafeInteger(message.timestamp) &&
+      message.timestamp >= 0 && message.timestamp <= 8_640_000_000_000_000 ? new Date(message.timestamp).toISOString() : undefined;
+    return [{ ...value, ...(value.occurredAt === undefined && observedAt ? { occurredAt: observedAt } : {}) }];
   });
 }
 

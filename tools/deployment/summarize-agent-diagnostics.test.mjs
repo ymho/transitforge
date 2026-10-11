@@ -115,3 +115,26 @@ const membership = spawnSync(process.execPath, ["tools/deployment/summarize-agen
 assert.equal(membership.status, 0, membership.stderr);
 assert.match(membership.stdout, /2026-10-11T06:44:03.000Z \| 7 \| rejected \| missing_evidence \| 21 \| 20 \| 1 \| 2 \| 0 \| 1 \| 0/);
 assert.doesNotMatch(membership.stdout, /private-reference|private-id/);
+
+// A browser can fail even when the server saves and sends its final response.
+// Keep the successful model/Tool timeline visible without publishing identifiers or payloads.
+writeFileSync(diagnostics, encode([{ event: "agent_diagnostic", executionId: "private-completed-id", phase: "execution",
+  reason: "completed", occurredAt: "2026-10-11T07:56:11Z" }]));
+writeFileSync(modelCalls, encode([{ event: "agent_model_call", executionId: "private-completed-id", occurredAt: "2026-10-11T07:55:00Z",
+  modelCall: 1, outcome: "completed", tools: ["search_journeys"], elapsedMs: 1000, outputTokens: 100, prompt: "private-prompt" }]));
+writeFileSync(toolCalls, encode([{ event: "agent_tool_call", executionId: "private-completed-id", occurredAt: "2026-10-11T07:56:00Z",
+  modelCall: 1, tool: "search_journeys", outcome: "completed", result: "private-result" }]));
+writeFileSync(streams, JSON.stringify([
+  { timestamp: Date.parse("2026-10-11T07:56:11Z"), message: JSON.stringify({ eventSource: "agent_stream", event: "final_sent",
+    latencyMs: 73000, requestId: "private-completed-id" }) },
+  { timestamp: Date.parse("2026-10-11T07:56:12Z"), message: JSON.stringify({ eventSource: "agent_stream", event: "completed",
+    latencyMs: 73100, requestId: "private-completed-id" }) },
+  { timestamp: "private-timestamp", message: JSON.stringify({ eventSource: "agent_stream", event: "private-event" }) },
+]));
+const successful = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams, modelShapes, modelCalls, failures, toolCalls, validations], { encoding: "utf8" });
+assert.equal(successful.status, 0, successful.stderr);
+assert.match(successful.stdout, /Latest completed invocation steps/);
+assert.match(successful.stdout, /2026-10-11T07:56:11.000Z \| 2026-10-11T07:55:00.000Z \| 1 \| model \| completed \| search_journeys/);
+assert.match(successful.stdout, /2026-10-11T07:56:11.000Z \| final_sent \| - \| 73000/);
+assert.match(successful.stdout, /2026-10-11T07:56:12.000Z \| completed \| - \| 73100/);
+assert.doesNotMatch(successful.stdout, /private-completed-id|private-prompt|private-result|private-timestamp|private-event/);
