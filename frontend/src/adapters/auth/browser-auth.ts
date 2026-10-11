@@ -16,7 +16,7 @@ export async function createBrowserAuth(): Promise<AuthSession> {
       storage: window.sessionStorage,
       location: { href, origin: url.origin, pathname: url.pathname, assign: value => window.location.assign(value) },
       history: window.history, now: () => Date.now(), nonce: () => crypto.randomUUID(),
-    });
+    }, { restoreProviderSession: true });
     await auth.initialize();
     // No hidden renewal; update UI on expiry and after a suspended tab resumes.
     window.setInterval(() => auth.getState(), 1000);

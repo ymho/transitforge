@@ -53,6 +53,12 @@ entryのawaitとdynamic importが互いのmodule評価完了を待つためで�
 
 新規ログインの絶対期限とCognito Refresh Token期限は12時間。Access/ID Tokenは最大5分のままとし、
 refreshやreloadで絶対期限を延長しない。旧8時間sessionは元の期限を保持する。token保存は引き続きタブ単位のsessionStorageである。
+起動時に有効な保存sessionがなければ、Managed Loginへ`prompt=none`のCode / PKCE認証を試す。
+Cognito側のログインcookieが有効なら新しい認証grantを取得し、Homeから旅程タブを表示する。
+cookieがなければstateを検証した`login_required`応答を通常の未ログイン状態として扱い、ログイン画面を表示しない。
+失敗・reload時の転送ループを防ぐため、自動試行はタブ単位で1回に制限し、成功時だけ試行済み印を消す。
+明示logout後は自動試行を抑止する。利用者のlogin操作は常に可能であり、認証成功後は次回起動時の復旧を再び許可する。
+有効なsessionの一時的なrefresh通信失敗では保存grantを維持し、Managed Loginへ転送しない。
 CDはAWSのApp Clientから期限・単位を読み戻し、12時間と5分の組合せを確認する。
 
 `node tools/verify_viewer_startup.mjs`はbuild済みViewerをChromiumの1440px/390pxで起動する。

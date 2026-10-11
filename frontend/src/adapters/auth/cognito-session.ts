@@ -1,4 +1,4 @@
-import { OidcClient, WebStorageStateStore } from "oidc-client-ts";
+import { ErrorResponse, OidcClient, WebStorageStateStore } from "oidc-client-ts";
 import type { AuthSession, AuthState } from "../../usecases/auth/auth-session";
 import { safeReturnPath, type AuthConfig } from "./auth-config";
 
@@ -30,10 +30,11 @@ export interface AuthBrowser {
   nonce(): string;
 }
 
-export function createCognitoSession(config: AuthConfig, browser: AuthBrowser): AuthSession {
+export function createCognitoSession(config: AuthConfig, browser: AuthBrowser, options: { restoreProviderSession?: boolean } = {}): AuthSession {
   const redirectUri = `${browser.location.origin}/index.html`;
   const storagePrefix = `raiquora.auth.${config.clientId}.`;
   const sessionKey = `${storagePrefix}session`;
+  const restoreAttemptKey = `${storagePrefix}restore-attempt`;
   const oidc = new OidcClient({
     authority: config.issuer, client_id: config.clientId,
     redirect_uri: redirectUri, response_type: "code", response_mode: "query",
@@ -65,6 +66,19 @@ export function createCognitoSession(config: AuthConfig, browser: AuthBrowser): 
   const expire = () => { clear(); publish({ status: "expired" }); };
   const signedIn = (value: StoredSession) => publish({ status: "signed-in", displayName: value.displayName, sessionExpiresAt: value.absoluteExpiresAt });
   const persist = (value: StoredSession) => browser.storage.setItem(sessionKey, JSON.stringify(value));
+  const beginLogin = async (passive: boolean) => {
+    const currentGeneration = ++generation;
+    clear(); clearPending();
+    publish({ status: "authenticating" });
+    try {
+      const returnPath = safeReturnPath(browser.location.pathname);
+      const request = await oidc.createSigninRequest({
+        state: passive ? { returnPath, restoreProviderSession: true } : returnPath,
+        nonce: browser.nonce(), extraQueryParams: { lang: "ja", ...(passive ? { prompt: "none" } : {}) },
+      });
+      if (currentGeneration === generation) browser.location.assign(request.url);
+    } catch { if (currentGeneration === generation) fail(); }
+  };
   const refresh = async (rejectedAccessToken?: string): Promise<string | undefined> => {
     if (!session || session.absoluteExpiresAt <= browser.now()) { if (session) expire(); return undefined; }
     if (rejectedAccessToken && session.accessToken !== rejectedAccessToken && session.expiresAt > browser.now()) return session.accessToken;
@@ -138,9 +152,17 @@ export function createCognitoSession(config: AuthConfig, browser: AuthBrowser): 
             displayName: typeof profile.email === "string" ? profile.email : "ログイン済みユーザー",
           };
           persist(session);
-          browser.history.replaceState(null, "", safeReturnPath(response.userState));
+          browser.storage.removeItem(restoreAttemptKey);
+          browser.history.replaceState(null, "", safeReturnPath(isRecord(response.userState) ? response.userState.returnPath : response.userState));
           signedIn(session);
-        } catch { if (currentGeneration === generation) fail(); }
+        } catch (error) {
+          if (currentGeneration === generation) {
+            // Only a state-validated passive callback may mean an ordinary guest.
+            if (error instanceof ErrorResponse && error.error === "login_required" &&
+                isRecord(error.state) && error.state.restoreProviderSession === true) publish({ status: "signed-out" });
+            else fail();
+          }
+        }
         return;
       }
       try {
@@ -155,21 +177,21 @@ export function createCognitoSession(config: AuthConfig, browser: AuthBrowser): 
         // A reload must not discard the still-valid grant on a transient refresh.
         if (!(error instanceof RefreshUnavailableError) || !session || session.absoluteExpiresAt <= browser.now()) fail();
       }
+      // Browser startup may recover a NEW grant from Managed Login's cookie.
+      // Keep a tab-local attempt marker through failure/reload to prevent loops.
+      if (currentGeneration === generation && options.restoreProviderSession && !session &&
+          (state.status === "signed-out" || state.status === "expired") && !browser.storage.getItem(restoreAttemptKey)) {
+        browser.storage.setItem(restoreAttemptKey, "1");
+        await beginLogin(true);
+      }
     },
     async login() {
-      ++generation;
-      clear(); clearPending();
-      publish({ status: "authenticating" });
-      try {
-        const request = await oidc.createSigninRequest({
-          state: safeReturnPath(browser.location.pathname), nonce: browser.nonce(),
-          extraQueryParams: { lang: "ja" },
-        });
-        browser.location.assign(request.url);
-      } catch { fail(); }
+      browser.storage.removeItem(restoreAttemptKey);
+      await beginLogin(false);
     },
     async logout() {
       ++generation;
+      browser.storage.setItem(restoreAttemptKey, "1");
       const revoke = session?.refreshToken;
       clear(); clearPending(); publish({ status: "signed-out" });
       // Cognito logout clears its cookie, not previously issued JWTs.
