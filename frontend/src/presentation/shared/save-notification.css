@@ -1,10 +1,10 @@
 .app-save-notification {
   position: fixed; inset: calc(env(safe-area-inset-top, 0px) + 16px) auto auto 50%; transform: translateX(-50%);
-  z-index: 10000; margin: 0; box-sizing: border-box; width: max-content; max-width: calc(100vw - 32px);
-  display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 16px;
-  border: 1px solid var(--tf-line, #e9eded); border-radius: 10px; background: var(--tf-bg, #fff);
+  z-index: 10000; margin: 0; box-sizing: border-box; width: min(560px, calc(100vw - 32px)); max-width: calc(100vw - 32px);
+  display: flex; align-items: center; gap: 12px; padding: 6px 10px 6px 14px;
+  border: 1px solid var(--tf-line, #e9eded); border-radius: 10px; background: #ffffffb8; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   color: var(--tf-ink, #242b2c); box-shadow: 0 6px 24px #24304326; font: 400 13px/1.5 var(--product-font, sans-serif);
 }
-.app-save-notification > span { min-width: 0; overflow-wrap: anywhere; }
-#app[data-primary-view] .app-save-notification > button, .app-save-notification > button { flex: 0 0 auto; border: 0; background: transparent; color: var(--tf-muted, #738080); padding: 2px 6px; min-height: 28px; font: inherit; font-size: 20px; border-radius: 6px; box-shadow: none; min-width: 28px; width: auto; cursor: pointer; }
+.app-save-notification > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#app[data-primary-view] .app-save-notification > button, .app-save-notification > button { flex: 0 0 auto; border: 0; background: transparent; color: var(--tf-muted, #738080); display: flex; align-items: center; justify-content: center; padding: 0; height: 26px; min-height: 26px; line-height: 1; font: inherit; font-size: 20px; border-radius: 6px; box-shadow: none; min-width: 26px; width: 26px; cursor: pointer; }
 .app-save-notification > button:focus-visible { outline: 2px solid var(--tf-blue, #37675f); outline-offset: 2px; }

@@ -25,7 +25,8 @@ export class TripApplication {
     private readonly titleGenerator?: import("../ports/trip-title-generator.js").TripTitleGenerator,
     private readonly consultationScope?: import("../ports/consultation-scope.js").ConsultationScope,
     private readonly weatherProvider?: import("../ports/weather-provider.js").WeatherForecastProvider,
-    private readonly stationCatalog?: import("../ports/station-catalog-repository.js").StationCatalogRepository) {}
+    private readonly stationCatalog?: import("../ports/station-catalog-repository.js").StationCatalogRepository,
+    private readonly accommodationProvider?: import("../ports/travel-provider.js").AccommodationProvider) {}
   private async ready(principal: TripPrincipal, proposed: Trip): Promise<void> {
     try {
       const reservations = await this.reservations?.facts(principal, proposed.id);
@@ -105,7 +106,7 @@ export class TripApplication {
           const item = current.items.find(item => item.id === command.itemId);
           if (!item || !tripWeatherTargets(current, item).length) throw new TripResourceError("invalid-input");
           const existing = currentTripWeather(current, item), now = this.clock.now();
-          const weather = existing && Date.parse(existing.validUntil) > now.getTime() && existing.forecasts.every(f => f.status !== "unavailable") ? existing : await refreshTripWeather(current, item, this.weatherProvider!, now, this.stationCatalog, () => this.clock.now());
+          const weather = existing && Date.parse(existing.validUntil) > now.getTime() && existing.forecasts.every(f => f.status !== "unavailable") ? existing : await refreshTripWeather(current, item, this.weatherProvider!, now, this.stationCatalog, () => this.clock.now(), this.accommodationProvider);
           const values = [...(current.weather ?? []).filter(value => value.itemId !== item.id), weather];
           try { validateTripWeather(values, current); } catch { throw new TripResourceError("unavailable"); }
           return { ...current, weather: values };

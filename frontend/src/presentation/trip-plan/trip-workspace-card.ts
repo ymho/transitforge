@@ -3,7 +3,7 @@ import { bookedReservationChanges, reservationChangeKey } from "@raiquora/trip/r
 import { confirmAction, requestText } from "../shared/app-dialog";
 
 import { renderTripWeather } from "./trip-weather-view";
-import { tripWeatherTargets } from "@raiquora/trip/trip-weather";
+import { tripWeatherTargets, currentTripWeather } from "@raiquora/trip/trip-weather";
 import { renderStayDetails } from "./trip-stay-details";
 import { renderItemCost } from "./trip-cost-view";
 import { projectDailyItinerary, type DayEntry } from "@raiquora/trip/daily-itinerary";
@@ -168,7 +168,11 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   if (options.refreshWeather && tripWeatherTargets(trip, item).length) {
     const updateWeather = control("天気を更新", () => {
       updateWeather.disabled = true;
-      void options.refreshWeather!(trip, item.id).then(() => notifySaved(document, "天気を更新しました。")).catch(() => options.report("天気を更新できませんでした。旅程を再読み込みしてお試しください。"))
+      void options.refreshWeather!(trip, item.id).then(() => {
+        const current = controller.current(), latest = current?.items.find(value => value.id === item.id);
+        const saved = current && latest ? currentTripWeather(current, latest) : undefined;
+        notifySaved(document, saved?.forecasts.some(value => value.status === "unavailable") ? "天気を取得できない地点があります。時間をおいて再試行してください。" : saved?.forecasts.every(value => value.status === "outside-forecast") ? "指定日は予報期間外です。" : "天気を更新しました。");
+      }).catch(() => options.report("天気を更新できませんでした。旅程を再読み込みしてお試しください。"))
         .finally(() => { updateWeather.disabled = false; });
     });
     updateWeather.classList.add("trip-weather-update");

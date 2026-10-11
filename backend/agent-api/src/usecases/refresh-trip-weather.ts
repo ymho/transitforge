@@ -5,7 +5,7 @@ import { tripWeatherTargets, tripWeatherBasis, weatherDate, type TripItemWeather
 import type { WeatherForecastProvider } from "../ports/weather-provider.js";
 
 /** Server-owned provider observations, bounded to two endpoint requests and 16 daily rows. */
-export async function refreshTripWeather(trip: Trip, item: ItineraryItem, provider: WeatherForecastProvider, now: Date, stations?: StationCatalogRepository, clock: () => Date = () => new Date()): Promise<TripItemWeather> {
+export async function refreshTripWeather(trip: Trip, item: ItineraryItem, provider: WeatherForecastProvider, now: Date, stations?: StationCatalogRepository, clock: () => Date = () => new Date(), accommodations?: import("../ports/travel-provider.js").AccommodationProvider): Promise<TripItemWeather> {
   const targets = tripWeatherTargets(trip, item);
   if (!targets.length) throw new Error("Weather needs a place and date");
   const fetchedAt = now.toISOString(), observedTimes: string[] = [], expiryTimes: string[] = [];
@@ -21,6 +21,14 @@ export async function refreshTripWeather(trip: Trip, item: ItineraryItem, provid
     if (startDate > endDate) return { target, status: "outside-forecast", rows: [] };
     try {
       let coordinate = target.place.coordinate;
+      if (!coordinate && item.type === "stay" && item.selection.status === "selected" && accommodations && item.selection.accommodation.provider === "rakuten-travel") {
+        const hotel = item.selection.accommodation;
+        const offerings = await accommodations.search({ destination: hotel.place.name, checkInDate: hotel.checkInDate, checkOutDate: hotel.checkOutDate, adults: 1, limit: 3 });
+        const matches = offerings.filter(value => value.provider === hotel.provider && value.providerItemId === hotel.providerItemId);
+        if (matches.length === 1 && Number.isFinite(matches[0]!.latitude) && Number.isFinite(matches[0]!.longitude) && Math.abs(matches[0]!.latitude!) <= 90 && Math.abs(matches[0]!.longitude!) <= 180) {
+          coordinate = { latitude: matches[0]!.latitude!, longitude: matches[0]!.longitude! };
+        }
+      }
       if (!coordinate && isRail) {
         const matches = catalog?.lines.flatMap(line => line.stations).filter(station => normalizeStationName(station.name) === normalizeStationName(target.place.name)) ?? [];
         const coordinates = [...new Map(matches.map(station => [JSON.stringify(station.coordinate), station.coordinate])).values()];

@@ -187,6 +187,8 @@ const unsignedConversation: ConversationSession = {
 };
 let activeConversationSession = unsignedConversation;
 const isSignedIn = canUsePersonalState;
+// Preserve an opened invite across login from any application entry point.
+if (initialShareLink && !isSignedIn()) { try { saveShareLogin(window.sessionStorage, initialShareLink); } catch { /* Explicit join still owns the login handoff. */ } }
 if (isSignedIn()) {
   try {
     // No standalone-chat restoration or empty server conversation at startup.

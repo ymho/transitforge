@@ -56,3 +56,10 @@ it("retains only the verified Rakuten reference price with its original currency
   const missing = new VerifiedAccommodationSelections(); missing.record([hotel], [rakutenAccommodationSelectionEvidence(hotel, at)!], observe());
   expect(JSON.stringify(missing.itemsFor(cards(observe())))).not.toContain("observedPrice");
 });
+
+it("retains verified hotel coordinates for forecasts instead of geocoding a facility name", () => {
+  const located = { ...hotel, latitude: 35.47, longitude: 133.05 };
+  const selections = new VerifiedAccommodationSelections(), evidence = observe(located);
+  selections.record([located], [rakutenAccommodationSelectionEvidence(located, at)!], evidence);
+  expect(selections.itemsFor(cards(evidence))[0]).toMatchObject({ selection: { accommodation: { place: { coordinate: { latitude: 35.47, longitude: 133.05 }, timeZone: "Asia/Tokyo" } } } });
+});
