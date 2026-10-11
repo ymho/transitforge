@@ -69,3 +69,7 @@ CIでは既存のChromium導入とbuildを再利用する。認証/個人APIはs
 旧汎用conversation、feedback、trace、未指定・未知operationは410。独立したread operationだけを`backend/agent-api/src/legacy-agent-ingress.ts`のallowlistで受け付ける。HTTP入力からモデルのmessages、Tool定義、modelClass、認証principalを注入できない。
 
 Function URLはAWS_IAM、CloudFront OACの署名とSourceArn制限を維持する。Cognitoが必要なreadは`X-Raiquora-Access-Token`を共通verifierで検証する。公開weather readの分類は`api-route-policy.ts`が所有し、公開readから個人State・有料モデルへ接続しない。URLやOAC resourceの存在を旧Agent Runtimeの存続と解釈しない。
+
+## 利用国と配信入口
+
+利用元を日本に限定する配信入口は[インフラ手順](../../infra/terraform/environments/dev/README.md)に従う。REST APIの直接要求はCloudFrontがoriginへ付与する非公開API keyも必要とする。これは国制限の迂回を閉じる追加境界であり、利用者のCognito principal・scope・owner認可を代替しない。

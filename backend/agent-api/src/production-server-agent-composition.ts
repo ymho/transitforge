@@ -1,3 +1,5 @@
+import { MapboxServiceAreaLookup } from "./adapters/mapbox-service-area-lookup.js";
+import { serviceAreaSearchScope, ServiceAreaPolicy, serviceAreaPlaces, serviceAreaRestaurants, serviceAreaWebSearch, serviceAreaPages, serviceAreaKnowledge } from "./usecases/service-area.js";
 import { VerifiedJourneySelections } from "./usecases/verified-journey-selection.js";
 import { S3RepresentativeTimetableRepository } from "./adapters/s3-representative-timetable.js";
 import { createRepresentativeTimetableOperation } from "./usecases/representative-timetable.js";
@@ -67,10 +69,11 @@ export function createProductionServerAgent(executionId: string, environment: Re
  const webCredentials = new SecretsManagerBraveSearchCredentials(secrets, secretArn);
  const http = { fetch: globalThis.fetch };
  const mapboxHttp = createMapboxHttpClient(http, required("VIEWER_ORIGIN"));
- const places = new EnrichedPlaceMediaProvider(new MapboxPlaceMediaProvider(mapboxHttp, mapboxCredentials),
-   new BraveImagePlaceMediaProvider(http, webCredentials), () => new Date(), new WikipediaPlaceMediaProvider(http));
+ const serviceArea = new ServiceAreaPolicy(new MapboxServiceAreaLookup(mapboxHttp, mapboxCredentials));
+ const places = serviceAreaPlaces(new EnrichedPlaceMediaProvider(new MapboxPlaceMediaProvider(mapboxHttp, mapboxCredentials),
+   new BraveImagePlaceMediaProvider(http, webCredentials), () => new Date(), new WikipediaPlaceMediaProvider(http)), serviceArea);
  const weather = new OpenMeteoWeatherProvider(http);
- const webSearch = new BraveWebSearchProvider(http, webCredentials);
+ const webSearch = serviceAreaWebSearch(new BraveWebSearchProvider(http, webCredentials), serviceArea);
  const discoveryRetrievers: TravelKnowledgeRetriever[] = [new WebTravelKnowledgeRetriever(webSearch)];
  if (environment.TRAVEL_KNOWLEDGE_BASE_ID) discoveryRetrievers.push(new BedrockKnowledgeRetriever({
    knowledgeBaseId: environment.TRAVEL_KNOWLEDGE_BASE_ID,
@@ -83,21 +86,21 @@ export function createProductionServerAgent(executionId: string, environment: Re
  let turnResearchLedger: ResearchExecutionLedger | undefined;
  let verifiedJourneyResults: JourneySearchResponse[] = [];
  let groundRouteEvidence: Array<{ id: string; output: Record<string, unknown> }> = [];
- const discovery = createTravelDiscoveryOperation({ retrievers: discoveryRetrievers, ledger: () => turnResearchLedger,
+ const discovery = createTravelDiscoveryOperation({ retrievers: discoveryRetrievers.map(retriever => serviceAreaKnowledge(retriever, serviceArea)), ledger: () => turnResearchLedger,
    ...(environment.BEDROCK_RERANK_MODEL_ARN ? { reranker: new BedrockCandidateReranker(environment.BEDROCK_RERANK_MODEL_ARN) } : {}) });
  const call = (operation: AgentOperation) => async (request: object) => {
    const result = await operation(request as Record<string, unknown>, { requestId: executionId });
    if ((result.statusCode ?? 200) >= 400) throw new Error("Provider unavailable");
    return result.body;
  };
- const restaurantSearch = createRestaurantSearchOperation(new HotPepperRestaurantProvider(http, new SecretsManagerHotPepperCredentials(secrets, secretArn)));
+ const restaurantSearch = createRestaurantSearchOperation(serviceAreaRestaurants(new HotPepperRestaurantProvider(http, new SecretsManagerHotPepperCredentials(secrets, secretArn)), serviceArea));
  const placeSearch = createPlaceMediaSearchOperation(places);
  const otp = otpConfiguration(environment);
  const otpBridge = otpBridgeConfiguration(environment);
  if (otp && otpBridge) throw new Error("Invalid OTP configuration");
  const groundRoutes = otp ? new OtpGroundRouteProvider(otp.endpoint, otp.coverage, http) : otpBridge
    ? new LambdaGroundRouteProvider(otpBridge.functionArn, new S3OtpGraphManifestRepository(s3,
-     required("AI_TIMETABLE_BUCKET"), otpBridge.manifestKey, otpBridge.version, otpBridge.otpImage, otpBridge.graphSha256)) : undefined;
+     required("AI_TIMETABLE_BUCKET"), otpBridge.manifestKey, otpBridge.version, otpBridge.otpImage, otpBridge.graphSha256, otpBridge.regionId)) : undefined;
  const selectableJourneys = new VerifiedJourneySelections();
  const selectableAccommodations = new VerifiedAccommodationSelections();
  const railSearch = createJourneySearchOperation(journey, { onVerifiedResult: (result, index, retrievedAt) => {
@@ -108,7 +111,8 @@ export function createProductionServerAgent(executionId: string, environment: Re
  const runRuntime = createStrandsServerRuntime(new StrandsAgentEngine({
    modelId,
    region: required("AWS_REGION"),
-   systemPrompt: agentV2SystemPrompt,
+   systemPrompt: `${agentV2SystemPrompt}
+SERVICE AREA: The service accepts travel searches only in Japan, within these prefectures: ${serviceAreaSearchScope.prefectures.join("、")}. Do not recommend candidates elsewhere or invent candidates excluded by Tools. An empty filtered response does not prove that no facilities exist. This product boundary is separate from actual rail/OTP coverage.`,
    maxTurns: 10,
    maxOutputTokens: 4_096,
    maxInvocationOutputTokens: 4_096,
@@ -152,7 +156,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
      discovery,
      journey: railSearch,
      representativeTimetable: createRepresentativeTimetableOperation(new S3RepresentativeTimetableRepository(s3, required("AI_TIMETABLE_BUCKET"), "ai-timetable")),
-     accommodation: createFixedEgressAccommodationOperation(required("FIXED_EGRESS_PROVIDER_FUNCTION_ARN")),
+     accommodation: createFixedEgressAccommodationOperation(required("FIXED_EGRESS_PROVIDER_FUNCTION_ARN"), undefined, serviceArea),
      onAccommodationEvidence: (offerings, evidence, retrievedAt) => {
        const proofs = offerings.flatMap(offering => {
          const proof = rakutenAccommodationSelectionEvidence(offering, retrievedAt);
@@ -164,7 +168,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
      external: {
        searchPlaceMedia: call(placeSearch),
        searchWeb: call(createWebSearchOperation(webSearch)),
-       readWebPages: call(createWebPageReadOperation(new SafeWebPageReader(http))),
+       readWebPages: call(createWebPageReadOperation(serviceAreaPages(new SafeWebPageReader(http), serviceArea))),
        searchHazardAlerts: call(createHazardAlertSearchOperation(new JmaHazardAlertProvider(http))),
        searchGroundAccess: call(createGroundAccessSearchOperation(new MapboxGroundAccessProvider(mapboxHttp, mapboxCredentials))),
        searchRestaurants: call(restaurantSearch),
@@ -192,17 +196,18 @@ function otpConfiguration(environment: Readonly<Record<string, string | undefine
 }
 
 function otpBridgeConfiguration(environment: Readonly<Record<string, string | undefined>>): {
-  functionArn: string; manifestKey: string; version: string; otpImage: string; graphSha256: string;
+  functionArn: string; manifestKey: string; version: string; otpImage: string; graphSha256: string; regionId: string;
 } | undefined {
   const functionArn = environment.OTP_ROUTE_PROVIDER_FUNCTION_ARN, manifestKey = environment.OTP_GRAPH_MANIFEST_KEY,
     version = environment.OTP_GRAPH_VERSION, otpImage = environment.OTP_EXPECTED_IMAGE, graphSha256 = environment.OTP_EXPECTED_GRAPH_SHA;
+  const regionId = environment.OTP_REGION_ID || "izumo-matsue";
   if (!functionArn && !manifestKey && !version && !otpImage && !graphSha256) return;
   if (!functionArn || !manifestKey || !version || !otpImage || !graphSha256 ||
       !/^arn:aws:lambda:[a-z0-9-]+:\d{12}:function:[A-Za-z0-9-_]+$/u.test(functionArn) ||
-      manifestKey !== `otp/izumo-matsue/versions/${version}/manifest.json` || !/^\d{8}T\d{6}Z-[0-9a-f]{12}$/u.test(version) ||
+      !/^[a-z][a-z0-9-]{2,63}$/u.test(regionId) || manifestKey !== `otp/${regionId}/versions/${version}/manifest.json` || !/^\d{8}T\d{6}Z-[0-9a-f]{12}$/u.test(version) ||
       !/^docker\.io\/opentripplanner\/opentripplanner@sha256:[0-9a-f]{64}$/u.test(otpImage) || !/^[0-9a-f]{64}$/u.test(graphSha256))
     throw new Error("Invalid OTP bridge configuration");
-  return { functionArn, manifestKey, version, otpImage, graphSha256 };
+  return { functionArn, manifestKey, version, otpImage, graphSha256, regionId };
 }
 
 function boundedInteger(value: string | undefined, fallback: number, minimum: number, maximum: number): number {

@@ -34,6 +34,12 @@ export function deploymentSafetyInputs(environment) {
   return { provider };
 }
 
+export function japanAccessRolloutReady(environment) {
+  if (environment.JAPAN_ACCESS_ROLLOUT_READY !== "true") {
+    throw new Error("Japan access preparation is required: first deploy require_cloudfront_origin_key=false, wait for CloudFront propagation, and verify country headers and domestic API access before setting JAPAN_ACCESS_ROLLOUT_READY=true");
+  }
+}
+
 /** No values from plan/state/policies/outputs are printed, including on malformed input. */
 export function reviewCutoverPlan(plan, environment) {
   const gates = deploymentSafetyInputs(environment);
@@ -96,13 +102,14 @@ export function reviewCutoverPlan(plan, environment) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     if (process.argv[2] === "inputs") deploymentSafetyInputs(process.env);
+    else if (process.argv[2] === "japan-access") japanAccessRolloutReady(process.env);
     else if (process.argv[2] === "plan") {
       let input = "";
       for await (const chunk of process.stdin) input += chunk;
       let plan;
       try { plan = JSON.parse(input); } catch { throw new Error("Invalid Terraform JSON plan"); }
       process.stdout.write(reviewCutoverPlan(plan, process.env));
-    } else throw new Error("Expected inputs or plan mode");
+    } else throw new Error("Expected inputs, japan-access or plan mode");
   } catch (error) {
     // Only our fixed validation messages: never print parser errors or plan contents.
     process.stderr.write(`Cutover guard rejected: ${error.message}\n`);

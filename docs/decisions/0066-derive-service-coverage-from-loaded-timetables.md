@@ -2,7 +2,7 @@
 
 ## 状態
 
-Accepted
+Superseded（一部）: [ADR 0101](0101-limit-access-and-travel-search-to-japan-service-area.md)が独立した地理境界を追加しない判断を置換する。時刻表・アクセス根拠による到達可能性の判定は維持する。
 
 ## 背景
 

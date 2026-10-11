@@ -93,6 +93,10 @@ resource "aws_cloudfront_distribution" "viewer" {
       origin_path                 = "/${var.environment}"
       connection_attempts         = 1
       response_completion_timeout = 260
+      custom_header {
+        name  = "x-api-key"
+        value = aws_api_gateway_api_key.cloudfront_origin["stream"].value
+      }
       custom_origin_config {
         http_port              = 80
         https_port             = 443
@@ -115,6 +119,10 @@ resource "aws_cloudfront_distribution" "viewer" {
       compress                 = false
       # Authorization is the Cognito Bearer token.
       response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.japan_only[0].arn
+      }
     }
   }
   dynamic "ordered_cache_behavior" {
@@ -128,7 +136,11 @@ resource "aws_cloudfront_distribution" "viewer" {
       cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
       origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
       response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
-      compress                   = true
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.japan_only[0].arn
+      }
+      compress = true
       # Cognito Bearer is forwarded to the origin.
     }
   }
@@ -162,9 +174,13 @@ resource "aws_cloudfront_distribution" "viewer" {
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id   = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
-    target_origin_id           = local.ai_agent_origin
-    viewer_protocol_policy     = "https-only"
-    compress                   = true
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.japan_only[0].arn
+    }
+    target_origin_id       = local.ai_agent_origin
+    viewer_protocol_policy = "https-only"
+    compress               = true
   }
 
   ordered_cache_behavior {
@@ -173,9 +189,13 @@ resource "aws_cloudfront_distribution" "viewer" {
     cached_methods             = ["GET", "HEAD", "OPTIONS"]
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
-    target_origin_id           = local.website_origin
-    viewer_protocol_policy     = "https-only"
-    compress                   = true
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.japan_only[0].arn
+    }
+    target_origin_id       = local.website_origin
+    viewer_protocol_policy = "https-only"
+    compress               = true
   }
 
   default_cache_behavior {
@@ -183,9 +203,13 @@ resource "aws_cloudfront_distribution" "viewer" {
     cached_methods             = ["GET", "HEAD", "OPTIONS"]
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.cloudflare_no_store[0].id
-    target_origin_id           = local.website_origin
-    viewer_protocol_policy     = "https-only"
-    compress                   = true
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.japan_only[0].arn
+    }
+    target_origin_id       = local.website_origin
+    viewer_protocol_policy = "https-only"
+    compress               = true
   }
 
   restrictions {

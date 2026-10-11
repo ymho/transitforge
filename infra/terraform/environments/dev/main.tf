@@ -135,6 +135,10 @@ resource "aws_cloudfront_distribution" "website" {
       origin_path                 = "/${var.environment}"
       connection_attempts         = 1
       response_completion_timeout = 260
+      custom_header {
+        name  = "x-api-key"
+        value = aws_api_gateway_api_key.cloudfront_origin["stream"].value
+      }
       custom_origin_config {
         http_port              = 80
         https_port             = 443
@@ -247,7 +251,8 @@ resource "aws_cloudfront_distribution" "website" {
 
   restrictions {
     geo_restriction {
-      restriction_type = "none"
+      restriction_type = "whitelist"
+      locations        = ["JP"]
     }
   }
 

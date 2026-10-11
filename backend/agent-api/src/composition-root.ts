@@ -1,3 +1,5 @@
+import { MapboxServiceAreaLookup } from "./adapters/mapbox-service-area-lookup.js";
+import { ServiceAreaPolicy, serviceAreaPlaces, serviceAreaRestaurants, serviceAreaAccommodations, serviceAreaWebSearch, serviceAreaPages } from "./usecases/service-area.js";
 import { HttpAccommodationProvider } from "./adapters/http-accommodation-provider.js";
 import { OpenMeteoWeatherProvider } from "./adapters/open-meteo-weather-provider.js";
 import { WikipediaPlaceMediaProvider } from "./adapters/wikipedia-place-media-provider.js";
@@ -66,16 +68,17 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     { fetch: globalThis.fetch },
     required(environment, "VIEWER_ORIGIN"),
   );
+  const serviceArea = new ServiceAreaPolicy(new MapboxServiceAreaLookup(mapboxHttp, mapboxCredentials));
   const mapboxPlaces = new MapboxPlaceMediaProvider(mapboxHttp, mapboxCredentials);
   const webSearchCredentials = new SecretsManagerBraveSearchCredentials(secrets, secretArn);
   const webImages = new BraveImagePlaceMediaProvider({ fetch: globalThis.fetch }, webSearchCredentials);
-  const places = new EnrichedPlaceMediaProvider(mapboxPlaces, webImages, () => new Date(), wikipediaPlaces);
-  const webSearch = new BraveWebSearchProvider({ fetch: globalThis.fetch }, webSearchCredentials);
-  const webPageReader = new SafeWebPageReader({ fetch: globalThis.fetch });
+  const places = serviceAreaPlaces(new EnrichedPlaceMediaProvider(mapboxPlaces, webImages, () => new Date(), wikipediaPlaces), serviceArea);
+  const webSearch = serviceAreaWebSearch(new BraveWebSearchProvider({ fetch: globalThis.fetch }, webSearchCredentials), serviceArea);
+  const webPageReader = serviceAreaPages(new SafeWebPageReader({ fetch: globalThis.fetch }), serviceArea);
   const hazardAlerts = new JmaHazardAlertProvider({ fetch: globalThis.fetch });
   const groundAccess = new MapboxGroundAccessProvider(mapboxHttp, mapboxCredentials);
   const restaurantCredentials = new SecretsManagerHotPepperCredentials(secrets, secretArn);
-  const restaurants = new HotPepperRestaurantProvider({ fetch: globalThis.fetch }, restaurantCredentials);
+  const restaurants = serviceAreaRestaurants(new HotPepperRestaurantProvider({ fetch: globalThis.fetch }, restaurantCredentials), serviceArea);
   const decisionModelId = optional(environment, "DECISION_MODEL_ID");
   const traceBucket = required(environment, "AGENT_TRACE_BUCKET");
   const bedrock = new AwsBedrockConverseClient();
@@ -93,7 +96,7 @@ export function createAgentApplication(environment: RuntimeEnvironment = process
     ["daily_congestion_analysis", createCongestionAnalysisOperation(summary, required(environment, "SUMMARY_TABLE"))],
     ["daily_congestion_peak", createCongestionPeakOperation(summary, required(environment, "SUMMARY_TABLE"))],
     ["train_delay_analysis", createDelayAnalysisOperation(summary, required(environment, "DELAY_SUMMARY_TABLE"))],
-    ["travel_accommodation_search", createAccommodationSearchOperation(accommodation)],
+    ["travel_accommodation_search", createAccommodationSearchOperation(serviceAreaAccommodations(accommodation, serviceArea))],
     ["weather_forecast_search", createWeatherForecastOperation(weather)],
     ["weather_grid_search", createWeatherGridOperation(weather)],
     ["place_media_search", createPlaceMediaSearchOperation(places)],
