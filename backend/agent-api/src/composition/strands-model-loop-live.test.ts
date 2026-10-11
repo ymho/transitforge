@@ -19,19 +19,21 @@ describe(`production model-loop diagnosis (${live ? "Bedrock" : "scripted SDK"})
   it.each(["verified", "no_candidates"] as const)("finishes the day-trip request with %s research", async scenario => {
     const state = stateDynamoFixture(), trips = tripDynamoFixture(), metadata = stateMetadata();
     const now = "2026-10-11T06:08:00Z", sourceUrl = "https://example.org/model-loop-fixture";
+    const urls = Array.from({ length: 12 }, (_, index) => `${sourceUrl}-${index}`);
+    let mediaCalls = 0;
     trips.seed(createTrip(metadata.tripId, "明日日帰りで城崎温泉にいきたい", now), stateA.subject);
     await state.conversations.create(stateA, conversationId, metadata);
-    const discovery = vi.fn(async () => ({ body: { discovery: { batch: { hits: scenario === "verified" ? [{
-      hitId: "fixture", sourceRef: sourceUrl, retrievalChannel: "web", text: "城崎温泉", originalRank: 1,
-    }] : [], coverage: { completedQueries: 1 }, incompleteReasons: [] } } } }));
+    const discovery = vi.fn(async () => ({ body: { discovery: { batch: { hits: scenario === "verified" ? urls.map((sourceRef, index) => ({
+      hitId: `fixture-${index}`, sourceRef, retrievalChannel: "web", text: "城崎温泉", originalRank: index + 1,
+    })) : [], coverage: { completedQueries: 6 }, incompleteReasons: [] } } } }));
     const bindings = productionServerTools({ discovery, external: {
-      readWebPages: vi.fn(async () => ({ webPages: { status: "available", freshness: "fresh", data: {
-        pages: [{ url: sourceUrl, title: "城崎温泉", text: "城崎温泉は外湯めぐりを楽しめる温泉地です。検証用の固定資料です。" }],
-      }, evidence: [{ id: "fixture-page", provider: "fixture", sourceUrl, retrievedAt: now }] } })),
-      searchPlaceMedia: vi.fn(async () => ({ result: { status: "available", freshness: "fresh", data: { places: [{
-        providerPlaceId: "fixture-place", name: "城崎温泉", summary: "外湯めぐりを楽しめる温泉地です。検証用の固定資料です。",
-        sourceUrl: "https://places.example.org/model-loop-fixture", officialWebsiteUrl: sourceUrl, openingHoursStatus: "unknown",
-      }] }, evidence: [{ id: "fixture-place", provider: "fixture", sourceUrl, retrievedAt: now }] } })),
+      readWebPages: vi.fn(async ({ urls }: { urls: string[] }) => ({ webPages: { status: "available", freshness: "fresh", data: {
+        pages: urls.map(url => ({ url, title: "城崎温泉", text: "城崎温泉は外湯めぐりを楽しめる温泉地です。検証用の固定資料です。" })),
+      }, evidence: urls.map((sourceUrl, index) => ({ id: `fixture-page-${index}`, provider: "fixture", sourceUrl, retrievedAt: now })) } })),
+      searchPlaceMedia: vi.fn(async () => ({ result: { status: "available", freshness: "fresh", data: { places: urls.slice(0, 4).map((officialWebsiteUrl, index) => ({
+        providerPlaceId: `fixture-place-${index}`, name: "城崎温泉", summary: "外湯めぐりを楽しめる温泉地です。検証用の固定資料です。",
+        sourceUrl: "https://www.mapbox.com/", officialWebsiteUrl, openingHoursStatus: "unknown",
+      })) }, evidence: [{ id: `fixture-place-${++mediaCalls}`, provider: "fixture", sourceUrl: "https://www.mapbox.com/", retrievedAt: now }] } })),
     }, accommodation: vi.fn(async () => ({ statusCode: 503, body: { code: "unavailable" } })),
     journey: vi.fn(async () => ({ statusCode: 503, body: { code: "unavailable" } })) });
     const modelId = process.env.MODEL_ID ?? "jp.anthropic.claude-sonnet-4-6";

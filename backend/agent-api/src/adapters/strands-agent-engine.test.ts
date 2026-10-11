@@ -62,7 +62,26 @@ function setup(effect: "read" | "proposal" = "read", agentV2Proposal = false) {
     toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()), effectiveIntent: effectiveDestination("京都") } };
 }
 describe("StrandsAgentEngine", () => {
-  it("reproduces missing_evidence after the model copies a Tool reference excluded by the global evidence cap", async () => {
+  it("keeps an earlier offered reference and withholds a later verified reference at the cap", async () => {
+    const tools = new AgentToolRegistry(), registry = new ToolEvidenceRegistry();
+    for (const name of ["read_first", "read_later"]) {
+      tools.register({ name, description: "検証用の資料取得", effect: "read", inputSchema: { type: "object", properties: {} },
+        parseInput: () => validAgentToolInput({}), execute: async () => successfulAgentToolResult({}) });
+      registry.register(name, (): Evidence[] => [{ id: name, category: "external", knowledgeKind: "deterministic_fact",
+        subject: name, facts: { description: "取得した資料" }, references: [{ sourceType: "external-source",
+          sourceRef: `https://example.test/${name}`, retrievedAt: "2026-10-11T00:00:00Z", freshness: "current", summary: "fixture" }] }]);
+    }
+    const model = new ScriptedModel([{ tool: "read_first", input: {} }, { tool: "read_later", input: {} },
+      { tool: "strands_structured_output", input: { kind: "answer", references: [{ evidenceId: "read_first", field: "description" }] } }]);
+    const result = await new StrandsAgentEngine(options, { model }).run({ executionId: "retained-reference", userRequest: "資料を確認して",
+      tools, toolExecutor: new AgentToolExecutor(tools, registry), maxEvidence: 1 });
+    const offered = JSON.parse(model.observedMessages[2]!).at(-1).content[0].toolResult.content[0].json;
+    expect(offered).toMatchObject({ evidenceIds: [], candidateReferences: [], replyReferences: [],
+      evidenceCoverage: { reason: "evidence_budget", omittedCount: 1 } });
+    expect(model.observedMessages).toHaveLength(3);
+    expect(result.replyProposal?.kind).toBe("answer");
+  });
+  it("admits the offered page reference even when discovery fills the evidence budget", async () => {
     const tools = new AgentToolRegistry(), registry = new ToolEvidenceRegistry(), log = vi.fn();
     const verified: Evidence = { id: "verified-page-after-discovery", category: "external", knowledgeKind: "deterministic_fact",
       subject: "京都", facts: { sourceExcerpt: "取得した施設の紹介です。" }, references: [{ sourceType: "external-source",
@@ -81,15 +100,15 @@ describe("StrandsAgentEngine", () => {
       toolExecutor: new AgentToolExecutor(tools, registry), maxEvidence: 20 });
     const offered = JSON.parse(model.observedMessages[1]!).at(-1).content[0].toolResult.content[0].json;
     expect(offered.replyReferences).toEqual([{ reference: { evidenceId: verified.id, field: "sourceExcerpt" }, value: verified.facts.sourceExcerpt }]);
-    expect(result.stopReason).toBe("limitTurns");
-    expect(result.replyProposal).toBeUndefined();
+    expect(result.replyProposal?.kind).toBe("answer");
+    expect(model.observedMessages).toHaveLength(2);
     expect(log.mock.calls.filter(([event]) => event === "agent_reply_validation").map(([, fields]) => fields.code))
-      .toEqual(["missing_evidence", "missing_evidence"]);
+      .toEqual([undefined]);
     expect(log).toHaveBeenCalledWith("agent_reply_validation", expect.objectContaining({
       evidenceCount: 21, retainedEvidenceCount: 20, omittedEvidenceCount: 1,
-      referenceCount: 1, unknownReferenceCount: 0, omittedReferenceCount: 1, duplicateReferenceCount: 0 }));
+      referenceCount: 1, unknownReferenceCount: 0, omittedReferenceCount: 0, duplicateReferenceCount: 0 }));
   });
-  it("reproduces repeated reply rejection for two identical place observations with different source IDs", async () => {
+  it("admits a reply for identical place observations with different source IDs", async () => {
     const { input } = setup(), log = vi.fn();
     const sourceUrl = "https://example.org/shared-source";
     const observations = externalTravelEvidence({ result: { status: "available", freshness: "fresh",
@@ -100,11 +119,9 @@ describe("StrandsAgentEngine", () => {
     expect(observations[0]!.facts).toEqual(observations[1]!.facts);
     const model = new ScriptedModel([submitted, submitted, submitted]);
     const result = await new StrandsAgentEngine({ ...options, maxTurns: 3, log }, { model }).run({ ...input, initialEvidence: observations });
-    expect(result.stopReason).toBe("limitTurns");
-    expect(result.replyProposal).toBeUndefined();
-    const rejections = log.mock.calls.filter(([event]) => event === "agent_reply_validation");
-    expect(rejections).toHaveLength(3);
-    expect(rejections.every(([, fields]) => fields.code === "evidence_collision" && fields.collisionCount === 0 && fields.conflictCount === 2)).toBe(true);
+    expect(result.replyProposal?.kind).toBe("uncertainty");
+    expect(model.observedMessages).toHaveLength(1);
+    expect(log).toHaveBeenCalledWith("agent_reply_validation", expect.objectContaining({ outcome: "completed" }));
   });
   it("preserves Tool and reply rejection diagnostics when a later model call fails", async () => {
     const { input } = setup();
