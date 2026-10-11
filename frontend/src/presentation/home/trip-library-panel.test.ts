@@ -9,7 +9,7 @@ const guide: OfficialGuide = { id, version: 1, publishedAt: at, trip };
 afterEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 function setup(officialOnly = false, initiallyAuthenticated = true) {
   const root = document.createElement("section"), own = document.createElement("div"); root.append(own); document.body.append(root);
-  const client = { accessible: vi.fn(async () => ({ trips: [{ trip, role: "viewer" as const }] })), ownedShared: vi.fn(async () => ({ trips: [] })), officialCapabilities: vi.fn(async () => false),
+  const client = { accessible: vi.fn(async (): Promise<{ trips: { trip: typeof trip; role: "viewer" }[]; afterTripId?: string }> => ({ trips: [{ trip, role: "viewer" }] })), ownedShared: vi.fn(async () => ({ trips: [] })), officialCapabilities: vi.fn(async () => false),
     officialList: vi.fn(async () => ({ guides: [guide] })), officialGet: vi.fn(async () => guide), officialPublish: vi.fn(async () => {}), officialWithdraw: vi.fn(async () => {}),
     officialImport: vi.fn(async () => trip) };
   let session = 1, authenticated = initiallyAuthenticated; const login = vi.fn(); const openTrip = vi.fn(async () => {});
@@ -25,6 +25,23 @@ describe("Trip catalogue sharing and official guide navigation", () => {
     expect([...f.root.querySelectorAll('[role="tab"]')].map(b => b.textContent)).toEqual(["あなたの旅", "共有中の旅"]);
     f.click("あなたの旅"); expect(f.own.hidden).toBe(false);
   });
+  it("paginates shared trips without reload, hiding the quiet next action while loading and after the final page", async () => {
+    const f = setup();
+    f.client.accessible.mockResolvedValueOnce({ trips: [{ trip, role: "viewer" }], afterTripId: id });
+    f.click("共有中の旅");
+    await vi.waitFor(() => expect(f.root.querySelector(".trip-library-more-link")?.textContent).toBe("さらに表示"));
+    expect(f.root.textContent).not.toContain("再読み込み");
+    let finish!: (page: { trips: [] }) => void;
+    f.client.accessible.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    f.click("さらに表示");
+    expect(f.root.querySelector(".trip-library-more-link")).toBeNull();
+    expect(f.client.accessible).toHaveBeenLastCalledWith(id);
+    expect(f.client.ownedShared).toHaveBeenCalledTimes(1);
+    finish({ trips: [] });
+    await vi.waitFor(() => expect(f.root.querySelector('[aria-busy="true"]')).toBeNull());
+    expect(f.root.querySelector(".trip-library-more")?.childElementCount).toBe(0);
+    expect(f.root.querySelectorAll(".trip-library-card")).toHaveLength(1);
+  });
   it("loads official guides on home only after login and clears late responses on logout", async () => {
     const f = setup(true, false);
     expect(f.client.officialList).not.toHaveBeenCalled(); expect(f.root.querySelector('[role="tab"]')).toBeNull();
@@ -34,7 +51,7 @@ describe("Trip catalogue sharing and official guide navigation", () => {
     expect(f.root.querySelector('[aria-busy="true"]')).not.toBeNull(); f.logout(); resolve({ guides: [guide] });
     await Promise.resolve(); expect(f.root.textContent).not.toContain("公式の海");
     f.signIn(); await vi.waitFor(() => expect(f.root.textContent).toContain("公式の海"));
-    f.click("再読み込み"); await vi.waitFor(() => expect(f.client.officialList).toHaveBeenCalledTimes(3));
+    expect(f.root.textContent).not.toContain("再読み込み");
   });
   it("removes the login prompt when authentication becomes available without a session counter change", async () => {
     const f = setup(true, false); expect(f.root.textContent).toContain("ログインすると");
