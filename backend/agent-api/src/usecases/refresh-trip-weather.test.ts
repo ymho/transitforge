@@ -56,3 +56,20 @@ it("accepts observations recorded during the provider request but rejects future
  p.search.mockResolvedValue({...response,evidence:[{...evidence[0]!,retrievedAt:new Date(receivedAt.getTime()+1).toISOString()}]});
  expect((await refreshTripWeather(f.trip,f.item,p,now,undefined,()=>receivedAt)).forecasts[0]?.status).toBe("unavailable");
 });
+
+it("resolves an existing hotel only by its exact verified provider facility ID", async () => {
+ const { selectAccommodation } = await import("@raiquora/trip/select-accommodation");
+ const { rakutenAccommodationSelectionEvidence } = await import("../adapters/rakuten-accommodation-selection.js");
+ const f = tripWeatherFixture(), p = provider();
+ const offering = { kind: "accommodation" as const, provider: "rakuten-travel", providerItemId: "42", name: "施設名", checkInDate: "2026-10-11", checkOutDate: "2026-10-12" };
+ const accommodation = selectAccommodation(offering, rakutenAccommodationSelectionEvidence(offering, now.toISOString())!, now.toISOString());
+ const item = { id: "hotel", title: offering.name, type: "stay" as const, schedule: { type: "day" as const, date: "2026-10-11", timeZone: "Asia/Tokyo" }, selection: { status: "selected" as const, accommodation } };
+ const search = vi.fn(async () => [{ ...offering, latitude: 35.47, longitude: 133.05 }]);
+ const result = await refreshTripWeather(f.trip, item, p, now, undefined, () => now, { search });
+ expect(result.forecasts[0]?.status).toBe("available");
+ expect(p.search).toHaveBeenCalledWith(expect.objectContaining({ coordinate: { latitude: 35.47, longitude: 133.05 } }));
+ expect(item.selection.accommodation.place.coordinate).toBeUndefined();
+ search.mockResolvedValueOnce([{ ...offering, providerItemId: "43", latitude: 35.47, longitude: 133.05 }]);
+ p.search.mockClear(); await refreshTripWeather(f.trip, item, p, now, undefined, () => now, { search });
+ expect(p.search.mock.calls[0]![0].coordinate).toBeUndefined();
+});

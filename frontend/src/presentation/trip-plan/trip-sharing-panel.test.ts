@@ -69,6 +69,7 @@ it("explicit Join hands off to login and resumed login redeems then opens the Tr
   const base = { root: document.body, button: document.createElement("button"), client: f.client, current: () => undefined,
     navigate: f.navigate, parseLink: parseTripShareLink, makeLink: (v: typeof link) => makeTripShareLink("https://example.test/", v), initialLink: link };
   const signedOut = configureTripSharing({ ...base, authenticated: () => false, login });
+  expect(signedOut.dialog.querySelector('[aria-label="共有リンクを貼り付け"]')).toBeNull();
   [...signedOut.dialog.querySelectorAll("button")].find(b => b.textContent === "共有リンクで参加して開く")!.click();
   await vi.waitFor(() => expect(login).toHaveBeenCalledWith(link)); expect(f.client.redeem).not.toHaveBeenCalled(); signedOut.destroy();
   const resumed = configureTripSharing({ ...base, authenticated: () => true, resumeJoin: true });

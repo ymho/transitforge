@@ -12,11 +12,11 @@ export function awsProviderLambdaInvoker(): ProviderLambdaInvoker {
   return { invoke: (input, abortSignal) => client.send(new InvokeCommand(input), { abortSignal }) };
 }
 export class LambdaAccommodationProvider implements AccommodationProvider {
-  constructor(private readonly functionArn: string, private readonly invoker: ProviderLambdaInvoker = awsProviderLambdaInvoker()) {}
+  constructor(private readonly functionArn: string, private readonly invoker: ProviderLambdaInvoker = awsProviderLambdaInvoker(), private readonly timeoutMs = 30_000) {}
   async search(request: TravelProviderSearch, requestId?: string) {
     const event = parseProviderRequest({ operation: "search_accommodation", request, ...(requestId ? { requestId } : {}) });
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await this.invoker.invoke({ FunctionName: this.functionArn, InvocationType: "RequestResponse", LogType: "None", Payload: new TextEncoder().encode(JSON.stringify(event)) }, controller.signal);
       if (response.StatusCode !== 200 || response.FunctionError || !response.Payload) throw new ProviderBoundaryError("unavailable");

@@ -1,3 +1,4 @@
+import { LambdaAccommodationProvider } from "./adapters/lambda-accommodation-provider.js";
 import { createTripWeatherStationCatalog } from "./adapters/trip-weather-station-catalog.js";
 import { OpenMeteoWeatherProvider } from "./adapters/open-meteo-weather-provider.js";
 import { BedrockTripTitleGenerator } from "./adapters/bedrock-trip-title-generator.js";
@@ -28,7 +29,8 @@ export function createAuthorizedTripApplications(table: string, stateTable?: str
     stateTable ? new DynamoDbConversationTurnRepository(stateTable) : undefined,
     stateTable ? new DynamoDbTripConsultationRepository(table, stateTable) : undefined,
     process.env.TRIP_TITLE_MODEL_ID ? new BedrockTripTitleGenerator(process.env.TRIP_TITLE_MODEL_ID) : undefined, consultationScope, new OpenMeteoWeatherProvider({ fetch: globalThis.fetch }, undefined, 3_000),
-    process.env.TRAFFIC_SNAPSHOT_BUCKET ? createTripWeatherStationCatalog(process.env.TRAFFIC_SNAPSHOT_BUCKET) : undefined) };
+    process.env.TRAFFIC_SNAPSHOT_BUCKET ? createTripWeatherStationCatalog(process.env.TRAFFIC_SNAPSHOT_BUCKET) : undefined,
+    process.env.FIXED_EGRESS_PROVIDER_FUNCTION_ARN ? new LambdaAccommodationProvider(process.env.FIXED_EGRESS_PROVIDER_FUNCTION_ARN, undefined, 6_000) : undefined) };
 }
 
 /** IAM/internal worker composition only. Every operation still requires an explicit trusted owner. */

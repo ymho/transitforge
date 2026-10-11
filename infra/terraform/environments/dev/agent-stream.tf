@@ -122,17 +122,18 @@ resource "aws_lambda_function" "trip_api" {
   memory_size      = 256
   timeout          = 15
   environment { variables = {
-    TRAFFIC_SNAPSHOT_BUCKET     = aws_s3_bucket.website.id
-    OFFICIAL_PUBLISHER_SUBJECTS = join(",", var.official_publisher_subjects)
-    CONSULTATION_SCOPE_MODEL_ID = var.bedrock_lightweight_model_id != "" ? var.bedrock_lightweight_model_id : var.bedrock_model_id
-    TRIP_API_ENABLED            = "true"
-    TRIP_TITLE_MODEL_ID         = var.bedrock_model_id
-    TRIP_TABLE_NAME             = aws_dynamodb_table.trips.name
-    SERVER_STATE_TABLE_NAME     = aws_dynamodb_table.server_state.name
-    COGNITO_USER_POOL_ID        = aws_cognito_user_pool.users.id
-    COGNITO_CLIENT_ID           = aws_cognito_user_pool_client.spa.id
+    TRAFFIC_SNAPSHOT_BUCKET            = aws_s3_bucket.website.id
+    FIXED_EGRESS_PROVIDER_FUNCTION_ARN = var.enable_fixed_egress_provider ? aws_lambda_function.fixed_egress_provider[0].arn : ""
+    OFFICIAL_PUBLISHER_SUBJECTS        = join(",", var.official_publisher_subjects)
+    CONSULTATION_SCOPE_MODEL_ID        = var.bedrock_lightweight_model_id != "" ? var.bedrock_lightweight_model_id : var.bedrock_model_id
+    TRIP_API_ENABLED                   = "true"
+    TRIP_TITLE_MODEL_ID                = var.bedrock_model_id
+    TRIP_TABLE_NAME                    = aws_dynamodb_table.trips.name
+    SERVER_STATE_TABLE_NAME            = aws_dynamodb_table.server_state.name
+    COGNITO_USER_POOL_ID               = aws_cognito_user_pool.users.id
+    COGNITO_CLIENT_ID                  = aws_cognito_user_pool_client.spa.id
   } }
-  depends_on = [aws_iam_role_policy.trip_api]
+  depends_on = [aws_iam_role_policy.trip_api, aws_iam_role_policy.trip_api_provider_invoke]
 }
 resource "aws_iam_role" "agent_stream" {
   for_each = local.agent_stream_instances
@@ -597,4 +598,12 @@ resource "aws_api_gateway_method_settings" "trip_sharing" {
     throttling_rate_limit  = 5
   }
   depends_on = [aws_api_gateway_method_settings.agent_stream]
+}
+
+resource "aws_iam_role_policy" "trip_api_provider_invoke" {
+  for_each = var.enable_fixed_egress_provider ? local.agent_stream_instances : {}
+  role     = aws_iam_role.trip_api[each.key].id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["lambda:InvokeFunction"], Resource = aws_lambda_function.fixed_egress_provider[0].arn }
+  ] })
 }

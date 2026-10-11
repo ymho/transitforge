@@ -102,7 +102,8 @@ it.each(["multiple", "named", "ordinal", "sole"] as const)(`${live ? "Bedrock" :
       observedPrice: { price: { currency: "JPY", amountMinor: 5100 }, basis: "reference-minimum", observedAt: at },
       sources: [{ provider: "rakuten-travel", sourceId: sole ? "100" : "101", attribution: "楽天トラベル", retrievedAt: expect.any(String) }],
     } } });
-    expect(JSON.stringify(saved)).not.toMatch(/availability|bookingUrl|fixture-key|fixture-app|latitude|longitude/u);
+    expect(saved?.items.find(item => item.type === "stay")).toMatchObject({ selection: { accommodation: { place: { coordinate: { latitude: 35.3, longitude: 132.7 }, timeZone: "Asia/Tokyo" } } } });
+    expect(JSON.stringify(saved)).not.toMatch(/availability|bookingUrl|fixture-key|fixture-app/u);
   }
   expect(await trips.repository.get(stateB, metadata.tripId)).toBeUndefined();
   const completedHistory = await state.conversations.history(stateA, conversationId);

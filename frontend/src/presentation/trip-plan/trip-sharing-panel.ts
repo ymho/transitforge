@@ -24,7 +24,7 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
   const link = element("input"); link.readOnly = true; link.setAttribute("aria-label", "作成した共有リンク"); link.placeholder = "作成したリンク";
   const grants = element("ul"); grantSection.replaceChildren(element("h4", "", "発行したリンク"), grants); let pending = options.initialLink, generation = 0, busy = false;
   const clearLink = () => { link.value = ""; copy.disabled = true; };
-  const close = () => { ++generation; pending = undefined; clearLink(); input.value = ""; expiry.value = ""; updateExpiry(); dialog.close(); };
+  const close = () => { ++generation; pending = undefined; clearLink(); expiry.value = ""; updateExpiry(); dialog.close(); };
   async function action(work: () => Promise<void>, announce = true) {
     if (busy) return; busy = true; const epoch = generation; setLoadingStatus(status, "処理しています。", true);
     try { await work(); if (epoch === generation) { status.textContent = ""; if (announce) notifySaved(dialog.ownerDocument, "共有設定を更新しました。"); } }
@@ -93,9 +93,8 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
   });
   publish.classList.add("ds-button--primary");
   officialActions.append(element("h3", "", "公式しおり"), publish, withdraw);
-  const input = element("input"); input.type = "password"; input.autocomplete = "off"; input.placeholder = "共有リンクを貼り付け"; input.setAttribute("aria-label", "共有リンクを貼り付け");
   const redeem = control("共有リンクで参加して開く", () => { void action(async () => {
-    const value = pending ?? options.parseLink(input.value); input.value = ""; if (!value) throw new Error("Invalid link");
+    const value = pending; if (!value) throw new Error("Invalid link");
     const epoch = generation;
     if (options.authenticated && !options.authenticated()) { if (!options.login) throw new Error("Authentication required"); await options.login(value); return; }
     const result = await options.client.redeem(value); pending = undefined;
@@ -108,7 +107,7 @@ export function configureTripSharing(options: { root: HTMLElement; button: HTMLE
   const heading = element("h2", "", "旅程の共有"); header.append(heading, closeButton);
   const join = element("details", "trip-sharing-join");
   join.open = true; join.hidden = !pending;
-  join.append(element("summary", "", "共有リンクで参加"), input, redeem);
+  join.append(element("summary", "", "共有リンクで参加"), redeem);
   const footer = element("footer", "trip-sharing-footer");
   footer.append(status, control("再読み込み", () => { void refresh(); }));
   dialog.append(header, warning, management, join, officialActions, footer);
