@@ -105,7 +105,7 @@ export class TripApplication {
           const item = current.items.find(item => item.id === command.itemId);
           if (!item || !tripWeatherTargets(current, item).length) throw new TripResourceError("invalid-input");
           const existing = currentTripWeather(current, item), now = this.clock.now();
-          const weather = existing && Date.parse(existing.validUntil) > now.getTime() && existing.forecasts.every(f => f.status !== "unavailable") ? existing : await refreshTripWeather(current, item, this.weatherProvider!, now, this.stationCatalog);
+          const weather = existing && Date.parse(existing.validUntil) > now.getTime() && existing.forecasts.every(f => f.status !== "unavailable") ? existing : await refreshTripWeather(current, item, this.weatherProvider!, now, this.stationCatalog, () => this.clock.now());
           const values = [...(current.weather ?? []).filter(value => value.itemId !== item.id), weather];
           try { validateTripWeather(values, current); } catch { throw new TripResourceError("unavailable"); }
           return { ...current, weather: values };

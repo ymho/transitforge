@@ -31,3 +31,5 @@ Trip API Lambdaは既存のViewer用`viewer-input/train_index.json`だけをS3 G
 ## 確認
 
 Domainで対象範囲・変更時の除去・公式しおりへの非公開、Applicationで保存・再読込・CAS・idempotency・共有権限、Adapterで座標照会、UIで表示・明示更新・Viewerの読取専用、AI projectionで同じ観測の参照を検証する。テストは合成予報と既存の鉄道fixtureを使い、外部Providerやモデルは呼ばない。
+
+予報の`retrievedAt`はProvider応答の受信時刻まで許容する。処理開始後に取得された正常な観測を未来時刻として除外しない。受信時刻より未来の観測は除外し、キャッシュの観測日時・有効期限はそのまま保持する。

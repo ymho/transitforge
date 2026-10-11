@@ -47,3 +47,12 @@ it("keeps the original observation time and expiry when a provider cache is reus
  const weather=await refreshTripWeather(f.trip,f.item,p,new Date("2026-10-10T01:30:00Z"));
  expect(weather.fetchedAt).toBe(now.toISOString()); expect(weather.validUntil).toBe("2026-10-10T02:00:00Z");
 });
+it("accepts observations recorded during the provider request but rejects future timestamps", async()=>{
+ const f=tripWeatherFixture(), p=provider(), observedAt=new Date(now.getTime()+250), receivedAt=new Date(now.getTime()+500);
+ const response=await p.search({location:"公園"});
+ p.search.mockResolvedValue({...response,evidence:[{...evidence[0]!,retrievedAt:observedAt.toISOString()}]});
+ const weather=await refreshTripWeather(f.trip,f.item,p,now,undefined,()=>receivedAt);
+ expect(weather.forecasts[0]?.status).toBe("available"); expect(weather.fetchedAt).toBe(observedAt.toISOString());
+ p.search.mockResolvedValue({...response,evidence:[{...evidence[0]!,retrievedAt:new Date(receivedAt.getTime()+1).toISOString()}]});
+ expect((await refreshTripWeather(f.trip,f.item,p,now,undefined,()=>receivedAt)).forecasts[0]?.status).toBe("unavailable");
+});
