@@ -27,6 +27,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   options: { entry?: DayEntry; collapsed: boolean; collapse(value: boolean): void; chat(prompt: string): void; report(message: string): void;
     saveMetadata?: (build: (current: Trip) => TripUpdateProposal) => Promise<void>;
     memoDrafts?: Map<string, { value: string; base?: string }>;
+    memoExpanded?: Map<string, boolean>;
     refreshWeather?: (trip: Trip, itemId: string) => Promise<void>;
     changeItemDecision?: (trip: Trip, item: ItineraryItem, action: "confirm" | "withdraw") => Promise<void> }, issues: TripFeasibilityIssue[] = []): HTMLElement {
   const card = element("article", "trip-workspace-card"); card.dataset.itemId = item.id; card.dataset.itemType = item.type;
@@ -101,10 +102,23 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
   }
   const memoSession = controller.sessionId(), memoSource = controller.source();
   const memoForm = element("form", "trip-item-memo");
-  const memoLabel = element("label", "", "メモ"), memoInput = element("textarea", "ds-control");
+  const memoLabel = element("label"), memoInput = element("textarea", "ds-control");
   memoInput.value = item.memo ?? ""; memoInput.rows = 3; memoInput.maxLength = 4000;
   memoInput.readOnly = controller.source()?.getRole?.() === "viewer";
   const memoKey = `${trip.id}:${item.id}`;
+  const memoDisclosure = element("details", "trip-item-memo-disclosure"), memoSummary = element("summary", "", "メモ");
+  memoInput.setAttribute("aria-label", `${item.title}のメモ`);
+  memoDisclosure.open = options.memoExpanded?.get(memoKey) ?? false;
+  memoSummary.addEventListener("click", () => {
+    options.memoExpanded?.set(memoKey, !memoDisclosure.open);
+    if (memoDisclosure.open) memoInput.blur();
+  });
+  memoDisclosure.addEventListener("toggle", () => {
+    if (!memoDisclosure.isConnected) return;
+    options.memoExpanded?.set(memoKey, memoDisclosure.open);
+    if (!memoDisclosure.open) memoInput.blur();
+  });
+  memoDisclosure.append(memoSummary, memoForm);
   const draft = options.memoDrafts?.get(memoKey);
   let memoBase = item.memo;
   if (draft && (draft.value === (item.memo ?? "") || !draft.value.trim() && item.memo === undefined)) options.memoDrafts?.delete(memoKey);
@@ -134,7 +148,7 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
       finally { memoSaving = false; memoInput.readOnly = controller.source()?.getRole?.() === "viewer"; }
     });
   }
-  if (!memoInput.readOnly || item.memo) body.append(memoForm);
+  if (!memoInput.readOnly || item.memo) body.append(memoDisclosure);
   const safe = (action: () => void) => { try { if (controller.current()?.id !== trip.id || controller.source()?.getRole?.() === "viewer") throw new Error("Stale or readonly Trip"); action(); } catch { options.report("この変更では条件・仮定との整合が取れません。会話で変更内容を相談してください。"); } };
   const actions = element("div", "trip-workspace-actions");
   if (options.changeItemDecision) {

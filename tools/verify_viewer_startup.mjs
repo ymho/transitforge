@@ -194,6 +194,9 @@ try {
     await weatherCard.locator(".trip-item-booking select").selectOption("booked");
     await page.waitForFunction(() => document.querySelector('[data-item-id="rail"] .trip-item-booking select')?.value === "booked" && !document.querySelector('[data-item-id="rail"] .trip-item-booking select')?.disabled);
     assert.equal(trips[0].items[0].bookingStatus, "booked");
+    const memoDisclosure = weatherCard.locator(".trip-item-memo-disclosure");
+    assert.equal(await memoDisclosure.getAttribute("open"), null);
+    await memoDisclosure.locator("summary").click();
     const memoField = weatherCard.locator(".trip-item-memo textarea");
     assert.equal(await weatherCard.locator(".trip-item-memo button").count(), 0);
     await memoField.fill("ブラウザからの自動保存メモ");
@@ -201,9 +204,12 @@ try {
     await page.waitForFunction(() => document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.value === "ブラウザからの自動保存メモ" && !document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.readOnly);
     assert.equal(trips[0].items[0].memo, "ブラウザからの自動保存メモ");
     await memoField.fill("自動保存メモを再編集");
-    await weatherCard.locator(".trip-item-booking select").focus();
+    await memoDisclosure.locator("summary").click();
     await page.waitForFunction(() => document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.value === "自動保存メモを再編集" && !document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.readOnly);
     assert.equal(trips[0].items[0].memo, "自動保存メモを再編集");
+    assert.equal(await memoDisclosure.getAttribute("open"), null);
+    await memoDisclosure.locator("summary").click();
+    assert.equal(await memoField.inputValue(), "自動保存メモを再編集");
     const heroBalance = await page.locator(".trip-header-content").evaluate(content => {
       const box = content.getBoundingClientRect(), nodes = [...content.children].map(node => node.getBoundingClientRect());
       return Math.abs((Math.min(...nodes.map(node => node.top)) - box.top) - (box.bottom - Math.max(...nodes.map(node => node.bottom))));
