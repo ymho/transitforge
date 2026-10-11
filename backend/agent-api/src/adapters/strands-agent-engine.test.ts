@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Evidence } from "@raiquora/agent/evidence-model";
+import { externalTravelEvidence } from "@raiquora/agent/external-travel-evidence";
 import { ConditionUpdateRejectedError } from "@raiquora/agent/conversation-condition";
 import { BedrockModel, Model, type AgentConfig, type BaseModelConfig, type Message, type ModelStreamEvent, type StreamOptions } from "@strands-agents/sdk";
 import { AgentToolExecutor } from "@raiquora/agent/agent-tool-executor";
@@ -61,6 +62,36 @@ function setup(effect: "read" | "proposal" = "read", agentV2Proposal = false) {
     toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()), effectiveIntent: effectiveDestination("京都") } };
 }
 describe("StrandsAgentEngine", () => {
+  it("reproduces repeated reply rejection for two identical place observations with different source IDs", async () => {
+    const { input } = setup(), log = vi.fn();
+    const sourceUrl = "https://example.org/shared-source";
+    const observations = externalTravelEvidence({ result: { status: "available", freshness: "fresh",
+      data: { places: [{ providerPlaceId: "same-place", name: "京都", summary: "同じ施設の同じ紹介文", sourceUrl }] },
+      evidence: ["source-1", "source-2"].map(id => ({ id, provider: "fixture", sourceUrl })),
+    } }, { executionId: "synthetic", toolCallId: "read-1", toolName: "explore_destination:result", queryFingerprint: "same", retrievedAt: "2026-10-11T00:00:00Z" });
+    expect(observations).toHaveLength(2);
+    expect(observations[0]!.facts).toEqual(observations[1]!.facts);
+    const model = new ScriptedModel([submitted, submitted, submitted]);
+    const result = await new StrandsAgentEngine({ ...options, maxTurns: 3, log }, { model }).run({ ...input, initialEvidence: observations });
+    expect(result.stopReason).toBe("limitTurns");
+    expect(result.replyProposal).toBeUndefined();
+    const rejections = log.mock.calls.filter(([event]) => event === "agent_reply_validation");
+    expect(rejections).toHaveLength(3);
+    expect(rejections.every(([, fields]) => fields.code === "evidence_collision" && fields.collisionCount === 0 && fields.conflictCount === 2)).toBe(true);
+  });
+  it("preserves Tool and reply rejection diagnostics when a later model call fails", async () => {
+    const { input } = setup();
+    const log = vi.fn();
+    const model = new ScriptedModel([
+      { tool: "lookup_place", input: { location: "大阪" } },
+      { tool: "strands_structured_output", input: { kind: "answer", references: [{ evidenceId: "private-invented", field: "sourceExcerpt" }] } },
+    ]);
+    await expect(new StrandsAgentEngine({ ...options, log }, { model }).run(input)).rejects.toMatchObject({ stage: "agent_invoke" });
+    expect(log).toHaveBeenCalledWith("agent_tool_call", expect.objectContaining({ modelCall: 1, tool: "lookup_place", outcome: "rejected", code: "stale_revision" }));
+    expect(log).toHaveBeenCalledWith("agent_reply_validation", expect.objectContaining({ modelCall: 2, replyKind: "answer", outcome: "rejected", code: "missing_evidence" }));
+    expect(log).toHaveBeenCalledWith("agent_model_call", expect.objectContaining({ modelCall: 3, outcome: "failed" }));
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/private-invented|京都|大阪|Unexpected extra/);
+  });
   it("captures a native SDK model failure once without raw content or retries", async () => {
     const { input, execute } = setup();
     const failure = Object.assign(new Error("private prompt and credentials"), { code: "ECONNRESET" });
