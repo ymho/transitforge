@@ -1,7 +1,8 @@
 import type { AssistantTurnView } from "../../../domain/assistant-turn-view";
 import type { AuthSession } from "../../../usecases/auth/auth-session";
 import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
-import { consumeAgentStream, AgentStreamError } from "./consumer";
+import { consumeAgentStream, AgentStreamError, type StreamMeasurement } from "./consumer";
+import type { BrowserAgentDiagnostics } from "./diagnostics";
 import type { AgentTurnEvent } from "@raiquora/agent/agent-progress";
 import { projectAssistantTurn } from "../../../usecases/concierge/assistant-turn-projection";
 
@@ -28,17 +29,18 @@ export interface ConversationStreamReferences {
 export function createConversationStreamSession(options: {
   auth: AuthSession; references: () => ConversationStreamReferences;
   endpoint?: string; fetcher?: typeof fetch; newTurnId?: () => string; now?: () => Date;
+  diagnostics?: BrowserAgentDiagnostics;
 }) {
   let authGeneration = 0, conversationGeneration = 0, tripGeneration = 0, requestGeneration = 0;
   let refs = options.references(), active: AbortController | undefined;
-  const unsubscribe = options.auth.subscribe(() => { authGeneration++; active?.abort(); });
+  const unsubscribe = options.auth.subscribe(() => { authGeneration++; active?.abort("auth_changed"); });
   const sync = () => {
     const next = options.references();
-    if (next.conversationId !== refs.conversationId) { conversationGeneration++; active?.abort(); }
+    if (next.conversationId !== refs.conversationId) { conversationGeneration++; active?.abort("conversation_changed"); }
     if (next.tripId !== refs.tripId || next.tripRevision !== refs.tripRevision ||
         next.draftRevision !== refs.draftRevision || next.draftRequestVersion !== refs.draftRequestVersion) {
       tripGeneration++;
-      active?.abort();
+      active?.abort("trip_changed");
     }
     refs = { ...next };
   };
@@ -47,7 +49,7 @@ export function createConversationStreamSession(options: {
     contextVersion() { sync(); return version(); },
     contextChanged: sync,
     start(userRequest: string, requestedResearchMode: "standard" | "detailed" = "standard", researchTarget?: { presentationId: string; candidateSetId?: string; candidateSetRevision?: number; tripId?: string; baseTripRevision?: number }) {
-      sync(); active?.abort(); const requestVersion = ++requestGeneration, contextVersion = version();
+      sync(); active?.abort("request_replaced"); const requestVersion = ++requestGeneration, contextVersion = version();
       if (researchTarget && ((researchTarget.tripId !== undefined && researchTarget.tripId !== refs.tripId) ||
           (researchTarget.baseTripRevision !== undefined && researchTarget.baseTripRevision !== refs.tripRevision))) throw new AgentStreamError("stale_generation");
       // Deliberate projection: callers cannot send history, Profile, Trip bodies or Tool data.
@@ -65,16 +67,20 @@ export function createConversationStreamSession(options: {
         async send(onEvent?: (event: AgentTurnEvent) => void): Promise<AssistantTurnView> {
           if (inFlight || !current()) throw new AgentStreamError("stale_generation");
           inFlight = true; const controller = new AbortController(); active = controller;
+          const diagnosticEpoch = options.diagnostics?.contextVersion(), began = performance.now();
+          let measurement: StreamMeasurement = { requestStart: 0, maxSilenceMs: 0 };
           try {
             let token = await options.auth.getAccessToken();
             if (!current()) throw new AgentStreamError("stale_generation");
             if (!token || options.auth.getState().status !== "signed-in") throw new ApiAuthenticationError("unauthenticated");
             if (!current()) throw new AgentStreamError("stale_generation");
+            options.diagnostics?.authorize(token);
             let final: AssistantTurnView | undefined;
             for (let attempt = 0; attempt < 2; attempt++) {
               try {
+                measurement = { requestStart: 0, maxSilenceMs: 0 };
                 await consumeAgentStream({ token, request, endpoint: options.endpoint ?? "/api/agent-stream", fetcher: options.fetcher,
-                  signal: controller.signal, isCurrent: current, measurement: { requestStart: 0, maxSilenceMs: 0 },
+                  signal: controller.signal, isCurrent: current, measurement,
                   onEvent(event) { if (!current()) return; if (event.type === "final") {
                     final = projectAssistantTurn(event);
                   } onEvent?.(event); },
@@ -86,12 +92,15 @@ export function createConversationStreamSession(options: {
                 if (!current()) throw new AgentStreamError("stale_generation");
                 if (!refreshed || refreshed === token || options.auth.getState().status !== "signed-in") { options.auth.invalidate(); throw new ApiAuthenticationError("unauthenticated"); }
                 token = refreshed;
+                options.diagnostics?.authorize(token);
               }
             }
             if (!current()) throw new AgentStreamError("stale_generation");
             if (final === undefined) throw new AgentStreamError("missing_final");
             return final;
           } catch (error) {
+            measurement.settledMs ??= performance.now() - began;
+            options.diagnostics?.record(error, measurement, request.turnId, diagnosticEpoch);
             if (!current()) throw new AgentStreamError("stale_generation");
             if (error instanceof AgentStreamError && error.message === "http_401") { options.auth.invalidate(); throw new ApiAuthenticationError("unauthenticated"); }
             if (error instanceof AgentStreamError && error.message === "http_403") throw new ApiAuthenticationError("forbidden");
@@ -100,7 +109,7 @@ export function createConversationStreamSession(options: {
         },
       };
     },
-    dispose() { unsubscribe(); requestGeneration++; active?.abort(); },
+    dispose() { unsubscribe(); requestGeneration++; active?.abort("disposed"); },
   };
 }
 

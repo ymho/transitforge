@@ -10,6 +10,7 @@ import { parsePublicJourneyPresentation } from "@raiquora/agent/public-journey-p
 import { parsePublicGroundRoutePresentation } from "@raiquora/agent/public-ground-route-presentation";
 import { parsePublicPlacePresentation } from "@raiquora/agent/public-place-presentation";
 import { parsePublicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
+import { browserAgentAbortReasons, type BrowserAgentDiagnostic } from "@raiquora/agent/browser-agent-diagnostic";
 
 export interface StreamMeasurement {
   requestStart: number;
@@ -20,6 +21,10 @@ export interface StreamMeasurement {
   settledMs?: number;
   maxSilenceMs: number;
   error?: string;
+  requestSent?: boolean;
+  httpStatus?: number;
+  runId?: string;
+  abortReason?: BrowserAgentDiagnostic["abortReason"];
 }
 export class AgentStreamError extends Error {}
 
@@ -34,10 +39,14 @@ export async function consumeAgentStream(options: {
   const endpoint = options.endpoint ?? "/api/agent-stream-poc";
   if (!/^\/(?!\/)[^?#]*$/u.test(endpoint)) throw new AgentStreamError("invalid_endpoint");
   const controller = new AbortController();
-  const abort = () => controller.abort();
+  const abort = () => {
+    const reason = options.signal.reason;
+    metrics.abortReason ??= (browserAgentAbortReasons as readonly unknown[]).includes(reason) ? reason : "external_abort";
+    controller.abort();
+  };
   options.signal.addEventListener("abort", abort, { once: true });
   let idle: ReturnType<typeof setTimeout> | undefined;
-  const deadline = setTimeout(abort, options.deadlineMs ?? 270_000);
+  const deadline = setTimeout(() => { metrics.abortReason ??= "deadline_timeout"; controller.abort(); }, options.deadlineMs ?? 270_000);
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   let lastByte = now(), pending: AgentTurnEvent | undefined, done = false, runId: string | undefined, sequence = 0;
   metrics.requestStart = lastByte;
@@ -45,12 +54,14 @@ export async function consumeAgentStream(options: {
     if (options.signal.aborted || controller.signal.aborted) throw new AgentStreamError("aborted");
     if (!options.isCurrent()) { controller.abort(); throw new AgentStreamError("stale_generation"); }
   };
-  const resetIdle = () => { if (idle) clearTimeout(idle); idle = setTimeout(abort, options.idleMs ?? 45_000); };
+  const resetIdle = () => { if (idle) clearTimeout(idle); idle = setTimeout(() => { metrics.abortReason ??= "idle_timeout"; controller.abort(); }, options.idleMs ?? 45_000); };
   try {
     current(); resetIdle();
+    metrics.requestSent = true;
     const response = await (options.fetcher ?? fetch)(endpoint, { method: "POST", redirect: "error", cache: "no-store",
       headers: { Authorization: `Bearer ${options.token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
       body: JSON.stringify(options.request), signal: controller.signal });
+    metrics.httpStatus = response.status;
     current(); metrics.headersMs = now() - metrics.requestStart;
     if (!response.ok) throw new AgentStreamError(`http_${response.status}`);
     if (!response.headers.get("content-type")?.startsWith("text/event-stream") || !response.body) throw new AgentStreamError("invalid_content_type");
@@ -60,7 +71,7 @@ export async function consumeAgentStream(options: {
       const value: unknown = JSON.parse(payload);
       if (!record(value) || value.v !== 1 || typeof value.runId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/u.test(value.runId) ||
           value.seq !== sequence + 1 || sequence >= 256 || (runId !== undefined && runId !== value.runId) || done) throw new AgentStreamError("invalid_sequence");
-      runId = value.runId; sequence++;
+      runId = value.runId; metrics.runId = runId; sequence++;
       if (name === "done") {
         if (Object.keys(value).some(k => !["v", "runId", "seq"].includes(k)) || !pending) throw new AgentStreamError("missing_final");
         done = true;

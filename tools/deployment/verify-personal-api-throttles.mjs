@@ -11,9 +11,10 @@ export function verifyPersonalApiThrottles(value) {
   const matches = (method, rate, burst) => method?.throttlingRateLimit === rate && method?.throttlingBurstLimit === burst &&
     method?.metricsEnabled === true && method?.dataTraceEnabled === false && method?.loggingLevel === "OFF" && method?.cachingEnabled === false;
   if (!matches(settings.get("*/*"), 1, 2) || !matches(settings.get("api/agent-stream/POST") ?? settings.get("*/*"), 1, 2) ||
-      !["conversations", "trips"].every(name => matches(settings.get(`api/${name}/v1/POST`), 5, 10)))
+      !["conversations", "trips"].every(name => matches(settings.get(`api/${name}/v1/POST`), 5, 10)) ||
+      !matches(settings.get("api/conversations/diagnostics/v1/POST"), 1, 2))
     throw new Error("Unexpected API method limits");
-  return "API throttles verified: conversation/trip=5/s burst10; Agent/default=1/s burst2.\n";
+  return "API throttles verified: conversation/trip=5/s burst10; Agent/default=1/s burst2; Browser diagnostics=1/s burst2 with tracing disabled.\n";
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {

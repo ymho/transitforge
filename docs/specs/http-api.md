@@ -8,6 +8,7 @@ KAIHOはVite / TypeScriptのSPA。Browserは表示・入力・同一originへの
 | HTTP入口 | 内容 | 利用者の認証搬送 |
 | --- | --- | --- |
 | POST `/api/agent-stream` | 会話turn、progress / final / errorのSSE | `Authorization: Bearer <Access Token>` |
+| POST `/api/conversations/diagnostics/v1` | 本文を含まないBrowser障害の診断受信。画面操作・診断閲覧APIはない | 同上 |
 | POST `/api/conversations/v1` | 会話metadata、履歴、更新、削除 | 同上 |
 | POST `/api/profile/v1` | Profile V3、revisionによるCAS | 同上 |
 | POST `/api/trips/v1` | 相談開始、旅程、予定変更、候補採用・確認 | 同上 |
@@ -30,6 +31,18 @@ HTTP bodyはSSEの文字列であり、JSON配列ではない。OpenAPIの`text/
 `x-sse-events`が`event: agent`のJSON dataである`AgentEventFrame`と、`event: done`の`DoneEventFrame`を参照する。
 `v: 1`、同一runId、1から増加するseq、final / errorの後のdoneを確認する。`: heartbeat`は接続維持用commentで、回答ではない。
 HTTP 200開始後の失敗はerror eventで返る。200またはEOFだけで成功とせず、自動再接続もしない。
+
+## 非表示のBrowser診断
+
+Browserは相談失敗時にHTTP応答・経過時間・最大受信間隔・閉じたエラー/中断コード・build識別子・照合用IDだけを送る。
+fetch開始はServer到着の証明ではない。Serverの`runId`を受信できた場合、Agentログのexecution IDと照合する。
+受信前の失敗にはBrowserのturn IDを用い、Server stream開始以後のログと照合する。本文・URL・token・Profile・任意の例外message/stackは送らない。
+受信APIはCognitoとscopeで認証し、exact keys・件数・byte・値上限を検証する。Browserの自己申告は認可や業務状態の根拠にしない。
+
+診断送信は5秒で打ち切り、token取得・refresh・invalidate・Agentの再実行を行わない。既に相談用に取得したtokenだけを用いる。
+未送信記録はページ内メモリに最大8件、30分だけ保持する。1送信4件まで、1件あたり最大2試行とし、次の接続復帰または相談時にだけ再送機会を持つ。
+即時再試行・周期送信はなく、認証状態の変更時にtokenと未送信記録を破棄する。ページを閉じる/再読込する場合や、認証が失効した場合は未送信診断を失う。
+診断は相談の成否や画面表示を変更せず、管理者が既存CloudWatchと診断Actionsから確認する。
 
 ## 未公開の境界
 

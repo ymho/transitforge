@@ -7,6 +7,7 @@ import type { OfficialGuide } from "@raiquora/trip/official-guide";
 import type { ShareGrantView, TripParticipantView, SharedTripRole } from "@raiquora/trip/trip-sharing";
 import type { ReservationFact } from "@raiquora/trip/reservation";
 import type { AgentTurnEvent } from "@raiquora/agent/agent-progress";
+import type { BrowserAgentDiagnosticCommand } from "@raiquora/agent/browser-agent-diagnostic";
 import type { ConversationTurnInput } from "../backend/agent-api/src/usecases/agent/conversation-turn.js";
 import type { Conversation, ConversationMetadata, ConversationMessage, PageOptions, ProfileState } from "../backend/agent-api/src/contracts/server-state.js";
 import type { TripApiCommand, PlanAdoptionApiCommand, TripAdoptionApiCommand, ItemDecisionApiCommand } from "../backend/agent-api/src/contracts/trip-api.js";
@@ -115,6 +116,8 @@ type ReadResponse =
 
 /** Explicit roots prevent schema generation from publishing unrelated/internal types. */
 export interface OpenApiModels {
+  BrowserDiagnosticCommand: BrowserAgentDiagnosticCommand;
+  BrowserDiagnosticResponse: { version: "browser-agent-diagnostics-v1"; ok: true };
   ConversationCommand: ConversationCommand;
   ConversationResponse: ConversationResponse;
   ProfileCommand: ProfileCommand;

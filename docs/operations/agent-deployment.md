@@ -52,3 +52,12 @@ Server成功と画面の失敗が食い違う場合は、通信の時系列を�
 旧bundle単体の再配置、Git全体の巻戻しは復旧手順にしない。
 最初の復旧はv2必須の組成と旧フラグなしの設定を維持した修正/部分revertとして作成し、上の検証を通す。
 撤去後の動作確認に成功したSHAを初めてのv2専用復旧基準として記録する。
+
+## Browserの非表示診断
+
+`Agent / Production Diagnostics`はAgent streamログに加え、既存personal-state Lambdaの`browser_agent_diagnostic`を直近2時間だけ取得する。
+集計は最大20件の時刻・閉じた理由・HTTP status・経過時間・最大受信間隔・build識別子を表示し、本文・token・account/相関IDを表示しない。
+CloudWatchの受信時刻とBrowser時刻は区別する。観測はBrowserの自己申告であり、fetch開始だけでServer到達済みと断定しない。
+必要な相関IDは管理者がCloudWatchで`runId`とAgent streamの`executionId`を照合する。run ID未受信の場合は`turnId`をstream開始以後のログと照合する。
+Agentは正常完了しBrowserが失敗した場合、HTTP応答・最大受信間隔・中断理由・回答形式の拒否を確認する。
+診断自体が未到達なら、観測なしを成功/失敗の証明にしない。詳細な送信・破棄条件は[HTTP API契約](../specs/http-api.md)を参照する。

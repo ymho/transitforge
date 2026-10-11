@@ -23,6 +23,7 @@ const optionalLocalDataFallbacks: Record<string, string> = {
 
 export default defineConfig({
   envDir: "..",
+  define: { "import.meta.env.VITE_APP_BUILD_ID": JSON.stringify(/^[0-9a-f]{7,40}$/u.test(process.env.GITHUB_SHA ?? "") ? process.env.GITHUB_SHA : "development") },
   build: {
     outDir: "../dist",
     emptyOutDir: true,

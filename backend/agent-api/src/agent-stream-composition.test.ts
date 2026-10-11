@@ -82,6 +82,7 @@ it("runs the real Server Agent once, with correlated safe logs and no request/st
     expect(entry).toMatchObject({ requestId: "execution-1", apiRequestId: "gateway-1", lambdaRequestId: "lambda-1", latencyMs: expect.any(Number) });
   }
   expect(s.log.mock.calls.at(-1)?.[0].executionId).toBe("execution-1");
+  expect(s.log.mock.calls.at(-1)?.[0].turnId).toBe(secondId);
   expect(JSON.stringify(s.log.mock.calls)).not.toMatch(/PRIVATE|Bearer|確認|identity-v1|profile|toolUse/i);
 });
 it("streams Application acceptance after commit without terminating the answer stream", async () => {

@@ -232,6 +232,60 @@ resource "aws_api_gateway_resource" "personal_state_conversations_v1" {
   parent_id   = aws_api_gateway_resource.personal_state_conversations[each.key].id
   path_part   = "v1"
 }
+# Content-free Browser transport observations use the existing authenticated JSON host.
+resource "aws_api_gateway_resource" "browser_diagnostics" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.personal_state_conversations[each.key].id
+  path_part   = "diagnostics"
+}
+resource "aws_api_gateway_resource" "browser_diagnostics_v1" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  parent_id   = aws_api_gateway_resource.browser_diagnostics[each.key].id
+  path_part   = "v1"
+}
+resource "aws_api_gateway_method" "browser_diagnostics_post" {
+  for_each             = local.agent_stream_instances
+  rest_api_id          = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id          = aws_api_gateway_resource.browser_diagnostics_v1[each.key].id
+  http_method          = "POST"
+  authorization        = "COGNITO_USER_POOLS"
+  api_key_required     = var.require_cloudfront_origin_key
+  authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
+  authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
+}
+resource "aws_api_gateway_integration" "browser_diagnostics" {
+  for_each                = local.agent_stream_instances
+  rest_api_id             = aws_api_gateway_rest_api.agent_stream[each.key].id
+  resource_id             = aws_api_gateway_resource.browser_diagnostics_v1[each.key].id
+  http_method             = aws_api_gateway_method.browser_diagnostics_post[each.key].http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.personal_state[each.key].invoke_arn
+}
+resource "aws_lambda_permission" "browser_diagnostics_gateway" {
+  for_each      = local.agent_stream_instances
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.personal_state[each.key].function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.agent_stream[each.key].execution_arn}/${var.environment}/POST/api/conversations/diagnostics/v1"
+}
+resource "aws_api_gateway_method_settings" "browser_diagnostics" {
+  for_each    = local.agent_stream_instances
+  rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
+  stage_name  = aws_api_gateway_stage.agent_stream[each.key].stage_name
+  method_path = "api/conversations/diagnostics/v1/POST"
+  settings {
+    logging_level          = "OFF"
+    caching_enabled        = false
+    data_trace_enabled     = false
+    metrics_enabled        = true
+    throttling_burst_limit = 2
+    throttling_rate_limit  = 1
+  }
+  depends_on = [aws_api_gateway_method_settings.agent_stream]
+}
 resource "aws_api_gateway_resource" "personal_state_profile" {
   for_each    = local.agent_stream_instances
   rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
@@ -374,7 +428,7 @@ resource "aws_api_gateway_deployment" "agent_stream" {
   for_each    = local.agent_stream_instances
   rest_api_id = aws_api_gateway_rest_api.agent_stream[each.key].id
   triggers = { configuration = sha1(jsonencode([
-    aws_api_gateway_integration.agent_stream_route[each.key], aws_api_gateway_method.agent_stream_post[each.key], aws_api_gateway_authorizer.agent_stream_cognito[each.key], aws_api_gateway_integration.personal_state_conversations[each.key], aws_api_gateway_integration.personal_state_profile[each.key], aws_api_gateway_method.personal_state_post[each.key], aws_api_gateway_method.personal_profile_post[each.key], aws_api_gateway_integration.trip_api[each.key], aws_api_gateway_method.trip_api_post[each.key], aws_api_gateway_integration.trip_sharing[each.key], aws_api_gateway_method.trip_sharing_post[each.key]
+    aws_api_gateway_integration.agent_stream_route[each.key], aws_api_gateway_method.agent_stream_post[each.key], aws_api_gateway_authorizer.agent_stream_cognito[each.key], aws_api_gateway_integration.personal_state_conversations[each.key], aws_api_gateway_integration.personal_state_profile[each.key], aws_api_gateway_integration.browser_diagnostics[each.key], aws_api_gateway_method.browser_diagnostics_post[each.key], aws_api_gateway_method.personal_state_post[each.key], aws_api_gateway_method.personal_profile_post[each.key], aws_api_gateway_integration.trip_api[each.key], aws_api_gateway_method.trip_api_post[each.key], aws_api_gateway_integration.trip_sharing[each.key], aws_api_gateway_method.trip_sharing_post[each.key]
   ])) }
   lifecycle { create_before_destroy = true }
 }

@@ -13,6 +13,7 @@
 | malformed/deep/duplicate input | API、Tool、Presentation、Candidate | exact keys、深さ/byte/array上限、重複ref、非有限数、prototype由来keyをschemaと意味検証で拒否 | `agent-request.test.ts`、`public-plan-presentation.test.ts`、`grounded-answer.test.ts`、`trip-handler.test.ts` | 文字の見た目が似る問題はID完全一致を維持する |
 | partial / delayed stream | SSE、account/conversation/trip切替 | finalを一時保留し、valid final + done + EOFが揃うまで描画しない。generation変更、invalid Presentation、順序違反を破棄 | `consumer.test.ts`、`agent-stream-composition.test.ts` | 切断後の完了結果は同じturn IDの明示再送でreceiptを読む |
 | 部分更新 / retry | state table、trip table、Provider失敗 | ConversationとturnはCAS transaction、TripはProposal/CAS/mutation receipt。候補採用previewはimmutable。同一mutationの副作用は1回 | `dynamodb-conversation-turn-repository.test.ts`、`plan-candidate-adoption.test.ts` | Conversation削除はcross-table transactionではないため下記のresumable contractを使う |
+| Browser診断への本文・token混入 / 偽観測 | 認証済み診断POST、Browser outbox | 閉じたコード・UUID・数値・exact keys・4KB/4件上限。任意message/stackは送らず、診断をauthorityに使わない。未送信分はページ内8件/30分、認証変更時に破棄 | `diagnostics.test.ts`、`browser-agent-diagnostics-handler.test.ts` | 通信断・認証失効・再読込で診断を失い得る。Browser観測の真実性は保証しない |
 | 生会話・私的推論の診断流出 | Trace、model failure、CloudWatch | diagnosticsはID・phase・件数・latencyだけ。Trace payloadはcontent-free/redacted、Profileを含むmodel requestは本文ごと省略 | `server-agent-diagnostics.test.ts`、`agent-trace.test.ts`、`strands-runtime-diagnostics.test.ts` | Cloud providerの基盤ログはAWS側保持設定に従う |
 
 ## 保持・削除contract

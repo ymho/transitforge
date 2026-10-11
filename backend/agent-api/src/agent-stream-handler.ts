@@ -18,9 +18,10 @@ export function createAgentStreamHandler(options: { verifier: AccessTokenVerifie
     const requestId = options.newRunId();
     const log = (event: StreamLog["event"], status?: number) => options.log?.({ event, requestId,
       apiRequestId: safeId(request.apiRequestId), lambdaRequestId: safeId(request.lambdaRequestId),
-      ...(runId ? { executionId: runId } : {}), latencyMs: Date.now() - began, ...(status ? { status } : {}) });
+      ...(runId ? { executionId: runId } : {}), ...(turnId ? { turnId } : {}), latencyMs: Date.now() - began, ...(status ? { status } : {}) });
     let outcome: StreamLog["event"] = "error";
     let started = false, sequence = 0, terminal = false, runId = "";
+    let turnId: string | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let queue = Promise.resolve();
     let writeFailed = false, streamLogged = false;
@@ -52,6 +53,7 @@ export function createAgentStreamHandler(options: { verifier: AccessTokenVerifie
       if (writer.signal.aborted) return;
       if (header(request, "content-type")?.split(";")[0].trim() !== "application/json") throw new InputError(415);
       const input = parseInput(request, options.conversationTurns);
+      if (typeof input.turnId === "string" && /^[0-9a-f-]{36}$/u.test(input.turnId)) turnId = input.turnId;
       runId = requestId;
       writer.start(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store, no-transform", "x-content-type-options": "nosniff" });
       started = true;
@@ -132,6 +134,7 @@ export interface StreamLog {
   apiRequestId?: string;
   lambdaRequestId?: string;
   executionId?: string;
+  turnId?: string;
   latencyMs: number;
   status?: number;
 }

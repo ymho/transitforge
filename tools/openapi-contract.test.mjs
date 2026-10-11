@@ -13,6 +13,13 @@ const spec = JSON.parse(readFileSync("docs/api/openapi.json", "utf8"));
 const ajv = new Ajv2020({ strict: false, validateFormats: false, allErrors: true });
 ajv.addSchema({ $id: "urn:kaiho:openapi", components: spec.components });
 const validate = name => ajv.compile({ $ref: `urn:kaiho:openapi#/components/schemas/${name}` });
+test("Browser diagnostics publish only bounded, content-free input and an acknowledgement", () => {
+  const v = validate("BrowserDiagnosticCommand"), report = { diagnosticId: "11111111-1111-4111-8111-111111111111", occurredAt: "2026-10-11T08:00:00.000Z", buildId: "e0d06e68", code: "aborted", requestSent: true, elapsedMs: 45000, maxSilenceMs: 45000 };
+  const command = { version: "browser-agent-diagnostics-v1", operation: "record", reports: [report] };
+  assert.equal(v(command), true, JSON.stringify(v.errors));
+  for (const reports of [[], Array(5).fill(report), [{ ...report, userRequest: "private" }], [{ ...report, code: "private" }], [{ ...report, httpStatus: 999 }], [{ ...report, elapsedMs: -1 }]]) assert.equal(v({ ...command, reports }), false);
+  assert.equal(spec.paths["/api/conversations/diagnostics/v1"].post["x-max-body-bytes"], 4096);
+});
 const tripId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", mutationId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const principal = { subject: `identity-v1:${"a".repeat(64)}`, identity: { issuer: "https://identity.example", subject: "fixture" }, scopes: ["raiquora/user"] };
 const assertValid = (validator, value) => assert.equal(validator(value), true, JSON.stringify(validator.errors));
@@ -99,7 +106,7 @@ test("read schema excludes retired operations and model injection", () => {
 });
 
 test("unpublished handlers and private identities are not published API contracts", () => {
-  assert.equal(Object.keys(spec.paths).length, 6);
+  assert.equal(Object.keys(spec.paths).length, 7);
   for (const path of spec["x-unpublished"].paths) assert.equal(spec.paths[path], undefined);
   for (const name of ["TrustedPrincipal", "TripPrincipal"]) assert.equal(spec.components.schemas[name], undefined);
   const v = validate("TripResponse"); assertValid(v, { version: "trip-api-v1" });

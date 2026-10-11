@@ -29,6 +29,9 @@
     },
     {
       "name": "read"
+    },
+    {
+      "name": "browserDiagnostics"
     }
   ],
   "security": [
@@ -1435,6 +1438,206 @@
         }
       }
     },
+    "/api/conversations/diagnostics/v1": {
+      "post": {
+        "operationId": "browserDiagnosticsCommand",
+        "tags": [
+          "browserDiagnostics"
+        ],
+        "summary": "本文を含まないブラウザー通信障害の診断記録",
+        "description": "同一originのPOST。query parameterは受け付けない。Cognito Access Tokenのraiquora/user scopeが必要。ownerはサーバーが解決する。競合時は最新revisionを取得して再判断する。",
+        "x-required-scopes": [
+          "raiquora/user"
+        ],
+        "x-max-body-bytes": 4096,
+        "x-operations": [
+          "record"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowserDiagnosticCommand"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "正常応答。operationごとに応答の形が異なる。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "個人応答はno-store。"
+              },
+              "X-Transitforge-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Handlerが返す安全な相関ID。Gatewayで拒否した応答には付かない。"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserDiagnosticResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid-input",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "個人応答はno-store。"
+              },
+              "X-Transitforge-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Handlerが返す安全な相関ID。Gatewayで拒否した応答には付かない。"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "version"
+                  ],
+                  "properties": {
+                    "version": {
+                      "const": "browser-agent-diagnostics-v1"
+                    },
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid-input"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "個人応答はno-store。"
+              },
+              "X-Transitforge-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Handlerが返す安全な相関ID。Gatewayで拒否した応答には付かない。"
+              },
+              "WWW-Authenticate": {
+                "schema": {
+                  "const": "Bearer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "version"
+                  ],
+                  "properties": {
+                    "version": {
+                      "const": "browser-agent-diagnostics-v1"
+                    },
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "個人応答はno-store。"
+              },
+              "X-Transitforge-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Handlerが返す安全な相関ID。Gatewayで拒否した応答には付かない。"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error",
+                    "version"
+                  ],
+                  "properties": {
+                    "version": {
+                      "const": "browser-agent-diagnostics-v1"
+                    },
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "forbidden"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Production hostを無効にしている場合。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unavailable"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/agent": {
       "post": {
         "operationId": "readCommand",
@@ -2448,6 +2651,108 @@
       }
     },
     "schemas": {
+      "BrowserAgentDiagnostic": {
+        "type": "object",
+        "properties": {
+          "diagnosticId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+          },
+          "buildId": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{7,40}|development)$"
+          },
+          "code": {
+            "enum": [
+              "aborted",
+              "agent_failed",
+              "forbidden",
+              "frame_too_large",
+              "http_error",
+              "incomplete_stream",
+              "invalid_content_type",
+              "invalid_endpoint",
+              "invalid_event",
+              "invalid_sequence",
+              "limit_reached",
+              "missing_final",
+              "partial_frame",
+              "preflight_trip_unavailable",
+              "stale_generation",
+              "stream_error",
+              "stream_too_large",
+              "turn_conflict",
+              "unauthenticated",
+              "unknown_error"
+            ],
+            "type": "string"
+          },
+          "requestSent": {
+            "type": "boolean"
+          },
+          "turnId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "runId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "httpStatus": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "abortReason": {
+            "enum": [
+              "auth_changed",
+              "conversation_changed",
+              "deadline_timeout",
+              "disposed",
+              "external_abort",
+              "idle_timeout",
+              "request_replaced",
+              "trip_changed"
+            ],
+            "type": "string"
+          },
+          "elapsedMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 600000
+          },
+          "maxSilenceMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 600000
+          },
+          "headersMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 600000
+          },
+          "firstByteMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 600000
+          }
+        },
+        "required": [
+          "buildId",
+          "code",
+          "diagnosticId",
+          "elapsedMs",
+          "maxSilenceMs",
+          "occurredAt",
+          "requestSent"
+        ],
+        "additionalProperties": false
+      },
       "ConversationCommand": {
         "oneOf": [
           {
@@ -12947,6 +13252,59 @@
           "detailUrl",
           "name",
           "providerRestaurantId"
+        ]
+      },
+      "BrowserDiagnosticCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "browser-agent-diagnostics-v1"
+              },
+              "operation": {
+                "type": "string",
+                "const": "record"
+              },
+              "reports": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BrowserAgentDiagnostic"
+                },
+                "minItems": 1,
+                "maxItems": 4
+              }
+            },
+            "required": [
+              "operation",
+              "reports",
+              "version"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "BrowserDiagnosticResponse": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "browser-agent-diagnostics-v1"
+              },
+              "ok": {
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "required": [
+              "ok",
+              "version"
+            ],
+            "additionalProperties": false
+          }
         ]
       },
       "SharingCommand": {
