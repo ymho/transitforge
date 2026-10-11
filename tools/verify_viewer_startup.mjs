@@ -401,15 +401,19 @@ try {
     await page.locator('[data-account]').click();
 
     // Resume a suspended tab after its absolute deadline: no refresh or protected data.
+    providerLoggedIn = false;
     const beforeExpiry = apiCalls.length;
     await page.clock.setSystemTime(new Date(issuedAt + 12 * 60 * 60 * 1000));
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow"))); await ready();
     assert.equal(refreshes, 1); assert.equal(apiCalls.length, beforeExpiry);
     assert.equal(await page.evaluate(key => sessionStorage.getItem(key), key), null);
     await page.reload(); await ready();
+    assert.equal(await page.locator("#app").getAttribute("data-auth-state"), "signed-out");
+    assert.equal(passiveAttempts, 3);
     assert.deepEqual(dataCalls, []); assert.deepEqual(errors, []);
 
     // Explicit logout clears tab credentials before Cognito navigation, then Home still mounts.
+    providerLoggedIn = true; // Even a leftover provider cookie must not undo explicit logout.
     const logoutTime = issuedAt + 12 * 60 * 60 * 1000;
     await page.evaluate(({ key, config, logoutTime }) => sessionStorage.setItem(key, JSON.stringify({ version: 1,
       issuer: config.issuer, clientId: config.clientId, scopes: config.scopes, accessToken: "fixture-access",
@@ -422,6 +426,7 @@ try {
     await page.locator(".settings-section").filter({ has: page.locator("[data-my-logout]") }).locator("summary").first().click();
     await Promise.all([page.waitForEvent("load"), page.locator("[data-my-logout]").click()]); await ready();
     assert.equal(await page.evaluate(key => sessionStorage.getItem(key), key), null);
+    assert.equal(passiveAttempts, 3);
     assert.deepEqual(errors, []); assert.deepEqual(dataCalls, []);
 
     // A failed dynamic import must display recovery; reload retries the actual build.
