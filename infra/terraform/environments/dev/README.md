@@ -258,6 +258,8 @@ API Gatewayの全POSTはCognitoとscopeに加え、CloudFront origin custom head
 
 初回は`require_cloudfront_origin_key=false`でorigin keyとCloudFront headerを先に配布する。国内から全APIの疎通と国ヘッダーを確認し、その後既定の`true`でAPI要求を有効にする。最終状態では国外のWeb/API利用とAPI URLへの直接要求を拒否する。単一applyで先にAPI要求を有効にするとCloudFront更新中に国内APIも一時拒否されるため、初回は二段階とする。公開CDはこれらの実アクセス確認を代替しない。
 
+`CD / Deploy`のdeployはdev Environmentの`JAPAN_ACCESS_ROLLOUT_READY`が厳密に`true`の場合だけ進む。未設定ではAWS認証・変更前に停止し、planのみの確認は利用できる。初回の`require_cloudfront_origin_key=false`による配布は上記の手動Terraform手順で行い、CloudFrontの反映完了・国ヘッダー・国内の全API疎通を確認してから変数を`true`にする。その後のCDが既定のorigin key必須化を反映する。コードのマージだけではこの準備完了を扱わない。
+
 ## OTP入力の拡張
 
 `otp_region_id`はData Builderと一致させる。v1/v2 manifestを受理し、v2ではfeedごとの範囲と運行期間を照会前に検証する。既存の固定graph versionは変更しない。追加GTFSを保存するだけでは稼働中のOTPは変わらないため、対応OSMでのグラフ再構築、実経路検証後にversion/hash/imageを更新する。全国グラフへ拡張する前にFargateのmemory・disk・build時間を測定する。

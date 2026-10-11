@@ -37,6 +37,7 @@ jobs:
       id-token: write
     env:
       CD_MODE: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.mode || 'plan' }}
+      JAPAN_ACCESS_ROLLOUT_READY: ${{ vars.JAPAN_ACCESS_ROLLOUT_READY || 'false' }}
       TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
       # #706: development-service cutover, not a general-availability quality gate.
       # #785: independently verified consultation flow, native adaptive thinking/medium.
@@ -73,6 +74,10 @@ jobs:
 
       - name: Validate deployment safety inputs
         run: node tools/deployment/cutover-gates.mjs inputs
+
+      - name: Require completed Japan access preparation
+        if: env.CD_MODE == 'deploy'
+        run: node tools/deployment/cutover-gates.mjs japan-access
 
       - name: Install JavaScript dependencies
         run: npm ci
