@@ -73,17 +73,19 @@ if (modelCallPath) {
 }
 
 if (modelCallPath && invocationFailurePath) {
-  console.log("\n### Failed invocation steps (up to four latest)");
+  console.log("\n### Failed or limited invocation steps (up to four latest)");
   const tools = new Set(["update_current_destination", "update_current_origin", "update_current_party", "update_current_travel_period", "update_current_budget", "consider_trip_scenario", "review_presented_candidates", "select_presented_candidate", "strands_structured_output", "explore_destination", "discover_destinations", "search_travel_knowledge", "search_weather_forecast", "search_place_media", "search_travel_alerts", "search_ground_access", "search_restaurants", "search_web", "read_web_pages", "resolve_place_candidates", "schedule_trip_recheck", "search_accommodations", "search_journeys", "search_representative_timetable", "compare_journeys", "draft_itinerary", "get_trip_search_context", "search_trip_gap_restaurants", "search_trip_gap_places", "search_trip_gap_ground_routes", "search_rail_bus_connections", "propose_trip_item_change"]);
   const codes = new Set(["invalid_input", "precondition_failed", "unknown_tool", "not_found", "outside_coverage", "precondition_missing", "stale_revision", "permission_denied", "rate_limited", "unavailable", "ambiguous_entity", "execution_failed", "intent_unavailable", "tool_budget", "schema_invalid", "invalid_condition", "invalid_source", "condition_conflict", "evidence_collision", "invalid_proposal", "missing_evidence", "ineligible_evidence", "invalid_field", "known_condition", "invalid_question_target", "operation_available", "invalid_receipt", "unsafe_content"]);
   const kinds = new Set(["answer", "candidates", "conversation", "clarification", "unavailable", "operation_result", "uncertainty"]);
   const number = value => Number.isSafeInteger(value) && value >= 0 && value <= 20_000_000 ? String(value) : "not_recorded";
-  const failures = messages(invocationFailurePath).filter(value => value.event === "agent_invocation_failed" && typeof value.executionId === "string")
-    .sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? "")).slice(0, 4);
+  const seen = new Set();
+  const failures = [...messages(invocationFailurePath).filter(value => value.event === "agent_invocation_failed" && typeof value.executionId === "string"),
+    ...limitedExecutions(diagnosticMessages)].sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""))
+    .filter(value => !seen.has(value.executionId) && seen.add(value.executionId)).slice(0, 4);
   const steps = [...messages(modelCallPath).filter(value => value.event === "agent_model_call"),
     ...(toolCallPath ? messages(toolCallPath).filter(value => value.event === "agent_tool_call") : []),
     ...(replyValidationPath ? messages(replyValidationPath).filter(value => value.event === "agent_reply_validation") : [])];
-  table(["Stopped (UTC)", "At (UTC)", "Call", "Stage", "Outcome", "Tools / reply kind", "Code", "Elapsed (ms)", "Output tokens", "Reasoning blocks"],
+  table(["Stopped (UTC)", "At (UTC)", "Call", "Stage", "Outcome", "Tools / reply kind", "Code", "Elapsed (ms)", "Output tokens", "Reasoning blocks", "Evidence collisions", "Conflicting observations"],
     failures.flatMap(failure => steps.filter(value => value.executionId === failure.executionId)
       .sort((a, b) => (a.occurredAt ?? "").localeCompare(b.occurredAt ?? "")).slice(0, 80).map(value => [
         timestamp(failure.occurredAt) ?? "-", timestamp(value.occurredAt) ?? "-", number(value.modelCall),
@@ -91,7 +93,7 @@ if (modelCallPath && invocationFailurePath) {
         ["completed", "failed", "rejected"].includes(value.outcome) ? value.outcome : "not_recorded",
         value.event === "agent_model_call" ? (Array.isArray(value.tools) ? value.tools.slice(0, 32).map(name => tools.has(name) ? name : "unknown_tool").join(", ") || "none" : "not_recorded") :
           value.event === "agent_tool_call" ? tools.has(value.tool) ? value.tool : "unknown_tool" : kinds.has(value.replyKind) ? value.replyKind : "unknown",
-        codes.has(value.code) ? value.code : "-", number(value.elapsedMs), number(value.outputTokens), number(value.reasoningBlocks),
+        codes.has(value.code) ? value.code : "-", number(value.elapsedMs), number(value.outputTokens), number(value.reasoningBlocks), number(value.collisionCount), number(value.conflictCount),
       ])));
 }
 
