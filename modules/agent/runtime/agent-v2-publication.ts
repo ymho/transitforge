@@ -193,11 +193,25 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       const publicAccommodationPresentation = accommodationComparison(selected, claims, context);
       const selectedPages = new Set([...selected.values()].flatMap(item => typeof item.facts.sourceUrl === "string" ? [item.facts.sourceUrl] : []));
       const cards: PublicPlaceCard[] = [];
-      for (const item of context.evidence) {
-        if (!selected.has(item.id) && !(typeof item.facts.sourceUrl === "string" && selectedPages.has(item.facts.sourceUrl))) continue;
+      const photoSections = proposal.sections?.filter(section => section.photoEvidenceId);
+      const photoEvidence = photoSections
+        ? photoSections.map(section => {
+          const matches = context.evidence.filter(item => item.id === section.photoEvidenceId);
+          if (matches.length !== 1) throw new AgentV2ReplyError("missing_evidence");
+          return matches[0]!;
+        })
+        : context.evidence;
+      for (const item of photoEvidence) {
+        if (!selected.has(item.id) && !(typeof item.facts.sourceUrl === "string" && selectedPages.has(item.facts.sourceUrl))) {
+          if (photoSections) throw new AgentV2ReplyError("ineligible_evidence");
+          continue;
+        }
         let card: PublicPlaceCard;
         try { card = placeCard(item, context.effectiveIntent); }
-        catch (error) { if (error instanceof AgentV2ReplyError) continue; throw error; }
+        catch (error) { if (error instanceof AgentV2ReplyError && !photoSections) continue; throw error; }
+        if (photoSections && !card.photo) throw new AgentV2ReplyError("ineligible_evidence");
+        const sectionHeading = photoSections?.find(section => section.photoEvidenceId === item.id)?.heading.trim();
+        card = { ...card, photoPlacement: sectionHeading ? { sectionHeading } : {} };
         if (!card.photo || cards.some(previous => previous.photo?.url === card.photo?.url && previous.title === card.title)) continue;
         selected.set(item.id, structuredClone(item)); cards.push(card);
         for (const [field, statement, transform] of [["sourceTitle", card.title, "identity"], ["sourceExcerpt", card.description, "bounded_quote"]] as const) {
@@ -218,13 +232,13 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
 
 /** Tell the model which references are eligible for cards, without creating a
  * second candidate store or accepting a model-authored title/URL/price/image. */
-export function agentV2CandidateReferences(evidence: readonly Evidence[], effective?: EffectiveIntent): { evidenceId: string; title: string }[] {
+export function agentV2CandidateReferences(evidence: readonly Evidence[], effective?: EffectiveIntent): { evidenceId: string; title: string; photoAvailable?: true }[] {
   return evidence.flatMap((item) => {
     try {
       if (item.observation?.predicate === "accommodation_search_result") {
         const card = accommodationCard(item, effective); return [{ evidenceId: card.evidenceId, title: card.name }];
       }
-      const card = placeCard(item, effective); return [{ evidenceId: card.evidenceId, title: card.title }];
+      const card = placeCard(item, effective); return [{ evidenceId: card.evidenceId, title: card.title, ...(card.photo ? { photoAvailable: true as const } : {}) }];
     }
     catch (error) { if (error instanceof AgentV2ReplyError) return []; throw error; }
   });

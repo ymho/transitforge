@@ -171,3 +171,25 @@ it("illustrates a destination explanation from its read page without inventing a
   expect(answer.publicPlacePresentation?.cards[0]).toMatchObject({ title: "城崎温泉", sourceUrl: `${url}/second`, photo: { attribution: "Tourism", sourceUrl: "https://photo.example/kinosaki" } });
   expect(JSON.stringify(answer.publicPlacePresentation)).not.toMatch(/latitude|longitude|mapbox/);
 });
+
+
+it("keeps bath and food photos bound to their own read pages", async () => {
+  const titles = ["城崎温泉 外湯めぐり", "城崎温泉 グルメ"];
+  const urls = titles.map((_, index) => `https://tourism.example/topics/${index}`);
+  const searchPhotos = vi.fn(async (_place: import("@raiquora/trip/place-media").PlaceMedia, topic: string | undefined) => availableExternalInformation({ images: [{
+    url: `https://images.example/${encodeURIComponent(topic!)}.jpg`, descriptionUrl: "https://photos.example/topics", attribution: "Tourism", hotlinkAllowed: true as const,
+  }] }, [{ id: `photo-${topic}`, provider: "fixture", kind: "media", retrievedAt: new Date().toISOString(), validUntil: "2099-01-01T00:00:00Z", confidence: "observed" }]));
+  const tools = productionServerTools({ accommodation: vi.fn(), journey: vi.fn(),
+    discovery: async () => ({ body: { discovery: { batch: { hits: urls.map(sourceRef => ({ sourceRef, retrievalChannel: "web" })) } } } }),
+    external: { readWebPages: async () => ({ webPages: { status: "available", freshness: "fresh", data: { pages: titles.map((title, index) => ({ url: urls[index], title, text: `${title}の資料です。` })) },
+      evidence: urls.map((sourceUrl, index) => ({ id: `page-${index}`, provider: "reader", sourceUrl, retrievedAt: evidenceContext.retrievedAt, validUntil: "2099-01-01T00:00:00Z" })) } }),
+      searchPlaceMedia: async () => ({ result: { data: { places: [] }, evidence: [] } }) }, destinationPhotos: { searchPhotos },
+  });
+  const tool = tools.find(tool => tool.descriptor.name === "explore_destination")!;
+  const response = await tool.operation({ destination: "城崎温泉", interests: ["外湯めぐり", "グルメ"] }, { requestId: "consultation" });
+  expect(searchPhotos.mock.calls.map(call => call[1])).toEqual(["外湯めぐり", "グルメ"]);
+  const evidence = tool.evidence(response.body, { ...evidenceContext, toolName: "explore_destination" });
+  const photos = evidence.filter(item => typeof item.facts.imageUrl === "string");
+  expect(photos.map(item => [item.facts.sourceTitle, item.facts.sourceUrl, item.facts.imageUrl])).toEqual(titles.map((title, index) =>
+    [title, urls[index], `https://images.example/${encodeURIComponent(index === 0 ? "外湯めぐり" : "グルメ")}.jpg`]));
+});

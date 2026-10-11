@@ -109,3 +109,20 @@ it("returns only photos for the requested name and does not claim a POI identity
   expect(new URL(String(fetcher.mock.calls[0]![0])).searchParams.get("q")).toBe("城崎温泉 豊岡市");
   expect(JSON.stringify(result.data)).not.toMatch(/providerPlaceId|latitude|longitude/);
 });
+
+
+it("searches a requested visual topic and drops generic destination photos", async () => {
+  let query = "";
+  const fetch = vi.fn(async (url: string) => {
+    query = new URL(url).searchParams.get("q")!;
+    return new Response(JSON.stringify({ results: [
+      { title: "城崎温泉の街並み", url: "https://tourism.example/town", thumbnail: { src: "https://images.example/town.jpg" } },
+      { title: "城崎温泉 外湯めぐりの露天風呂", url: "https://tourism.example/baths", thumbnail: { src: "https://images.example/baths.jpg" } },
+      { title: "別の温泉 外湯めぐり", url: "https://tourism.example/other", thumbnail: { src: "https://images.example/other.jpg" } },
+    ] }));
+  });
+  const provider = new BraveImagePlaceMediaProvider({ fetch }, { load: async () => ({ apiKey: "test" }) });
+  const result = await provider.searchPhotos({ providerPlaceId: "destination", name: "城崎温泉", sourceUrl: "https://tourism.example/kinosaki", openingHoursStatus: "unknown" }, "外湯めぐり");
+  expect(query).toContain("城崎温泉 外湯めぐり");
+  expect(result.data?.images.map(image => image.url)).toEqual(["https://images.example/baths.jpg"]);
+});

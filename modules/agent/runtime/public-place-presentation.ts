@@ -15,6 +15,8 @@ export interface PublicPlaceCard {
   /** When the cited material was retrieved, not a claim of current opening/availability. */
   retrievedAt?: string;
   photo?: PublicPlacePhoto;
+  /** Illustration only; the optional heading identifies its position in the answer. */
+  photoPlacement?: { sectionHeading?: string };
 }
 export interface PublicPlacePresentation {
   version: typeof publicPlacePresentationVersion;
@@ -28,7 +30,7 @@ export function parsePublicPlacePresentation(value: unknown): PublicPlacePresent
       !Array.isArray(value.cards) || value.cards.length < 1 || value.cards.length > 8) return invalid();
   const evidenceIds = new Set<string>(), places = new Set<string>();
   const cards = value.cards.map((card): PublicPlaceCard => {
-    if (!record(card) || !only(card, ["evidenceId", "placeRef", "title", "description", "sourceUrl", "retrievedAt", "photo"]) ||
+    if (!record(card) || !only(card, ["evidenceId", "placeRef", "title", "description", "sourceUrl", "retrievedAt", "photo", "photoPlacement"]) ||
         !text(card.evidenceId, 240) || !text(card.placeRef, 1000) || !/^place:[^:]+:.+$/u.test(card.placeRef) ||
         !text(card.title, 160) || !text(card.description, 400, true) || !text(card.sourceUrl, 2048) ||
         card.retrievedAt !== undefined && (typeof card.retrievedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(card.retrievedAt) || !Number.isFinite(Date.parse(card.retrievedAt)))) return invalid();
@@ -45,8 +47,12 @@ export function parsePublicPlacePresentation(value: unknown): PublicPlacePresent
       photo = { url, sourceUrl: photoSourceUrl, attribution: card.photo.attribution,
         ...(card.photo.license === undefined ? {} : { license: card.photo.license }) };
     }
+    if (card.photoPlacement !== undefined && (!photo || !record(card.photoPlacement) ||
+        !only(card.photoPlacement, ["sectionHeading"]) ||
+        card.photoPlacement.sectionHeading !== undefined && !text(card.photoPlacement.sectionHeading, 40))) return invalid();
     return { evidenceId: card.evidenceId, placeRef: card.placeRef, title: card.title,
-      description: card.description, sourceUrl, ...(card.retrievedAt === undefined ? {} : { retrievedAt: card.retrievedAt }), ...(photo ? { photo } : {}) };
+      description: card.description, sourceUrl, ...(card.retrievedAt === undefined ? {} : { retrievedAt: card.retrievedAt }), ...(photo ? { photo } : {}),
+      ...(card.photoPlacement === undefined ? {} : { photoPlacement: { ...(card.photoPlacement.sectionHeading === undefined ? {} : { sectionHeading: card.photoPlacement.sectionHeading as string }) } }) };
   });
   const result: PublicPlacePresentation = { version: publicPlacePresentationVersion, cards };
   if (new TextEncoder().encode(JSON.stringify(result)).length > 32 * 1024) return invalid();

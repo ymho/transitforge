@@ -116,3 +116,46 @@ describe("public place presentation view", () => {
       publicPlacePresentation: presentation() }).history("00000000-0000-4000-8000-000000000001")).rejects.toBeDefined();
   });
 });
+
+
+it("places photo-only illustrations beneath their own headings in both SSE and history", async () => {
+  const cards = presentation(true);
+  const headings = ["♨️ 外湯めぐり", "🦀 グルメ", "出石皿そばとは"];
+  cards.cards = headings.map((sectionHeading, index) => ({ ...cards.cards[0]!, evidenceId: `evidence:topic:${index}`,
+    placeRef: `place:fixture:topic-${index}`, title: sectionHeading, retrievedAt: "2026-09-26T10:00:00Z",
+    photo: { ...cards.cards[0]!.photo!, url: `https://images.example.org/topic-${index}.jpg` }, photoPlacement: { sectionHeading } }));
+  const text = "### 明日の天気\n\n晴れ予報です。\n\n" + headings.map(heading => `### ${heading}\n\n旅先で楽しめます。`).join("\n\n") + "\n\n### アクセス\n\n駅から歩けます。";
+  const events = await consume({ type: "final", status: "completed", response: text, publicPlacePresentation: cards });
+  const final = events[0]; if (final?.type !== "final") throw new Error("Expected final SSE");
+  const history = await historyClient({ role: "assistant", text, sequence: 2, createdAt: "2026-09-26T10:00:00Z", publicPlacePresentation: cards })
+    .history("00000000-0000-4000-8000-000000000001");
+  const roots = [projectAssistantTurn(final), projectAssistantTurn({ response: history.items[0]!.text, ...history.items[0]! })].map(turn => {
+    const root = document.createElement("li"); root.scrollIntoView = vi.fn();
+    resolveAssistantMessage(root, turn, { animate: false, placeMemoSelection: { days: () => [], propose: vi.fn() } });
+    return root;
+  });
+  for (const root of roots) {
+    const copy = root.querySelector(".ai-guide-message-copy")!;
+    expect(copy.querySelectorAll("img")).toHaveLength(3);
+    for (const heading of copy.querySelectorAll("h4")) {
+      const illustrated = headings.includes(heading.textContent!);
+      expect(heading.nextElementSibling?.classList.contains("public-place-illustration")).toBe(illustrated);
+    }
+    expect(root.querySelectorAll("blockquote, .public-place-card, .public-place-presentation, .public-place-illustration button")).toHaveLength(0);
+    expect(root.textContent).not.toContain(cards.cards[0]!.description);
+    expect(root.textContent).not.toContain("最新情報は改めて確認");
+    expect(copy.querySelectorAll("figure a")).toHaveLength(3);
+  }
+  expect(roots[0]!.innerHTML).toBe(roots[1]!.innerHTML);
+});
+
+it("does not move an illustration to an unrelated or missing heading", () => {
+  const cards = presentation(true); cards.cards[0]!.photoPlacement = { sectionHeading: "グルメ" };
+  const copy = document.createElement("div"); copy.innerHTML = "<h3>明日の天気</h3><p>晴れです。</p>";
+  const tail = renderPublicPlacePresentation(cards, undefined, copy);
+  expect(copy.querySelector("img")).toBeNull(); expect(tail.childElementCount).toBe(0);
+  for (const photoPlacement of [{ sectionHeading: "" }, { sectionHeading: "x".repeat(41) }, { unexpected: true }]) {
+    expect(() => parsePublicPlacePresentation({ ...cards, cards: [{ ...cards.cards[0], photoPlacement }] })).toThrow();
+  }
+  expect(() => parsePublicPlacePresentation({ ...cards, cards: [{ ...cards.cards[0], photo: undefined }] })).toThrow();
+});

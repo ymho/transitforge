@@ -8,14 +8,14 @@ import "./public-place-presentation.css";
 export function renderPublicPlacePresentation(input: PublicPlacePresentation, selection?: {
   days(): readonly { key: string; label: string }[];
   propose(card: PublicPlaceCard, dayKey: string, category: ActivityCategory): void;
-}): HTMLElement {
+}, copy?: HTMLElement): HTMLElement {
   const value = parsePublicPlacePresentation(input);
   const section = document.createElement("section");
   section.className = "public-place-presentation";
   section.setAttribute("aria-label", "旅先の候補");
   for (const place of value.cards) {
     const card = document.createElement("article");
-    card.className = "public-place-card";
+    card.className = place.photoPlacement ? "public-place-illustration" : "public-place-card";
     if (place.photo) {
       const figure = document.createElement("figure");
       figure.className = "public-place-photo";
@@ -35,6 +35,14 @@ export function renderPublicPlacePresentation(input: PublicPlacePresentation, se
       caption.append(credit);
       figure.append(image, caption);
       card.append(figure);
+    }
+    if (place.photoPlacement) {
+      const heading = place.photoPlacement.sectionHeading;
+      const anchor = heading && copy ? [...copy.querySelectorAll("h2, h3, h4, h5, h6")].find(node => node.textContent === heading) : undefined;
+      // A missing section is not permission to put its photo under another topic.
+      if (heading) { if (anchor) anchor.after(card); }
+      else section.append(card);
+      continue;
     }
     const header = document.createElement("header");
     const title = document.createElement("h3");

@@ -16,6 +16,7 @@ const conversationalText = z.string().min(1).max(600)
 const questionTarget = z.enum(replyQuestions).describe("保存依頼で表示候補がない場合はitinerary_targetを選び、保存する候補がないことと旅程画面の相談・追加導線を案内する。goalへ一般的な旅行質問を返さない。複数の表示候補から選択が必要ならcandidate_selection。その他は今回不足する条件だけ。");
 const sections = z.array(z.strictObject({
   heading: z.string().min(1).max(40), text: z.string().min(1).max(240),
+  photoEvidenceId: identifier(240).optional().describe("この節の温泉・観光体験・料理を写したphotoAvailableなcandidateReferencesのEvidence ID。referencesで選んだ資料の写真だけ。内容に合う写真がなければ省略。天気・アクセス・条件確認の節には付けない。写真URLや写真の説明文は書かない。"),
 })).min(1).max(4).describe("参照したEvidenceに基づく短い話題別説明。見出しは内容から選ぶ。概要・アクセス・イベントなど必要な話題だけを使い、各節1〜2文。commentaryと重複させない。");
 const nextQuestion = z.strictObject({ target: questionTarget, text: z.string().min(1).max(200) })
   .describe("回答の後に相談を進めるための質問を1つ。現在の条件と利用者の関心から選び、既知の条件を単に聞き直さない。外部事実や操作の成功を含めない。");

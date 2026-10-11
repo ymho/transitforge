@@ -135,3 +135,36 @@ it("publishes a photo on an explanation answer only when its exact source page i
   expect(result.publicPlacePresentation?.cards.map(card => card.title)).toEqual(["庭園"]);
   expect(result.publicPlacePresentation?.cards[0]?.photo?.sourceUrl).toBe("https://photos.example.org/garden");
 });
+
+
+it("binds each illustration to its selected topic and does not auto-illustrate weather or access", () => {
+  const baths = place("baths", "外湯", "露天風呂を巡れます。", true);
+  const food = place("soba", "出石皿そば", "小皿に盛ったそばです。", true);
+  const result = admitAgentV2Reply({ kind: "answer", references: [baths, food].map(item => ({ evidenceId: item.id, field: "sourceExcerpt" })),
+    sections: [{ heading: "明日の天気", text: "天気はまだ確認していません。" },
+      { heading: "♨️ 外湯めぐり", text: "露天風呂を楽しめます。", photoEvidenceId: baths.id },
+      { heading: "出石皿そばとは", text: "小皿で味わうそばです。", photoEvidenceId: food.id },
+      { heading: "アクセス", text: "出発地を教えてください。" }] },
+    { executionId: "v2-cards", evidence: [baths, food], effectiveIntent: intent });
+  expect(result.publicPlacePresentation?.cards.map(card => [card.title, card.photoPlacement])).toEqual([
+    ["外湯", { sectionHeading: "♨️ 外湯めぐり" }], ["出石皿そば", { sectionHeading: "出石皿そばとは" }],
+  ]);
+  expect(validateEvidenceAndClaims(result.evidence, result.claims).valid).toBe(true);
+  expect(agentV2CandidateReferences([food], intent)).toEqual([{ evidenceId: food.id, title: "出石皿そば", photoAvailable: true }]);
+  expect(result.text).not.toContain("露天風呂を巡れます。");
+  const weatherOnly = admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: baths.id, field: "sourceExcerpt" }],
+    sections: [{ heading: "天気", text: "予報は未確認です。" }] }, { executionId: "v2-cards", evidence: [baths], effectiveIntent: intent });
+  expect(weatherOnly.publicPlacePresentation).toBeUndefined();
+});
+
+it("rejects an illustration with unknown, unselected, stale or photoless evidence", () => {
+  const selected = place("selected", "庭園", "庭園です。", true);
+  const other = place("other", "別の場所", "別の資料です。", true);
+  const missingPhoto = place("no-photo");
+  const stale = place("stale", "古い場所", "以前の資料です。", true); stale.observation!.state = "stale";
+  for (const photoEvidenceId of ["unknown", other.id, missingPhoto.id, stale.id]) {
+    expect(() => admitAgentV2Reply({ kind: "answer", references: [{ evidenceId: selected.id, field: "sourceExcerpt" }],
+      sections: [{ heading: "散策", text: "庭園を歩けます。", photoEvidenceId }] },
+      { executionId: "v2-cards", evidence: [selected, other, missingPhoto, stale], effectiveIntent: intent })).toThrow();
+  }
+});
