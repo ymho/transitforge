@@ -249,3 +249,15 @@ Cognito管理者が公式用アカウントを作成し、その`sub`をdev Envi
 未設定時は空配列で、一般ユーザーには公開操作を出さない。Frontendへsubject一覧を渡さない。
 次回デプロイ後、公式アカウントは通常の旅程画面から「共有」→「公式しおりとして公開・更新」を行う。
 公開は通常の共有Grantと独立した全ユーザー向けsnapshot。詳細は[公式しおり仕様](../../../../docs/specs/official-guides.md)。
+
+## 日本国内アクセス制限
+
+旧CloudFront入口はJPのIP geo whitelistを持つ。Cloudflare経由のcustom domainではCloudFrontが見る接続元IPは利用者のIPとは異なるため、AOPとrequired viewer mTLSの内側で`cf-ipcountry=JP`だけ許可する。CloudflareのIP GeolocationまたはAdd visitor location headersを有効にし、国ヘッダーをoriginへ届ける。未取得・XX・T1・複数値は403とする。すべてのcache behaviorに同じviewer-request検証を適用し、拒否応答は保存しない。
+
+API Gatewayの全POSTはCognitoとscopeに加え、CloudFront origin custom headerの`x-api-key`を要求する。AWSが生成するorigin専用値をBrowser・環境ファイル・出力・ログへ公開しない。値はTerraform stateとAWS設定に存在するため、既存の非公開state/IAM境界を維持する。利用者認可は引き続きCognitoが担う。
+
+初回は`require_cloudfront_origin_key=false`でorigin keyとCloudFront headerを先に配布する。国内から全APIの疎通と国ヘッダーを確認し、その後既定の`true`でAPI要求を有効にする。最終状態では国外のWeb/API利用とAPI URLへの直接要求を拒否する。単一applyで先にAPI要求を有効にするとCloudFront更新中に国内APIも一時拒否されるため、初回は二段階とする。公開CDはこれらの実アクセス確認を代替しない。
+
+## OTP入力の拡張
+
+`otp_region_id`はData Builderと一致させる。v1/v2 manifestを受理し、v2ではfeedごとの範囲と運行期間を照会前に検証する。既存の固定graph versionは変更しない。追加GTFSを保存するだけでは稼働中のOTPは変わらないため、対応OSMでのグラフ再構築、実経路検証後にversion/hash/imageを更新する。全国グラフへ拡張する前にFargateのmemory・disk・build時間を測定する。

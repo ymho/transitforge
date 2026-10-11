@@ -174,6 +174,7 @@ resource "aws_lambda_function" "agent_stream" {
       OTP_ROUTE_PROVIDER_FUNCTION_ARN    = var.enable_otp_route_service ? aws_lambda_function.otp_bridge[0].arn : ""
       OTP_GRAPH_MANIFEST_KEY             = var.enable_otp_route_service ? local.otp_graph_manifest_key : ""
       OTP_GRAPH_VERSION                  = var.enable_otp_route_service ? var.otp_graph_version : ""
+      OTP_REGION_ID                      = var.enable_otp_route_service ? var.otp_region_id : ""
       OTP_EXPECTED_IMAGE                 = var.enable_otp_route_service ? var.otp_image : ""
       OTP_EXPECTED_GRAPH_SHA             = var.enable_otp_route_service ? var.otp_graph_sha256 : ""
       AGENT_PROVIDER_SECRET_ARN          = aws_secretsmanager_secret.agent_stream_providers[each.key].arn
@@ -269,6 +270,7 @@ resource "aws_api_gateway_method" "agent_stream_post" {
   resource_id          = aws_api_gateway_resource.agent_stream_route[each.key].id
   http_method          = "POST"
   authorization        = "COGNITO_USER_POOLS"
+  api_key_required     = var.require_cloudfront_origin_key
   authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
   authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
 }
@@ -278,6 +280,7 @@ resource "aws_api_gateway_method" "personal_state_post" {
   resource_id          = aws_api_gateway_resource.personal_state_conversations_v1[each.key].id
   http_method          = "POST"
   authorization        = "COGNITO_USER_POOLS"
+  api_key_required     = var.require_cloudfront_origin_key
   authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
   authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
 }
@@ -287,6 +290,7 @@ resource "aws_api_gateway_method" "personal_profile_post" {
   resource_id          = aws_api_gateway_resource.personal_state_profile_v1[each.key].id
   http_method          = "POST"
   authorization        = "COGNITO_USER_POOLS"
+  api_key_required     = var.require_cloudfront_origin_key
   authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
   authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
 }
@@ -296,6 +300,7 @@ resource "aws_api_gateway_method" "trip_api_post" {
   resource_id          = aws_api_gateway_resource.trip_api_v1[each.key].id
   http_method          = "POST"
   authorization        = "COGNITO_USER_POOLS"
+  api_key_required     = var.require_cloudfront_origin_key
   authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
   authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
 }
@@ -564,6 +569,7 @@ resource "aws_api_gateway_method" "trip_sharing_post" {
   resource_id          = aws_api_gateway_resource.trip_sharing_v1[each.key].id
   http_method          = "POST"
   authorization        = "COGNITO_USER_POOLS"
+  api_key_required     = var.require_cloudfront_origin_key
   authorizer_id        = aws_api_gateway_authorizer.agent_stream_cognito[each.key].id
   authorization_scopes = aws_cognito_resource_server.api.scope_identifiers
 }

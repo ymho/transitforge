@@ -7,6 +7,16 @@ mock_provider "aws" {
 }
 mock_provider "aws" { alias = "us_east_1" }
 mock_provider "archive" {}
+override_resource {
+  target          = aws_cloudfront_function.japan_only[0]
+  override_during = plan
+  values          = { arn = "arn:aws:cloudfront::123456789012:function/transitforge-dev-japan-only" }
+}
+override_resource {
+  target          = aws_api_gateway_api_key.cloudfront_origin["stream"]
+  override_during = plan
+  values          = { value = "syntheticOriginKeyFixtureOnly1234" }
+}
 variables {
   github_repository                = "example/transitforge"
   data_builder_github_oidc_subject = "repo:example@12345/transitforge-data-builder@67890:environment:dev"
@@ -204,10 +214,10 @@ run "custom_domain_contract" {
   }
   assert {
     condition = (
-      length(one(aws_cloudfront_distribution.viewer[0].default_cache_behavior).function_association) == 0 &&
-      alltrue([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : length(b.function_association) == 0])
+      alltrue([for f in one(aws_cloudfront_distribution.viewer[0].default_cache_behavior).function_association : f.function_arn == aws_cloudfront_function.japan_only[0].arn && f.event_type == "viewer-request"]) && length(one(aws_cloudfront_distribution.viewer[0].default_cache_behavior).function_association) == 1 &&
+      alltrue([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : length(b.function_association) == 1 && alltrue([for f in b.function_association : f.function_arn == aws_cloudfront_function.japan_only[0].arn && f.event_type == "viewer-request"])])
     )
-    error_message = "The custom-domain distribution must not retain CloudFront Basic authentication associations."
+    error_message = "The custom-domain distribution must guard every behavior with the Japanese visitor country function."
   }
 }
 run "custom_domain_current_topology" {
@@ -250,4 +260,27 @@ run "reject_fractional_business_deadline" {
   command = plan
   variables { server_agent_max_execution_ms = 120000.5 }
   expect_failures = [var.server_agent_max_execution_ms]
+}
+
+run "cloudfront_origin_guard" {
+  command = plan
+  variables { cloudflare_front_door_enabled = true }
+  assert {
+    condition = alltrue([
+      aws_api_gateway_method.agent_stream_post["stream"].api_key_required,
+      aws_api_gateway_method.personal_state_post["stream"].api_key_required,
+      aws_api_gateway_method.personal_profile_post["stream"].api_key_required,
+      aws_api_gateway_method.trip_api_post["stream"].api_key_required,
+      aws_api_gateway_method.trip_sharing_post["stream"].api_key_required,
+    ])
+    error_message = "All public REST API methods must require the server-only origin key in addition to Cognito."
+  }
+  assert {
+    condition = one([for item in aws_cloudfront_distribution.viewer[0].origin : item if item.origin_id == local.agent_stream_name]).custom_header == toset([{ name = "x-api-key", value = aws_api_gateway_api_key.cloudfront_origin["stream"].value }])
+    error_message = "CloudFront must inject the origin key server-side."
+  }
+  assert {
+    condition = one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].restriction_type == "whitelist" && one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].locations == toset(["JP"]) && one(aws_cloudfront_distribution.viewer[0].restrictions).geo_restriction[0].restriction_type == "none"
+    error_message = "Direct viewers use JP IP filtering; the Cloudflare ingress uses its trusted country header."
+  }
 }

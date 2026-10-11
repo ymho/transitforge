@@ -1,3 +1,13 @@
+variable "otp_region_id" {
+  type        = string
+  default     = "izumo-matsue"
+  description = "Explicit region of the validated graph. One region is served per deployment."
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{2,63}$", var.otp_region_id))
+    error_message = "otp_region_id must be a lowercase slug."
+  }
+}
+
 variable "enable_otp_route_service" {
   type        = bool
   default     = false
@@ -47,8 +57,8 @@ variable "otp_graph_loader_image" {
 locals {
   otp_service_name       = "${local.resource_prefix}-otp"
   otp_graph_bucket       = "${local.resource_prefix}-data-builder-source"
-  otp_graph_key          = "otp/izumo-matsue/versions/${var.otp_graph_version}/graph.obj"
-  otp_graph_manifest_key = "otp/izumo-matsue/versions/${var.otp_graph_version}/manifest.json"
+  otp_graph_key          = "otp/${var.otp_region_id}/versions/${var.otp_graph_version}/graph.obj"
+  otp_graph_manifest_key = "otp/${var.otp_region_id}/versions/${var.otp_graph_version}/manifest.json"
   otp_bridge_package     = jsondecode(file("${path.module}/../../../packaging/otp-route-bridge.json"))
   otp_private_domain     = "otp.${local.resource_prefix}.internal"
 }
@@ -312,6 +322,7 @@ resource "aws_lambda_function" "otp_bridge" {
     OTP_GRAPH_BUCKET       = local.otp_graph_bucket
     OTP_GRAPH_MANIFEST_KEY = local.otp_graph_manifest_key
     OTP_GRAPH_VERSION      = var.otp_graph_version
+    OTP_REGION_ID          = var.otp_region_id
     OTP_EXPECTED_IMAGE     = var.otp_image
     OTP_EXPECTED_GRAPH_SHA = var.otp_graph_sha256
   } }

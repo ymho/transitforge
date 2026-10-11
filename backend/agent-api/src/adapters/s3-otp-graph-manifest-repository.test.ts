@@ -42,3 +42,23 @@ it("requires the configured image and full graph hash to match the manifest", as
   await expect(repository(manifest.otpImage, "c".repeat(64))).rejects.toThrow();
   await expect(repository("docker.io/opentripplanner/opentripplanner@sha256:" + "d".repeat(64), manifest.graph.sha256)).rejects.toThrow();
 });
+
+it("accepts v2 identified feeds in an explicitly selected region and rejects broken provenance", async () => {
+  const root = 'otp/chugoku';
+  const feed = { ...manifest.sources.gtfs, feedId: 'matsue', fileName: 'matsue.gtfs.zip',
+    serviceStart: manifest.serviceStart, serviceEnd: manifest.serviceEnd, bounds: manifest.bounds, attribution: 'Matsue',
+    object: { bucket: 'source', key: `${root}/sources/gtfs/${manifest.sources.gtfs.sha256}.zip` } };
+  const value = { ...manifest, schemaVersion: 'otp-graph-manifest-v2', regionId: 'chugoku',
+    graph: { ...manifest.graph, key: `${root}/versions/${version}/graph.obj` },
+    sources: { gtfs: [feed], osm: { ...manifest.sources.osm, object: { bucket: 'source', key: `${root}/sources/osm/${manifest.sources.osm.sha256}.osm.pbf` } } },
+    buildConfig: { fileName: 'build-config.json', bytes: 100, sha256: 'e'.repeat(64),
+      config: { transitFeeds: [{ type: 'gtfs', feedId: 'matsue', source: 'file:///var/opentripplanner/matsue.gtfs.zip' }] } } };
+  const load = (input: unknown, region = 'chugoku') => new S3OtpGraphManifestRepository({
+    getObject: async () => ({ Body: new TextEncoder().encode(JSON.stringify(input)) }),
+  }, 'source', `${root}/versions/${version}/manifest.json`, version, manifest.otpImage, manifest.graph.sha256, region).load();
+  await expect(load(value)).resolves.toMatchObject({ coverage: { feeds: [{ feedId: 'matsue', serviceEnd: manifest.serviceEnd }] } });
+  await expect(load(value, 'izumo-matsue')).rejects.toThrow();
+  await expect(load({ ...value, serviceEnd: '2027-01-01' })).rejects.toThrow();
+  await expect(load({ ...value, sources: { ...value.sources, gtfs: [feed, feed] } })).rejects.toThrow();
+  await expect(load({ ...value, sources: { ...value.sources, gtfs: [{ ...feed, fileName: '../matsue.gtfs.zip' }] } })).rejects.toThrow();
+});

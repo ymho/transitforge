@@ -134,3 +134,5 @@ Server Runtime・Stateの新構成は#478以降で決定する。
 - [ADR 0098: Agent v2の基準モデルをNova 2 Liteへ変更する](0098-use-nova2-lite-for-agent-v2.md)
 - [ADR 0099: OTPで徒歩・バス経路を照会する](0099-use-otp-for-bus-and-walk-ground-routes.md)
 - [ADR 0100: 利用者の予約マークをTripの予定に保存する](0100-keep-user-booking-marks-on-trip-items.md)
+
+- [ADR 0101: 日本からのアクセスと32都府県の旅行検索に限定する](0101-limit-access-and-travel-search-to-japan-service-area.md)

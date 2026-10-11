@@ -61,3 +61,18 @@ it("interprets OTP routing codes as no route or coverage limits without hiding u
   expect((await provider("OUTSIDE_SERVICE_PERIOD").search(request)).status).toBe("outside_coverage");
   expect((await provider("FUTURE_UNKNOWN_CODE").search(request)).status).toBe("unavailable");
 });
+
+it("does not promote the multi-feed envelope or another feed's dates to local coverage", async () => {
+  let calls = 0;
+  const http = { fetch: async () => { calls++; return new Response(JSON.stringify({ data: { planConnection: { edges: [] } } })); } };
+  const local = { feedId: "local", bounds: { south: 35.3, north: 35.6, west: 132.6, east: 132.9 },
+    serviceStart: "2026-10-01", serviceEnd: "2026-10-31", feedUrl: coverage.feedUrl, attribution: "local" };
+  const provider = new OtpGroundRouteProvider("https://otp.example.org/otp/gtfs/v1", { ...coverage, feeds: [local,
+    { ...local, feedId: "distant", bounds: { south: 35.6, north: 35.8, west: 133, east: 133.2 }, serviceEnd: "2026-12-31" },
+  ] }, http);
+  expect((await provider.search({ ...request, departureAt: "2026-11-01T09:00:00+09:00" })).status).toBe("outside_coverage");
+  expect((await provider.search({ ...request, origin: { ...request.origin, longitude: 132.95 } })).status).toBe("outside_coverage");
+  expect(calls).toBe(0);
+  expect((await provider.search(request)).status).toBe("no_route");
+  expect((await provider.search({ ...request, mode: "walk", departureAt: "2026-11-01T09:00:00+09:00" })).status).toBe("no_route");
+});
