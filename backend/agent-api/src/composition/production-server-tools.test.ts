@@ -1,3 +1,5 @@
+import { admitAgentV2Reply } from "@raiquora/agent/agent-v2-publication";
+import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
 import { expect, it, vi } from "vitest";
 import { strandsScriptedRuntime } from "../adapters/strands-scripted-model.fixture.js";
 import { createTrip } from "@raiquora/trip/trip";
@@ -150,4 +152,22 @@ it("restores a Trip without Profile, invokes fixed-egress through the existing o
   expect(JSON.stringify(invoke.mock.calls)).not.toMatch(/principal|Bearer|profile/);
   expect((await state.conversations.history(stateA, conversationId)).items.map(m => m.role)).toEqual(["user", "assistant"]);
   expect(await app.runConversationTurn(request)).toEqual(final); expect(invoke).toHaveBeenCalledTimes(1); expect(model.calls).toBe(2);
+});
+
+it("illustrates a destination explanation from its read page without inventing a map POI", async () => {
+  const url = "https://tourism.example/kinosaki";
+  const tools = productionServerTools({ accommodation: vi.fn(), journey: vi.fn(),
+    discovery: async () => ({ body: { discovery: { batch: { hits: [{ sourceRef: url, retrievalChannel: "web" }] } } } }),
+    external: { readWebPages: async () => ({ webPages: { status: "available", freshness: "fresh", data: { pages: [url, `${url}/second`].map(url => ({ url, title: "城崎温泉の散策", text: "城崎温泉では温泉街を散策できます。" })) },
+      evidence: [url, `${url}/second`].map((sourceUrl, index) => ({ id: `page-${index}`, provider: "reader", sourceUrl, retrievedAt: evidenceContext.retrievedAt, validUntil: "2099-01-01T00:00:00Z" })) } }), searchPlaceMedia: async () => ({ result: { data: { places: [] }, evidence: [] } }) },
+    destinationPhotos: { searchPhotos: async target => { expect(target.name).toBe("城崎温泉"); return availableExternalInformation({ images: [{ url: "https://imgs.search.brave.com/kinosaki.jpg", descriptionUrl: "https://photo.example/kinosaki", attribution: "Tourism", hotlinkAllowed: true }] }, [{ id: "photos", provider: "fixture", kind: "media", retrievedAt: new Date().toISOString(), validUntil: "2099-01-01T00:00:00Z", confidence: "observed" }]); } },
+  });
+  const tool = tools.find(tool => tool.descriptor.name === "explore_destination")!;
+  const response = await tool.operation({ destination: "城崎温泉" }, { requestId: "consultation" });
+  expect(response.body.outcome).toMatchObject({ photoCandidateCount: 2 });
+  const evidence = tool.evidence(response.body, { ...evidenceContext, toolName: "explore_destination" });
+  const page = evidence.find(item => item.facts.sourcePrecision === "read-page" && item.facts.sourceUrl === `${url}/second`)!;
+  const answer = admitAgentV2Reply({ kind: "answer", commentary: "温泉街を散策できます。", references: [{ evidenceId: page.id, field: "sourceExcerpt" }] }, { executionId: "consultation", evidence });
+  expect(answer.publicPlacePresentation?.cards[0]).toMatchObject({ title: "城崎温泉", sourceUrl: `${url}/second`, photo: { attribution: "Tourism", sourceUrl: "https://photo.example/kinosaki" } });
+  expect(JSON.stringify(answer.publicPlacePresentation)).not.toMatch(/latitude|longitude|mapbox/);
 });

@@ -88,6 +88,7 @@
     "./item-cost": "./domain/item-cost.ts",
     "./public-cost-proposal": "./domain/public-cost-proposal.ts",
     "./official-guide": "./domain/official-guide.ts",
+    "./verified-journey-search-selection": "./domain/verified-journey-search-selection.ts",
     "./service-area": "./domain/service-area.ts"
   },
   "dependencies": {

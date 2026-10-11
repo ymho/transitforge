@@ -1,3 +1,4 @@
+import { DynamoDbConversationTurnRepository } from "./adapters/dynamodb-conversation-turn-repository.js";
 import { DynamoDbTripRepository } from "./adapters/dynamodb-trip-repository.js";
 import { createCognitoAccessTokenVerifier } from "./adapters/cognito-access-token-verifier.js";
 import { DynamoDbConversationRepository } from "./adapters/dynamodb-conversation-repository.js";
@@ -25,7 +26,7 @@ export function createPersonalStateApiHandler(options: {
   if (!options.stateTable || !options.tripTable) throw new Error("Missing personal state API configuration");
   const authenticate = createHttpPrincipalResolver(options.verifier ?? createCognitoAccessTokenVerifier(options.auth), options.auth.requiredScopes);
   const conversations = createConversationApiHandler(new ConversationApplication(new DynamoDbConversationRepository(options.stateTable),
-    new DynamoDbItineraryCandidateRepository(options.tripTable), undefined, new DynamoDbTripRepository(options.tripTable)), authenticate);
+    new DynamoDbItineraryCandidateRepository(options.tripTable), undefined, new DynamoDbTripRepository(options.tripTable), new DynamoDbConversationTurnRepository(options.stateTable)), authenticate);
   const profile = createProfileApiHandler(new ProfileApplication(new DynamoDbProfileRepository(options.stateTable)), authenticate);
   const diagnostics = createBrowserAgentDiagnosticsHandler(authenticate, options.diagnosticLog ??
     (report => console.info(JSON.stringify({ eventSource: "browser_agent_diagnostic", observationSource: "untrusted_browser", receivedAt: new Date().toISOString(), ...report }))));

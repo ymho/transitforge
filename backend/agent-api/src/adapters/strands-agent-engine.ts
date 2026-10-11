@@ -35,6 +35,7 @@ export interface StrandsAgentEngineOptions {
   maxOutputTokens?: number;
   maxInvocationOutputTokens?: number;
   toolTimeoutMs?: number;
+  toolTimeoutOverrides?: Readonly<Record<string, number>>;
   /** Explicit Nova configuration selected by the composition root. */
   novaReasoningEffort?: "low";
   /** Native Anthropic adaptive thinking; temperature must remain unset. */
@@ -126,7 +127,7 @@ export class StrandsAgentEngine {
     const budgetState = { toolCalls: 0, toolLimitReached: false };
     const tools = createStrandsReadTools({
       registry: input.tools, executor: input.toolExecutor, executionId: input.executionId,
-      getEffectiveIntent: () => currentEffectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
+      toolTimeoutOverrides: this.options.toolTimeoutOverrides, getEffectiveIntent: () => currentEffectiveIntent, toolTimeoutMs: this.options.toolTimeoutMs ?? 20_000,
       trace, evidence, initialEvidence: input.initialEvidence, maxEvidence: input.maxEvidence,
       budgetState, maxToolCalls: input.limits?.maxToolCalls,
       reserveToolCall: input.reserveToolCall, canExecute: () => !intentUnavailable,
@@ -332,7 +333,7 @@ export class StrandsAgentEngine {
 }
 function createStrandsReadTools(input: {
   registry: AgentToolRegistry; executor: AgentToolExecutor; executionId: string; getEffectiveIntent?: () => EffectiveIntent | undefined;
-  toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[]; initialEvidence?: readonly Evidence[]; maxEvidence?: number;
+  toolTimeoutOverrides?: Readonly<Record<string, number>>; toolTimeoutMs: number; trace: AgentTraceRecorder; evidence: Evidence[]; initialEvidence?: readonly Evidence[]; maxEvidence?: number;
   budgetState?: { toolCalls: number; toolLimitReached: boolean }; maxToolCalls?: number;
   reserveToolCall?: () => boolean; canExecute?: () => boolean;
 }): InvokableTool<unknown, JSONValue>[] {
@@ -359,7 +360,7 @@ function createStrandsReadTools(input: {
       try {
         execution = await input.executor.execute({
           executionId: input.executionId, toolCallId: context?.toolUse.toolUseId ?? `strands-${descriptor.name}`,
-          toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutMs,
+          toolName: descriptor.name, toolInput, timeoutMs: input.toolTimeoutOverrides?.[descriptor.name] ?? input.toolTimeoutMs,
           // Bind every V2 read to its Application snapshot, even where a Tool has no
           // field-level intent policy. A later intent update cannot relabel old reads.
           ...(effectiveIntent ? { intentDependency: {

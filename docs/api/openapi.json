@@ -58,6 +58,7 @@
           "get",
           "history",
           "list",
+          "turn",
           "update"
         ],
         "requestBody": {
@@ -2830,6 +2831,34 @@
               },
               "operation": {
                 "type": "string",
+                "const": "turn"
+              },
+              "conversationId": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "turnId": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              }
+            },
+            "required": [
+              "conversationId",
+              "operation",
+              "turnId",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "conversation-api-v1"
+              },
+              "operation": {
+                "type": "string",
                 "const": "history"
               },
               "conversationId": {
@@ -3036,6 +3065,50 @@
             },
             "required": [
               "items",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "conversation-api-v1"
+              },
+              "state": {
+                "enum": [
+                  "failed",
+                  "missing",
+                  "pending"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "conversation-api-v1"
+              },
+              "state": {
+                "type": "string",
+                "const": "completed"
+              },
+              "result": {
+                "$ref": "#/components/schemas/Omit"
+              }
+            },
+            "required": [
+              "result",
+              "state",
               "version"
             ],
             "additionalProperties": false
@@ -7695,6 +7768,311 @@
           }
         ]
       },
+      "__type_1": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "enum": [
+              "completed",
+              "follow_up"
+            ],
+            "type": "string"
+          },
+          "response": {
+            "type": "string"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/NonNullable"
+          },
+          "publicPlanPresentation": {
+            "$ref": "#/components/schemas/PublicPlanPresentation"
+          },
+          "publicJourneyPresentation": {
+            "$ref": "#/components/schemas/PublicJourneyPresentation"
+          },
+          "publicAccommodationPresentation": {
+            "$ref": "#/components/schemas/PublicAccommodationPresentation"
+          },
+          "publicPlacePresentation": {
+            "$ref": "#/components/schemas/PublicPlacePresentation"
+          },
+          "tripMutationReceipt": {
+            "$ref": "#/components/schemas/PublicTripMutationReceipt"
+          },
+          "semanticReceipt": {
+            "$ref": "#/components/schemas/PublicSemanticReceipt"
+          },
+          "publicGroundRoutePresentation": {
+            "$ref": "#/components/schemas/PublicGroundRoutePresentation"
+          },
+          "tripUpdateProposal": {
+            "$ref": "#/components/schemas/TripUpdateProposal"
+          },
+          "consultationRequestProposal": {
+            "$ref": "#/components/schemas/ConsultationRequestProposal"
+          },
+          "tripCostProposal": {
+            "$ref": "#/components/schemas/PublicCostProposal"
+          },
+          "researchExecution": {
+            "$ref": "#/components/schemas/ResearchExecutionOutcome"
+          }
+        },
+        "required": [
+          "response",
+          "status"
+        ]
+      },
+      "ResearchExecutionOutcome": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "const": "research-execution-v1"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "requestedMode": {
+            "enum": [
+              "detailed",
+              "standard"
+            ],
+            "type": "string"
+          },
+          "effectiveMode": {
+            "enum": [
+              "detailed",
+              "standard"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed",
+              "partial",
+              "stopped"
+            ],
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/ResearchExecutionUsage"
+          },
+          "coveredScopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remainingScopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "continuation": {
+            "description": "Server-issued locator only. Resolution always rechecks owner/conversation/Trip/revision; possession grants no authority.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "new-turn-request",
+                  "receipt-result"
+                ],
+                "type": "string"
+              },
+              "issuedBy": {
+                "type": "string",
+                "const": "server"
+              },
+              "ref": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "expiresAt",
+              "issuedBy",
+              "kind",
+              "ref"
+            ]
+          },
+          "stopReason": {
+            "enum": [
+              "budget_exhausted",
+              "deadline",
+              "needs_user_input",
+              "provider_failure",
+              "rate_limited",
+              "user_stopped"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "coveredScopes",
+          "effectiveMode",
+          "policyVersion",
+          "remainingScopes",
+          "requestedMode",
+          "status",
+          "usage",
+          "version"
+        ]
+      },
+      "ResearchExecutionUsage": {
+        "type": "object",
+        "properties": {
+          "modelCalls": {
+            "type": "number"
+          },
+          "toolCalls": {
+            "type": "number"
+          },
+          "providerReads": {
+            "type": "number"
+          },
+          "rerankCalls": {
+            "type": "number"
+          },
+          "knowledgeBaseCalls": {
+            "type": "number"
+          },
+          "saveCalls": {
+            "type": "number"
+          },
+          "retries": {
+            "type": "number"
+          },
+          "inputTokens": {
+            "type": "number"
+          },
+          "outputTokens": {
+            "type": "number"
+          },
+          "cacheReadInputTokens": {
+            "type": "number"
+          },
+          "cacheWriteInputTokens": {
+            "type": "number"
+          },
+          "cache": {
+            "$ref": "#/components/schemas/Record__unknown___read___write___miss___disabled__number_"
+          },
+          "wallClockMs": {
+            "type": "number"
+          },
+          "estimatedCostUsd": {
+            "type": "number"
+          },
+          "pricingVersion": {
+            "type": "string"
+          },
+          "costComplete": {
+            "type": "boolean"
+          },
+          "measurementCoverage": {
+            "$ref": "#/components/schemas/Record__cost___modelCalls___toolCalls___rerankCalls___knowledgeBaseCalls___providerReads___saveCalls___retries___tokens___cache__boolean_"
+          }
+        },
+        "required": [
+          "cache",
+          "cacheReadInputTokens",
+          "cacheWriteInputTokens",
+          "costComplete",
+          "inputTokens",
+          "knowledgeBaseCalls",
+          "measurementCoverage",
+          "modelCalls",
+          "outputTokens",
+          "providerReads",
+          "rerankCalls",
+          "retries",
+          "saveCalls",
+          "toolCalls",
+          "wallClockMs"
+        ]
+      },
+      "Record__unknown___read___write___miss___disabled__number_": {
+        "type": "object",
+        "properties": {
+          "unknown": {
+            "type": "number"
+          },
+          "read": {
+            "type": "number"
+          },
+          "write": {
+            "type": "number"
+          },
+          "miss": {
+            "type": "number"
+          },
+          "disabled": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "disabled",
+          "miss",
+          "read",
+          "unknown",
+          "write"
+        ]
+      },
+      "Record__cost___modelCalls___toolCalls___rerankCalls___knowledgeBaseCalls___providerReads___saveCalls___retries___tokens___cache__boolean_": {
+        "type": "object",
+        "properties": {
+          "cost": {
+            "type": "boolean"
+          },
+          "modelCalls": {
+            "type": "boolean"
+          },
+          "toolCalls": {
+            "type": "boolean"
+          },
+          "rerankCalls": {
+            "type": "boolean"
+          },
+          "knowledgeBaseCalls": {
+            "type": "boolean"
+          },
+          "providerReads": {
+            "type": "boolean"
+          },
+          "saveCalls": {
+            "type": "boolean"
+          },
+          "retries": {
+            "type": "boolean"
+          },
+          "tokens": {
+            "type": "boolean"
+          },
+          "cache": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cache",
+          "cost",
+          "knowledgeBaseCalls",
+          "modelCalls",
+          "providerReads",
+          "rerankCalls",
+          "retries",
+          "saveCalls",
+          "tokens",
+          "toolCalls"
+        ]
+      },
+      "Omit": {
+        "$ref": "#/components/schemas/__type_1"
+      },
       "ProfileCommand": {
         "oneOf": [
           {
@@ -8236,7 +8614,11 @@
                 "type": "string",
                 "pattern": "^[A-Za-z0-9_-]{1,100}$"
               },
-              "baseTripRevision": {
+              "candidateSetId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$"
+              },
+              "candidateSetRevision": {
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740990
@@ -8245,11 +8627,7 @@
                 "type": "string",
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$"
               },
-              "candidateSetId": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$"
-              },
-              "candidateSetRevision": {
+              "baseTripRevision": {
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740990
@@ -8291,7 +8669,11 @@
                 "type": "string",
                 "pattern": "^[A-Za-z0-9_-]{1,100}$"
               },
-              "baseTripRevision": {
+              "candidateSetId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$"
+              },
+              "candidateSetRevision": {
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740990
@@ -8300,11 +8682,7 @@
                 "type": "string",
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$"
               },
-              "candidateSetId": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$"
-              },
-              "candidateSetRevision": {
+              "baseTripRevision": {
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740990
@@ -8648,7 +9026,7 @@
       "TripCostForecast_1": {
         "$ref": "#/components/schemas/TripCostForecast"
       },
-      "__type_1": {
+      "__type_2": {
         "type": "object",
         "properties": {
           "accommodation": {
@@ -8666,7 +9044,7 @@
         }
       },
       "Partial": {
-        "$ref": "#/components/schemas/__type_1"
+        "$ref": "#/components/schemas/__type_2"
       },
       "TripItemWeather": {
         "description": "Retained forecasts are observations at fetchedAt, never current conditions or safety certification.",
@@ -8793,7 +9171,7 @@
           "startDate"
         ]
       },
-      "__type_2": {
+      "__type_3": {
         "type": "object",
         "properties": {
           "name": {
@@ -8826,7 +9204,7 @@
         ]
       },
       "Pick": {
-        "$ref": "#/components/schemas/__type_2"
+        "$ref": "#/components/schemas/__type_3"
       },
       "TripWeatherRow": {
         "type": "object",
@@ -9600,7 +9978,7 @@
           "version"
         ]
       },
-      "__type_3": {
+      "__type_4": {
         "type": "object",
         "properties": {
           "tripId": {
@@ -9683,9 +10061,9 @@
         ]
       },
       "StreamCommand": {
-        "$ref": "#/components/schemas/__type_3"
+        "$ref": "#/components/schemas/__type_4"
       },
-      "__type_4": {
+      "__type_5": {
         "type": "object",
         "properties": {
           "v": {
@@ -9837,257 +10215,10 @@
         ],
         "type": "string"
       },
-      "ResearchExecutionOutcome": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "string",
-            "const": "research-execution-v1"
-          },
-          "policyVersion": {
-            "type": "string"
-          },
-          "requestedMode": {
-            "enum": [
-              "detailed",
-              "standard"
-            ],
-            "type": "string"
-          },
-          "effectiveMode": {
-            "enum": [
-              "detailed",
-              "standard"
-            ],
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "completed",
-              "failed",
-              "partial",
-              "stopped"
-            ],
-            "type": "string"
-          },
-          "usage": {
-            "$ref": "#/components/schemas/ResearchExecutionUsage"
-          },
-          "coveredScopes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "remainingScopes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "continuation": {
-            "description": "Server-issued locator only. Resolution always rechecks owner/conversation/Trip/revision; possession grants no authority.",
-            "type": "object",
-            "properties": {
-              "kind": {
-                "enum": [
-                  "new-turn-request",
-                  "receipt-result"
-                ],
-                "type": "string"
-              },
-              "issuedBy": {
-                "type": "string",
-                "const": "server"
-              },
-              "ref": {
-                "type": "string"
-              },
-              "expiresAt": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "expiresAt",
-              "issuedBy",
-              "kind",
-              "ref"
-            ]
-          },
-          "stopReason": {
-            "enum": [
-              "budget_exhausted",
-              "deadline",
-              "needs_user_input",
-              "provider_failure",
-              "rate_limited",
-              "user_stopped"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "coveredScopes",
-          "effectiveMode",
-          "policyVersion",
-          "remainingScopes",
-          "requestedMode",
-          "status",
-          "usage",
-          "version"
-        ]
-      },
-      "ResearchExecutionUsage": {
-        "type": "object",
-        "properties": {
-          "modelCalls": {
-            "type": "number"
-          },
-          "toolCalls": {
-            "type": "number"
-          },
-          "providerReads": {
-            "type": "number"
-          },
-          "rerankCalls": {
-            "type": "number"
-          },
-          "knowledgeBaseCalls": {
-            "type": "number"
-          },
-          "saveCalls": {
-            "type": "number"
-          },
-          "retries": {
-            "type": "number"
-          },
-          "inputTokens": {
-            "type": "number"
-          },
-          "outputTokens": {
-            "type": "number"
-          },
-          "cacheReadInputTokens": {
-            "type": "number"
-          },
-          "cacheWriteInputTokens": {
-            "type": "number"
-          },
-          "cache": {
-            "$ref": "#/components/schemas/Record__unknown___read___write___miss___disabled__number_"
-          },
-          "wallClockMs": {
-            "type": "number"
-          },
-          "estimatedCostUsd": {
-            "type": "number"
-          },
-          "pricingVersion": {
-            "type": "string"
-          },
-          "costComplete": {
-            "type": "boolean"
-          },
-          "measurementCoverage": {
-            "$ref": "#/components/schemas/Record__cost___modelCalls___toolCalls___rerankCalls___knowledgeBaseCalls___providerReads___saveCalls___retries___tokens___cache__boolean_"
-          }
-        },
-        "required": [
-          "cache",
-          "cacheReadInputTokens",
-          "cacheWriteInputTokens",
-          "costComplete",
-          "inputTokens",
-          "knowledgeBaseCalls",
-          "measurementCoverage",
-          "modelCalls",
-          "outputTokens",
-          "providerReads",
-          "rerankCalls",
-          "retries",
-          "saveCalls",
-          "toolCalls",
-          "wallClockMs"
-        ]
-      },
-      "Record__unknown___read___write___miss___disabled__number_": {
-        "type": "object",
-        "properties": {
-          "unknown": {
-            "type": "number"
-          },
-          "read": {
-            "type": "number"
-          },
-          "write": {
-            "type": "number"
-          },
-          "miss": {
-            "type": "number"
-          },
-          "disabled": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "disabled",
-          "miss",
-          "read",
-          "unknown",
-          "write"
-        ]
-      },
-      "Record__cost___modelCalls___toolCalls___rerankCalls___knowledgeBaseCalls___providerReads___saveCalls___retries___tokens___cache__boolean_": {
-        "type": "object",
-        "properties": {
-          "cost": {
-            "type": "boolean"
-          },
-          "modelCalls": {
-            "type": "boolean"
-          },
-          "toolCalls": {
-            "type": "boolean"
-          },
-          "rerankCalls": {
-            "type": "boolean"
-          },
-          "knowledgeBaseCalls": {
-            "type": "boolean"
-          },
-          "providerReads": {
-            "type": "boolean"
-          },
-          "saveCalls": {
-            "type": "boolean"
-          },
-          "retries": {
-            "type": "boolean"
-          },
-          "tokens": {
-            "type": "boolean"
-          },
-          "cache": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "cache",
-          "cost",
-          "knowledgeBaseCalls",
-          "modelCalls",
-          "providerReads",
-          "rerankCalls",
-          "retries",
-          "saveCalls",
-          "tokens",
-          "toolCalls"
-        ]
-      },
       "AgentEventFrame": {
-        "$ref": "#/components/schemas/__type_4"
+        "$ref": "#/components/schemas/__type_5"
       },
-      "__type_5": {
+      "__type_6": {
         "type": "object",
         "properties": {
           "v": {
@@ -10108,7 +10239,7 @@
         ]
       },
       "DoneEventFrame": {
-        "$ref": "#/components/schemas/__type_5"
+        "$ref": "#/components/schemas/__type_6"
       },
       "ReadCommand": {
         "oneOf": [
@@ -12310,11 +12441,11 @@
           "strategy"
         ]
       },
-      "__type_6": {
+      "__type_7": {
         "type": "object"
       },
       "Record": {
-        "$ref": "#/components/schemas/__type_6"
+        "$ref": "#/components/schemas/__type_7"
       },
       "Array_12": {
         "type": "array",
@@ -12325,11 +12456,11 @@
       "Record_string_unknown_": {
         "type": "object"
       },
-      "__type_7": {
+      "__type_8": {
         "type": "object"
       },
       "Record_1": {
-        "$ref": "#/components/schemas/__type_7"
+        "$ref": "#/components/schemas/__type_8"
       },
       "AccommodationOffering": {
         "description": "Volatile comparison result. Price/availability/booking/media are not persisted Trip facts.",

@@ -224,3 +224,15 @@ it("retains draft proposals across a lost completion response and rejects change
   await expect(f.turns.completeTurn(identity, lease, { ...final, consultationRequestProposal: { ...consultationRequestProposal, summary: "変更" } })).rejects.toMatchObject({ code: "conflict" });
   await expect(f.conversations.append(principal, conversationId, 2, [{ role: "assistant", text: "偽造", consultationRequestProposal }] as never)).rejects.toMatchObject({ code: "invalid-input" });
 });
+
+it("recovers only the exact completed owner turn without creating messages or acquiring a lease", async () => {
+  const f = await setup();
+  expect(await f.turns.readTurn(identity)).toEqual({ state: "missing" });
+  const lease = await begin(f);
+  expect(await f.turns.readTurn(identity)).toEqual({ state: "pending" });
+  await f.turns.completeTurn(identity, lease, result);
+  expect(await f.turns.readTurn(identity)).toEqual({ state: "completed", result });
+  expect(await f.turns.readTurn({ ...identity, turnId: secondId })).toEqual({ state: "missing" });
+  await expect(f.turns.readTurn({ ...identity, principal: stateB })).rejects.toMatchObject({ code: "not-found" });
+  expect((await f.conversations.history(principal, conversationId)).items).toHaveLength(2);
+});

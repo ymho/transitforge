@@ -1,3 +1,4 @@
+import type { ConversationTurnResult } from "../backend/agent-api/src/ports/conversation-turn-repository.js";
 /** Public HTTP shapes for OpenAPI generation. Runtime validators remain authoritative.
  * Reuse Domain types; never expose principals, repository records or internal Tool contracts.
  */
@@ -33,6 +34,7 @@ type ConversationCommand = { version: "conversation-api-v1" } & (
   | { operation: "create"; metadata: ConversationMetadata }
   | { operation: "get"; conversationId: string }
   | { operation: "list"; page?: PageOptions }
+  | { operation: "turn"; conversationId: string; turnId: string }
   | { operation: "history"; conversationId: string; page?: PageOptions }
   | { operation: "update"; conversationId: string; expectedRevision: number; metadata: ConversationMetadata }
   | { operation: "delete"; conversationId: string; expectedRevision: number });
@@ -40,6 +42,8 @@ type ConversationResponse = { version: "conversation-api-v1" } & (
   | { conversation: PublicConversation }
   | { items: PublicConversation[]; nextAfter?: string }
   | { items: ConversationMessage[]; nextAfter?: string }
+  | { state: "pending" | "failed" | "missing" }
+  | { state: "completed"; result: Omit<ConversationTurnResult, "turnObservation" | "presentationReceipt"> }
   | { complete: boolean });
 type ProfileCommand = { version: "profile-api-v1" } & (
   | { operation: "get" }

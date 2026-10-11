@@ -1,3 +1,4 @@
+import { availableExternalInformation } from "@raiquora/trip/external-travel-information";
 import { representativeTimetableEvidence } from "@raiquora/agent/representative-timetable-evidence";
 import { representativeTimetableToolDescriptor } from "@raiquora/agent/representative-timetable-tool-descriptor";
 import { externalTravelToolDescription, externalTravelToolInputSchema, executeExternalTravelTool, isSpecificPlaceCandidateName, type ExternalTravelToolDependencies, type ExternalTravelToolState } from "@raiquora/agent/external-travel-tools";
@@ -19,6 +20,7 @@ export function productionServerTools(options: {
   external: ExternalTravelToolDependencies;
   accommodation: AgentOperation;
   journey: AgentOperation;
+  destinationPhotos?: import("../ports/place-photo-provider.js").PlacePhotoProvider;
   representativeTimetable?: AgentOperation;
   discovery?: AgentOperation;
   onJourneyResult?: (result: JourneySearchResponse) => void;
@@ -90,6 +92,24 @@ export function productionServerTools(options: {
               if (resolved && typeof resolved === "object") resolvedOutput = resolved as Record<string, unknown>;
             } catch { placeEnrichmentFailed = true; }
           } else placeEnrichmentFailed = true;
+        }
+      }
+      // A read destination page is its own source identity. Discovery photos do
+      // not resolve a Mapbox POI and never provide coordinates or factual prose.
+      if (name === "explore_destination" && resolvedPhotoCount(resolvedOutput) === 0 && options.destinationPhotos && typeof input.destination === "string") {
+        const sourcePages = pages.filter(page => normalizedIncludes(page.title ?? "", input.destination as string));
+        const page = sourcePages[0];
+        if (page) {
+          const place = { providerPlaceId: page.url, name: input.destination, sourceUrl: page.url,
+            summary: page.text.slice(0, 1_200), sources: [{ provider: "web-page", label: page.title ?? input.destination, url: page.url, role: "identity" as const }],
+            openingHoursStatus: "unknown" as const };
+          try {
+            const photos = await options.destinationPhotos.searchPhotos(place);
+            if (photos.status === "available" && photos.freshness === "fresh" && photos.data?.images.length) resolvedOutput = { ...resolvedOutput, destinationMedia: availableExternalInformation({ places: sourcePages.map(source => ({ ...place,
+              providerPlaceId: source.url, sourceUrl: source.url, summary: source.text.slice(0, 1_200),
+              sources: [{ provider: "web-page", label: source.title ?? input.destination as string, url: source.url, role: "identity" as const }],
+              image: photos.data!.images[0], images: photos.data!.images })) }, state.webPages!.evidence.filter(e => sourcePages.some(source => source.url === e.sourceUrl))) };
+          } catch { placeEnrichmentFailed = true; }
         }
       }
       const verifiedCandidateCount = Math.max(pages.length, resolvedPlaceCount(resolvedOutput));
@@ -194,7 +214,8 @@ function materializedEvidence(output: unknown, context: Parameters<typeof extern
   const values = output as Record<string, unknown>;
   // Place resolution carries page references too. A page excerpt and a place
   // projection are distinct observations even when their Provider ID is shared.
-  return [...(values.webPages ? externalTravelEvidence({ webPages: values.webPages },
+  return [...(values.destinationMedia ? externalTravelEvidence({ result: values.destinationMedia },
+    { ...context, toolName: `${context.toolName ?? "external"}:destinationMedia` }) : []), ...(values.webPages ? externalTravelEvidence({ webPages: values.webPages },
     { ...context, toolName: `${context.toolName ?? "external"}:webPages` }) : []),
     ...(values.result ? externalTravelEvidence({ result: values.result },
       { ...context, toolName: `${context.toolName ?? "external"}:result` }) : [])];
@@ -206,11 +227,12 @@ function resolvedPlaceCount(output: Record<string, unknown>): number {
     "places" in result.data && Array.isArray(result.data.places) ? result.data.places.length : 0;
 }
 function resolvedPhotoCount(output: Record<string, unknown>): number {
-  const result = output.result;
-  if (!result || typeof result !== "object" || !("data" in result) || !result.data || typeof result.data !== "object" ||
-      !("places" in result.data) || !Array.isArray(result.data.places)) return 0;
-  return result.data.places.filter((place) => place && typeof place === "object" && "image" in place && place.image &&
-    typeof place.image === "object" && "url" in place.image && typeof place.image.url === "string" && place.image.hotlinkAllowed === true).length;
+  return [output.result, output.destinationMedia].reduce<number>((count, result) => {
+    if (!result || typeof result !== "object" || !("data" in result) || !result.data || typeof result.data !== "object" ||
+        !("places" in result.data) || !Array.isArray(result.data.places)) return count;
+    return count + result.data.places.filter((place) => place && typeof place === "object" && "image" in place && place.image &&
+      typeof place.image === "object" && "url" in place.image && typeof place.image.url === "string" && place.image.hotlinkAllowed === true).length;
+  }, 0);
 }
 function normalizedIncludes(source: string, target: string): boolean {
   const normalize = (value: string) => value.normalize("NFKC").toLocaleLowerCase("ja").replace(/[\s・･,，.。()（）「」『』]/gu, "");

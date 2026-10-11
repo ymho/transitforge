@@ -8,7 +8,8 @@ export class ConversationApplication {
   constructor(private readonly repository: ConversationRepository,
     private readonly candidateResources: ConversationCandidateResourceRepository,
     private readonly newId: (tripId: string) => string = tripId => tripId,
-    private readonly trips?: Pick<import("../ports/trip-repository.js").TripRepository, "get">) {}
+    private readonly trips?: Pick<import("../ports/trip-repository.js").TripRepository, "get">,
+    private readonly turns?: import("../ports/conversation-turn-repository.js").ConversationTurnReadRepository) {}
   async create(principal: TrustedPrincipal, input: unknown) {
     requireStatePrincipal(principal);
     const fields = metadata(input), owner = structuredClone(principal);
@@ -38,6 +39,14 @@ export class ConversationApplication {
   async list(principal: TrustedPrincipal, options: PageOptions = {}) {
     requireStatePrincipal(principal);
     return this.repository.list(principal, pageOptions(options));
+  }
+  async turn(principal: TrustedPrincipal, conversationId: string, turnId: string) {
+    requireStatePrincipal(principal); stateId(conversationId); stateId(turnId);
+    if (!this.turns) throw new StateError("unavailable");
+    const saved = await this.turns.readTurn({ principal, conversationId, turnId });
+    if (saved.state !== "completed") return saved;
+    const { turnObservation: _observation, presentationReceipt: _receipt, ...result } = saved.result;
+    return { state: "completed" as const, result };
   }
   async history(principal: TrustedPrincipal, conversationId: string, options: PageOptions = {}) {
     requireStatePrincipal(principal); stateId(conversationId);

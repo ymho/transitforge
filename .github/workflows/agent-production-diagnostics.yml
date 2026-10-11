@@ -8,6 +8,7 @@ on:
       - .github/workflows/agent-production-diagnostics.yml
       - tools/deployment/summarize-agent-diagnostics.mjs
       - tools/deployment/summarize-browser-agent-diagnostics.mjs
+      - tools/deployment/summarize-agent-transport-diagnostics.mjs
 
 permissions:
   contents: read
@@ -24,6 +25,7 @@ jobs:
     env:
       AWS_REGION: ap-northeast-1
       AGENT_STREAM_LOG_GROUP: /aws/lambda/transitforge-dev-agent-stream
+      AGENT_GATEWAY_LOG_GROUP: /aws/apigateway/transitforge-dev-agent-stream
       PERSONAL_STATE_LOG_GROUP: /aws/lambda/transitforge-dev-agent-stream-personal-state
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -57,3 +59,8 @@ jobs:
           aws logs filter-log-events --log-group-name "$PERSONAL_STATE_LOG_GROUP" --start-time "$start_time" \
             --filter-pattern '"browser_agent_diagnostic"' --query 'events[].message' --output json > browser-agent-diagnostics.json
           node tools/deployment/summarize-browser-agent-diagnostics.mjs browser-agent-diagnostics.json | tee -a "$GITHUB_STEP_SUMMARY"
+          aws logs filter-log-events --log-group-name "$AGENT_GATEWAY_LOG_GROUP" --start-time "$start_time" \
+            --filter-pattern '{ $.status = "5*" }' --query 'events[].{message:message,timestamp:timestamp}' --output json > agent-gateway-events.json
+          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
+            --filter-pattern '"REPORT RequestId"' --query 'events[].{message:message,timestamp:timestamp}' --output json > agent-lambda-reports.json
+          node tools/deployment/summarize-agent-transport-diagnostics.mjs agent-gateway-events.json agent-lambda-reports.json | tee -a "$GITHUB_STEP_SUMMARY"

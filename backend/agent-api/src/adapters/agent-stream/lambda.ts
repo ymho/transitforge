@@ -9,11 +9,14 @@ export interface RestStreamEvent {
   queryStringParameters?: Record<string, string> | null; body?: string | null; isBase64Encoded?: boolean;
 }
 export interface LambdaStreamingApi {
-  streamifyResponse(handler: (event: RestStreamEvent, output: Writable, context?: { awsRequestId?: string }) => Promise<void>): unknown;
+  streamifyResponse(handler: (event: RestStreamEvent, output: Writable, context?: { awsRequestId?: string; callbackWaitsForEmptyEventLoop?: boolean }) => Promise<void>): unknown;
   HttpResponseStream: { from(output: Writable, metadata: { statusCode: number; headers: Record<string, string> }): Writable };
 }
 export function lambdaStreamHandler(api: LambdaStreamingApi, handle: (request: StreamRequest, writer: StreamWriter) => Promise<void>) {
   return api.streamifyResponse(async (event, raw, context) => {
+    // Node 22 streaming waits for idle handles by default. SDK keepalive handles
+    // must not retain the single reserved invocation after all work was awaited.
+    if (context) context.callbackWaitsForEmptyEventLoop = false;
     const controller = new AbortController();
     let output = raw;
     const closed = () => { if (!output.writableFinished) controller.abort(); };

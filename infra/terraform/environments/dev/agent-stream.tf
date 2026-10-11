@@ -442,7 +442,8 @@ resource "aws_api_gateway_stage" "agent_stream" {
     format = jsonencode({
       requestId            = "$context.requestId", apiRequestId = "$context.extendedRequestId",
       status               = "$context.status", latencyMs = "$context.responseLatency",
-      integrationLatencyMs = "$context.integration.latency"
+      integrationLatencyMs = "$context.integration.latency",
+      integrationStatus    = "$context.integration.status", responseType = "$context.error.responseType"
     })
   }
   depends_on = [aws_api_gateway_account.agent_stream]

@@ -188,6 +188,14 @@ export class DynamoDbConversationTurnRepository extends DynamoDbConversationRepo
     if (turn && turn.userSequence > current.messageCount) throw new StateError("unavailable");
     return { current, old, turn };
   }
+  /** Read-only recovery: never acquires a lease or executes a model/tool. */
+  async readTurn(identity: ConversationTurnIdentity): Promise<import("../ports/conversation-turn-repository.js").ConversationTurnReadResult> {
+    const input = this.identity(identity);
+    const { turn } = await this.read(input);
+    if (!turn) return { state: "missing" };
+    if (turn.state === "completed") return { state: "completed", result: finalResult(turn.result!) };
+    return { state: turn.state === "failed" ? "failed" : "pending" };
+  }
   async beginTurn(identity: ConversationTurnIdentity, request: { userRequest: string; requestedResearchMode?: "standard" | "detailed"; researchTarget?: import("../contracts/server-state.js").ResearchTarget; tripId?: string; uiContext?: { itemId?: string; calendarDate?: string } }): Promise<BeginConversationTurn> {
     const input = this.identity(identity);
     exactObject(request, ["userRequest", "requestedResearchMode", "researchTarget", "tripId", "uiContext"]);

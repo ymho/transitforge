@@ -8,7 +8,7 @@ export const personalApiPolicies = {
   sharing: { path: "/api/trips/sharing/v1", version: "trip-sharing-v1", operations: ["create-grant", "redeem", "revoke-grant", "manage", "participant", "accessible", "owned-shared", "reservation-facts", "official-capabilities", "official-list", "official-get", "official-publish", "official-withdraw", "official-import"] },
   notification: { path: "/api/trips/notifications/v1", version: "notification-api-v1", operations: ["list", "read"] },
   inTrip: { path: "/api/trips/in-trip/v1", version: "in-trip-api-v1", operations: [undefined] },
-  conversation: { path: "/api/conversations/v1", version: "conversation-api-v1", operations: ["create", "get", "list", "history", "update", "delete"] },
+  conversation: { path: "/api/conversations/v1", version: "conversation-api-v1", operations: ["create", "get", "list", "history", "turn", "update", "delete"] },
   profile: { path: "/api/profile/v1", version: "profile-api-v1", operations: ["get", "update", "delete"] },
 } as const;
 export type PersonalApi = keyof typeof personalApiPolicies;

@@ -95,3 +95,28 @@ function connectionIndex(scenario: Scenario) {
   connections.sort((a, b) => Number(a.departure_time_minutes) - Number(b.departure_time_minutes));
   return { schema_version: "timetable-connection-index-v1", service_date: scenario.serviceDate ?? "2026-08-15", default_transfer_minutes: 5, station_transfer_minutes: scenario.stationTransferMinutes ?? {}, trips, connections };
 }
+
+it("does not connect the two 柏原 stations, but preserves Kyoto interchange and through trains", () => {
+  const request: JourneySearchRequest = { serviceDate: "2026-08-15", originStation: "向日町", destinationStation: "豊岡", departureTimeMinutes: 600, maxTransfers: 3 };
+  const scenario: Scenario = { id: "homonyms", request, expect: {}, services: [
+    { id: "feeder", trainNumber: "1", stops: [{ station: "向日町", departure: 601 }, { station: "京都", arrival: 609 }] },
+    { id: "shinkansen", trainNumber: "2", stops: [{ station: "京都", departure: 620 }, { station: "米原", arrival: 640 }] },
+    { id: "tokaido", trainNumber: "3", stops: [{ station: "米原", departure: 650 }, { station: "柏原", arrival: 664, departure: 665 }, { station: "関ケ原", arrival: 670 }] },
+    { id: "fukuchiyama", trainNumber: "4", stops: [{ station: "谷川", departure: 650 }, { station: "柏原", arrival: 670, departure: 673 }, { station: "豊岡", arrival: 760 }] },
+    { id: "valid", trainNumber: "5", stops: [{ station: "京都", departure: 625 }, { station: "豊岡", arrival: 790 }] },
+  ] };
+  const catalog = { schema_version: "station-line-catalog-v1", source: "fixture", lines: [
+    { operator: "JR", line: "東海道線", stations: [{ name: "米原", coordinate: [136.29, 35.31] }, { name: "柏原", coordinate: [136.40, 35.34] }, { name: "関ケ原", coordinate: [136.47, 35.36] }] },
+    { operator: "JR", line: "福知山線", stations: [{ name: "谷川", coordinate: [135.05, 35.08] }, { name: "柏原", coordinate: [135.08, 35.13] }, { name: "豊岡", coordinate: [134.82, 35.54] }] },
+    { operator: "JR", line: "JR京都線", stations: [{ name: "向日町", coordinate: [135.70, 34.95] }, { name: "京都", coordinate: [135.758, 34.986] }] },
+    { operator: "JR", line: "東海道新幹線", stations: [{ name: "京都", coordinate: [135.7582, 34.9861] }, { name: "米原", coordinate: [136.29, 35.31] }] },
+  ] };
+  for (const index of [directIndex(scenario), connectionIndex(scenario)]) {
+    const input = { index: { ...index, station_line_catalog: catalog } };
+    const result = searchJourneyIndex(request, input);
+    expect(result.journeys.map(j => j.legs.map(l => l.serviceUid))).toEqual([["feeder", "valid"]]);
+    expect(searchJourneyIndex({ ...request, originStation: "米原", destinationStation: "関ケ原" }, input).journeys[0]?.legs[0]?.stops?.map(s => s.stationName)).toContain("柏原（東海道線）");
+    expect(searchJourneyIndex({ ...request, originStation: "柏原", destinationStation: "豊岡" }, input).journeys).toEqual([]);
+    expect(searchJourneyIndex({ ...request, originStation: "柏原（福知山線）", destinationStation: "豊岡" }, input).journeys).toHaveLength(1);
+  }
+});

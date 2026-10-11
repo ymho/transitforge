@@ -15,6 +15,7 @@ export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
     private readonly enrichment: PlaceMediaProvider,
     private readonly now: () => Date = () => new Date(),
     private readonly identityFallback?: PlaceMediaProvider,
+    private readonly photos?: import("../ports/place-photo-provider.js").PlacePhotoProvider,
   ) {}
 
   async search(query: PlaceMediaQuery): Promise<ExternalTravelInformation<PlaceMediaSearchResult>> {
@@ -29,9 +30,10 @@ export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
     if (!primary.data?.places.length) return primary;
 
     const rankedPlaces = rankPlaces(primary.data.places, query.query).slice(0, requestedLimit);
-    const enrichmentResults = await Promise.all(rankedPlaces.slice(0, 4).map((place) =>
+    const enrichmentResults = this.photos ? [] : await Promise.all(rankedPlaces.slice(0, 4).map((place) =>
       this.enrichment.search({ query: place.name, limit: 3, ...(query.detail ? { detail: true } : {}) }),
     ));
+    const photoResults = this.photos ? await Promise.all(rankedPlaces.slice(0, 4).map(place => this.photos!.searchPhotos(place))) : [];
     const usedEvidence: ExternalSourceEvidence[] = [];
     const places = rankedPlaces.map((place, index) => {
       const enrichment = enrichmentResults[index];
@@ -39,6 +41,11 @@ export class EnrichedPlaceMediaProvider implements PlaceMediaProvider {
         samePlaceSourcePage(place.officialWebsiteUrl, candidate.officialWebsiteUrl) ||
         samePlaceSourcePage(place.officialWebsiteUrl, candidate.sourceUrl));
       const match = matches?.length === 1 ? matches[0] : undefined;
+      const photos = photoResults[index];
+      if (photos?.status === "available" && photos.freshness === "fresh" && photos.data?.images.length) {
+        usedEvidence.push(...photos.evidence);
+        place = { ...place, image: photos.data.images[0], images: photos.data.images };
+      }
       if (!match || !enrichment) return place;
       usedEvidence.push(...enrichment.evidence);
       return enrichPlace(place, match);

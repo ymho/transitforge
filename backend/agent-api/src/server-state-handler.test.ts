@@ -1,3 +1,4 @@
+import { DynamoDbConversationTurnRepository } from "./adapters/dynamodb-conversation-turn-repository.js";
 import { createTrip } from "@raiquora/trip/trip";
 import { tripDynamoFixture } from "./adapters/trip-dynamodb.fixture.js";
 import { describe, expect, it } from "vitest";
@@ -43,4 +44,22 @@ describe("authenticated Conversation and Profile HTTP APIs", () => {
     expect((await handler(event("/api/profile/v1", { version: "profile-api-v1", operation: "update", profile: stateProfile(), expectedRevision: 1 }, token()))).statusCode).toBe(409);
     expect((await handler(event("/api/profile/v1", { version: "profile-api-v1", operation: "get" }))).statusCode).toBe(401);
   });
+});
+
+it("recovers a completed turn through the authenticated read API without exposing internal receipts", async () => {
+  const f = stateDynamoFixture(), { verifier } = cognitoTokenFixture(), principal = await verifier.verify(token());
+  await f.conversations.create(principal, conversationId, stateMetadata());
+  const turns = new DynamoDbConversationTurnRepository("test-state", f.client, f.clock);
+  const turnId = "33333333-3333-4333-8333-333333333333", identity = { principal, conversationId, turnId };
+  const begun = await turns.beginTurn(identity, { userRequest: "相談" });
+  if (begun.state !== "started") throw new Error();
+  await turns.completeTurn(identity, begun.lease, { status: "completed", response: "保存した回答", turnObservation: { outcome: "answer", progress: [] } });
+  const handler = createConversationApiHandler(new ConversationApplication(f.conversations, noCandidateResources, undefined, undefined, turns), createHttpPrincipalResolver(verifier, [scope]));
+  const command = { version: "conversation-api-v1", operation: "turn", conversationId, turnId };
+  const response = await handler(event("/api/conversations/v1", command, token()));
+  expect(response.statusCode).toBe(200);
+  expect(JSON.parse(response.body)).toEqual({ version: "conversation-api-v1", state: "completed", result: { status: "completed", response: "保存した回答" } });
+  expect((await handler(event("/api/conversations/v1", command))).statusCode).toBe(401);
+  expect((await handler(event("/api/conversations/v1", command, token({ sub: "other" })))).statusCode).toBe(404);
+  expect((await handler(event("/api/conversations/v1", { ...command, userRequest: "must not execute" }, token()))).statusCode).toBe(400);
 });

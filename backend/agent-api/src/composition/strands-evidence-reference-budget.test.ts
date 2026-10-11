@@ -28,11 +28,11 @@ it.each(["retained_page", "weather"] as const)("publishes an exact Tool referenc
         data: { pages: urls.map(url => ({ url, title: "城崎温泉", text: "城崎温泉の検証用資料です。" })) },
         evidence: urls.map((sourceUrl, index) => ({ id: `page-${index}`, provider: "fixture-reader", sourceUrl, retrievedAt: now })),
       } }),
-      searchPlaceMedia: async () => ({ result: { status: "available", freshness: "fresh",
+      searchPlaceMedia: async () => { mediaCalls++; return { result: { status: "available", freshness: "fresh",
         data: { places: urls.slice(0, 4).map((officialWebsiteUrl, index) => ({ providerPlaceId: `place-${index}`,
           name: "城崎温泉", summary: "検証用の紹介", sourceUrl: "https://www.mapbox.com/", officialWebsiteUrl })) },
-        evidence: [{ id: `mapbox-call-${++mediaCalls}`, provider: "mapbox", sourceUrl: "https://www.mapbox.com/", retrievedAt: now }],
-      } }),
+        evidence: Array.from({ length: 4 }, (_, index) => ({ id: `mapbox-observation-${index}`, provider: "mapbox", sourceUrl: "https://www.mapbox.com/", retrievedAt: now })),
+      } }; },
     },
     accommodation: async () => ({ body: {} }), journey: async () => ({ body: {} }),
   });
@@ -75,7 +75,7 @@ it.each(["retained_page", "weather"] as const)("publishes an exact Tool referenc
     researchMode: { requestedMode: "standard", effectiveMode: "standard" },
     researchLedger: new ResearchExecutionLedger(researchBudgetForRuntimeLimits(limits, "synthetic-budget"),
       { requestedMode: "standard", effectiveMode: "standard" }) });
-  expect(mediaCalls).toBe(4);
+  expect(mediaCalls).toBe(1);
   expect(validations.every(value => value.evidenceCount === 25 && value.retainedEvidenceCount === 20 && value.omittedEvidenceCount === 5)).toBe(true);
   expect(result.status).toBe("completed");
   expect(result.publicReply?.kind).toBe("answer");

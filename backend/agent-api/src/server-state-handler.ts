@@ -32,6 +32,7 @@ function conversationCommand(value: Record<string, unknown>) {
     case "create": exactObject(value, ["version", "operation", "metadata"]); break;
     case "get": exactObject(value, ["version", "operation", "conversationId"]); break;
     case "list": exactObject(value, ["version", "operation", "page"]); break;
+    case "turn": exactObject(value, ["version", "operation", "conversationId", "turnId"]); break;
     case "history": exactObject(value, ["version", "operation", "conversationId", "page"]); break;
     case "update": exactObject(value, ["version", "operation", "conversationId", "expectedRevision", "metadata"]); break;
     case "delete": exactObject(value, ["version", "operation", "conversationId", "expectedRevision"]); break;
@@ -47,7 +48,7 @@ function profileCommand(value: Record<string, unknown>) {
   }
 }
 
-export function createConversationApiHandler(application: Pick<ConversationApplication, "create" | "get" | "list" | "history" | "update" | "delete">, authenticate: PrincipalResolver) {
+export function createConversationApiHandler(application: Pick<ConversationApplication, "create" | "get" | "list" | "history" | "update" | "delete"> & Partial<Pick<ConversationApplication, "turn">>, authenticate: PrincipalResolver) {
   return async (event: LambdaHttpEvent, context?: LambdaContext) => {
     const requestId = context?.awsRequestId ?? randomUUID(), version = "conversation-api-v1";
     try {
@@ -56,6 +57,7 @@ export function createConversationApiHandler(application: Pick<ConversationAppli
         case "create": return jsonResponse(200, { version, conversation: publicConversation(await application.create(principal!, value.metadata)) }, requestId);
         case "get": return jsonResponse(200, { version, conversation: publicConversation(await application.get(principal!, id(value) as string)) }, requestId);
         case "list": { const result = await application.list(principal!, value.page as { limit?: number; after?: string } ?? {}); return jsonResponse(200, { version, items: result.items.map(publicConversation), ...(result.nextAfter ? { nextAfter: result.nextAfter } : {}) }, requestId); }
+        case "turn": if (!application.turn) throw new StateError("unavailable"); return jsonResponse(200, { version, ...(await application.turn(principal!, id(value) as string, value.turnId as string)) }, requestId);
         case "history": return jsonResponse(200, { version, ...(await application.history(principal!, id(value) as string, value.page as { limit?: number; after?: string } ?? {})) }, requestId);
         case "update": return jsonResponse(200, { version, conversation: publicConversation(await application.update(principal!, id(value) as string, value.expectedRevision as number, value.metadata)) }, requestId);
         case "delete": return jsonResponse(200, { version, ...(await application.delete(principal!, id(value) as string, value.expectedRevision as number)) }, requestId);
@@ -65,7 +67,7 @@ export function createConversationApiHandler(application: Pick<ConversationAppli
   };
 }
 
-export function createProfileApiHandler(application: Pick<ProfileApplication, "get" | "update" | "delete">, authenticate: PrincipalResolver) {
+export function createProfileApiHandler(application: Pick<ProfileApplication, "get" | "update" | "delete"> & Partial<Pick<ConversationApplication, "turn">>, authenticate: PrincipalResolver) {
   return async (event: LambdaHttpEvent, context?: LambdaContext) => {
     const requestId = context?.awsRequestId ?? randomUUID(), version = "profile-api-v1";
     try {

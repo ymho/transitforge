@@ -1,3 +1,4 @@
+import { WorkerJourneySearchExecutor } from "./adapters/worker-journey-search-executor.js";
 import { MapboxServiceAreaLookup } from "./adapters/mapbox-service-area-lookup.js";
 import { serviceAreaSearchScope, ServiceAreaPolicy, serviceAreaPlaces, serviceAreaRestaurants, serviceAreaWebSearch, serviceAreaPages, serviceAreaKnowledge } from "./usecases/service-area.js";
 import { VerifiedJourneySelections } from "./usecases/verified-journey-selection.js";
@@ -61,7 +62,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
  const s3 = new AwsS3Client();
  const journey = new S3JourneyDataRepository(s3, { indexBucket: required("AI_TIMETABLE_BUCKET"),
    indexPrefix: environment.PLANNING_TIMETABLE_PREFIX ?? "timetable", snapshotBucket: required("TRAFFIC_SNAPSHOT_BUCKET"),
-   snapshotKey: "api/traffic/delays.json" });
+   snapshotKey: "api/traffic/delays.json", stationCatalog: new S3StationCatalogRepository(s3, required("TRAFFIC_SNAPSHOT_BUCKET")) });
  const secrets = new AwsSecretsManagerClient();
  // Dedicated non-travel secret: do not grant the old mixed secret to this role.
  const secretArn = required("AGENT_PROVIDER_SECRET_ARN");
@@ -70,8 +71,9 @@ export function createProductionServerAgent(executionId: string, environment: Re
  const http = { fetch: globalThis.fetch };
  const mapboxHttp = createMapboxHttpClient(http, required("VIEWER_ORIGIN"));
  const serviceArea = new ServiceAreaPolicy(new MapboxServiceAreaLookup(mapboxHttp, mapboxCredentials));
+ const destinationPhotos = new BraveImagePlaceMediaProvider(http, webCredentials);
  const places = serviceAreaPlaces(new EnrichedPlaceMediaProvider(new MapboxPlaceMediaProvider(mapboxHttp, mapboxCredentials),
-   new BraveImagePlaceMediaProvider(http, webCredentials), () => new Date(), new WikipediaPlaceMediaProvider(http)), serviceArea);
+   destinationPhotos, () => new Date(), new WikipediaPlaceMediaProvider(http), destinationPhotos), serviceArea);
  const weather = new OpenMeteoWeatherProvider(http);
  const webSearch = serviceAreaWebSearch(new BraveWebSearchProvider(http, webCredentials), serviceArea);
  const discoveryRetrievers: TravelKnowledgeRetriever[] = [new WebTravelKnowledgeRetriever(webSearch)];
@@ -103,10 +105,10 @@ export function createProductionServerAgent(executionId: string, environment: Re
      required("AI_TIMETABLE_BUCKET"), otpBridge.manifestKey, otpBridge.version, otpBridge.otpImage, otpBridge.graphSha256, otpBridge.regionId)) : undefined;
  const selectableJourneys = new VerifiedJourneySelections();
  const selectableAccommodations = new VerifiedAccommodationSelections();
- const railSearch = createJourneySearchOperation(journey, { onVerifiedResult: (result, index, retrievedAt) => {
-   try { selectableJourneys.record(result, index, retrievedAt); }
-   catch { /* A displayable result without complete selection provenance stays read-only. */ }
- } });
+ const railSearch = createJourneySearchOperation(journey, {
+   executor: new WorkerJourneySearchExecutor(),
+   onVerifiedItems: (result, items) => selectableJourneys.recordItems(result, items),
+ });
  const modelId = environment.MODEL_ID ?? "jp.amazon.nova-2-lite-v1:0";
  const runRuntime = createStrandsServerRuntime(new StrandsAgentEngine({
    modelId,
@@ -115,6 +117,7 @@ export function createProductionServerAgent(executionId: string, environment: Re
 SERVICE AREA: The service accepts travel searches only in Japan, within these prefectures: ${serviceAreaSearchScope.prefectures.join("、")}. Do not recommend candidates elsewhere or invent candidates excluded by Tools. An empty filtered response does not prove that no facilities exist. This product boundary is separate from actual rail/OTP coverage.`,
    log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
    maxTurns: 10,
+   toolTimeoutOverrides: { search_journeys: 90_000 },
    maxOutputTokens: 4_096,
    // The per-response cap is separate from the whole condition/read/reply loop.
    maxInvocationOutputTokens: 8_192,
@@ -154,7 +157,7 @@ SERVICE AREA: The service accepts travel searches only in Japan, within these pr
    runRuntime,
    diagnostics: { record: async event => { console.info(JSON.stringify({ event: "agent_diagnostic", ...event })); } },
    log: (event, fields) => { console.warn(JSON.stringify({ event, ...fields })); },
-   additionalTools: [...productionServerTools({
+   additionalTools: [...productionServerTools({ destinationPhotos,
      discovery,
      journey: railSearch,
      representativeTimetable: createRepresentativeTimetableOperation(new S3RepresentativeTimetableRepository(s3, required("AI_TIMETABLE_BUCKET"), "ai-timetable")),

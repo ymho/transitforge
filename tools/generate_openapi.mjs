@@ -68,7 +68,7 @@ function refineCommands(root, index) {
     for (const field of ["baseRevision", "baseTripRevision", "sourceRevision", "candidateSetRevision", "guideVersion", "baseVersion"]) patch(field, revision);
     patch("expectedRevision", root === "ProfileCommand" && operation === "update" ? { type: ["integer", "null"], minimum: 0, maximum: revision.maximum } : revision);
     patch("confirmationKey", { type: "string", pattern: "^[0-9a-f]{64}$" });
-    if (root === "ConversationCommand") patch("conversationId", uuid);
+    if (root === "ConversationCommand") { patch("conversationId", uuid); patch("turnId", uuid); }
     if (root === "TripCommand") patch("conversationId", { type: "string", pattern: "^[A-Za-z0-9_-]{1,100}$" });
     patch("title", { minLength: 1, maxLength: 160 });
     patch("itemId", { minLength: 1, maxLength: 160 });

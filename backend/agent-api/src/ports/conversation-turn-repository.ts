@@ -24,3 +24,9 @@ export interface ConversationTurnRepository {
   failTurn(identity: ConversationTurnIdentity, lease: ConversationTurnLease): Promise<void>;
   getWorkingState(principal: TrustedPrincipal, conversationId: string): Promise<import("@raiquora/agent/conversation-working-state").ConversationWorkingState | undefined>;
 }
+
+export type ConversationTurnReadResult = { state: "pending" | "failed" | "missing" } | { state: "completed"; result: ConversationTurnResult };
+/** Read-only completion recovery, independent of turn execution/lease acquisition. */
+export interface ConversationTurnReadRepository {
+  readTurn(identity: ConversationTurnIdentity): Promise<ConversationTurnReadResult>;
+}
