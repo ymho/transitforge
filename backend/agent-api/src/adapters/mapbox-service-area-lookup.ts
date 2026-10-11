@@ -25,7 +25,7 @@ export class MapboxServiceAreaLookup implements ServiceAreaLookup {
       if (hasPoint) { params.set("latitude", String(input.latitude)); params.set("longitude", String(input.longitude)); }
       else params.set("q", query!);
       const response = await this.http.fetch(`https://api.mapbox.com/search/searchbox/v1/${hasPoint ? "reverse" : "forward"}?${params}`,
-        { headers: { accept: "application/json" }, signal: AbortSignal.timeout(4_000) });
+        { headers: { accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(4_000) });
       if (!response.ok) return;
       const data: unknown = await response.json(); if (!record(data) || !Array.isArray(data.features) || !data.features.length) return;
       const locations = data.features.map(feature => {
