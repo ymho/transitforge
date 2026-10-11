@@ -84,7 +84,7 @@ run "current_topology" {
       aws_api_gateway_resource.browser_diagnostics["stream"].parent_id == aws_api_gateway_resource.personal_state_conversations["stream"].id &&
       aws_api_gateway_resource.browser_diagnostics_v1["stream"].path_part == "v1" &&
       aws_api_gateway_method.browser_diagnostics_post["stream"].authorization == "COGNITO_USER_POOLS" &&
-      aws_api_gateway_method.browser_diagnostics_post["stream"].authorization_scopes == aws_cognito_resource_server.api.scope_identifiers &&
+      toset(aws_api_gateway_method.browser_diagnostics_post["stream"].authorization_scopes) == toset(aws_cognito_resource_server.api.scope_identifiers) &&
       aws_api_gateway_integration.browser_diagnostics["stream"].uri == aws_lambda_function.personal_state["stream"].invoke_arn &&
       aws_api_gateway_method_settings.browser_diagnostics["stream"].settings[0].throttling_burst_limit == 2 &&
       !aws_api_gateway_method_settings.browser_diagnostics["stream"].settings[0].data_trace_enabled
