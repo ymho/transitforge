@@ -79,3 +79,17 @@ const modelFailures = spawnSync(process.execPath, ["tools/deployment/summarize-a
 assert.equal(modelFailures.status, 0, modelFailures.stderr);
 assert.match(modelFailures.stdout, /59000 \| Error \| - \| Error \/ - \/ - \| ECONNRESET \/ - \/ - \| 503 \| 3/);
 assert.doesNotMatch(modelFailures.stdout, /private-provider-message|private-id|private-error|private-code|999/);
+
+const failures = join(directory, "failures.json"), toolCalls = join(directory, "tool-calls.json"), validations = join(directory, "validations.json");
+const encode = values => JSON.stringify(values.map(value => JSON.stringify(value)));
+writeFileSync(failures, encode([{ event: "agent_invocation_failed", executionId: "private-id", occurredAt: "2026-10-11T06:10:07Z" }]));
+writeFileSync(toolCalls, encode([{ event: "agent_tool_call", executionId: "private-id", occurredAt: "2026-10-11T06:09:00Z",
+  modelCall: 2, tool: "explore_destination", outcome: "rejected", code: "stale_revision", input: "private-input" },
+{ event: "agent_tool_call", executionId: "private-id", tool: "private-tool", outcome: "private-outcome", code: "private-code" }]));
+writeFileSync(validations, encode([{ event: "agent_reply_validation", executionId: "private-id", occurredAt: "2026-10-11T06:09:30Z",
+  modelCall: 4, replyKind: "answer", outcome: "rejected", code: "invalid_field", reply: "private-reply" }]));
+const timeline = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams, modelShapes, modelCalls, failures, toolCalls, validations], { encoding: "utf8" });
+assert.equal(timeline.status, 0, timeline.stderr);
+assert.match(timeline.stdout, /tool \| rejected \| explore_destination \| stale_revision/);
+assert.match(timeline.stdout, /reply_validation \| rejected \| answer \| invalid_field/);
+assert.doesNotMatch(timeline.stdout, /private-id|private-input|private-tool|private-outcome|private-code|private-reply/);

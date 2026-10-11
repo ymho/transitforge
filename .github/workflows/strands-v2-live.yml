@@ -20,6 +20,7 @@ on:
           - "budget-condition"
           - "trip-v2-product"
           - "reported-trip-flow"
+          - "model-loop"
       repetitions:
         description: Independent repetitions per case
         required: true
@@ -109,6 +110,7 @@ jobs:
             budget-condition) cases=7; cycles=6 ;;
             trip-v2-product) cases=3; cycles=8 ;;
             reported-trip-flow) cases=10; cycles=8 ;;
+            model-loop) cases=2; cycles=10 ;;
             *) echo "Invalid CASE_ID: $CASE_ID" >&2; exit 2 ;;
           esac
           maximum_calls=$((cases * REPETITIONS * cycles))
@@ -120,13 +122,18 @@ jobs:
             echo "- Cases/turns: $cases"
             echo "- Repetitions: $REPETITIONS"
             echo "- Maximum model calls: $maximum_calls"
-            echo "- External read Tool calls per turn: at most 4 (basic cases: 1)"
-            echo "- Deadline per turn: at most 90s"
+            if [[ "$CASE_ID" == "model-loop" ]]; then
+              echo "- External read Tool calls per turn: at most 16"
+              echo "- Deadline per turn: at most 150s"
+            else
+              echo "- External read Tool calls per turn: at most 4 (basic cases: 1)"
+              echo "- Deadline per turn: at most 90s"
+            fi
             echo "- External Travel Providers / production state: none"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run Strands v2 live evaluation
-        if: inputs.case_id != 'conversation-output' && inputs.case_id != 'consultation-plan' && inputs.case_id != 'condition-operations' && inputs.case_id != 'party-condition' && inputs.case_id != 'travel-period' && inputs.case_id != 'budget-condition' && inputs.case_id != 'trip-v2-product' && inputs.case_id != 'reported-trip-flow'
+        if: inputs.case_id != 'conversation-output' && inputs.case_id != 'consultation-plan' && inputs.case_id != 'condition-operations' && inputs.case_id != 'party-condition' && inputs.case_id != 'travel-period' && inputs.case_id != 'budget-condition' && inputs.case_id != 'trip-v2-product' && inputs.case_id != 'reported-trip-flow' && inputs.case_id != 'model-loop'
         shell: bash
         run: |
           set -euo pipefail
@@ -136,7 +143,7 @@ jobs:
           npm run eval:agent:strands:live -- "${args[@]}"
 
       - name: Run independent Conversation or condition repetitions
-        if: inputs.case_id == 'conversation-output' || inputs.case_id == 'consultation-plan' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition' || inputs.case_id == 'travel-period' || inputs.case_id == 'budget-condition' || inputs.case_id == 'trip-v2-product' || inputs.case_id == 'reported-trip-flow'
+        if: inputs.case_id == 'conversation-output' || inputs.case_id == 'consultation-plan' || inputs.case_id == 'condition-operations' || inputs.case_id == 'party-condition' || inputs.case_id == 'travel-period' || inputs.case_id == 'budget-condition' || inputs.case_id == 'trip-v2-product' || inputs.case_id == 'reported-trip-flow' || inputs.case_id == 'model-loop'
         shell: bash
         env:
           AGENT_V2_LIVE: 'true'
@@ -152,6 +159,7 @@ jobs:
             budget-condition) script=test:agent:v2:budget-live ;;
             trip-v2-product) script=test:trip:v2:bedrock ;;
             reported-trip-flow) script=test:trip:v2:reported-live ;;
+            model-loop) script=test:agent:v2:model-loop-live ;;
             *) exit 2 ;;
           esac
           status=0
@@ -167,7 +175,7 @@ jobs:
           if [[ -f .artifacts/strands-v2-live/report.json ]]; then
             jq '{modelId,region,repetitions,maximumModelCalls,observedModelCalls,stablePassed,cases,results:[.results[]|{caseId,attempt,passed,failures,metrics:{status:.observation.status,deliveryBasis:.observation.deliveryBasis,toolCalls:.observation.toolCalls,evidenceCount:.observation.evidenceCount,modelCalls:.observation.modelCalls,inputTokens:.observation.inputTokens,outputTokens:.observation.outputTokens,durationMs:.observation.durationMs}}]}' .artifacts/strands-v2-live/report.json >> "$GITHUB_STEP_SUMMARY"
           fi
-          for file in .artifacts/strands-v2-live/conversation-output-*.json .artifacts/strands-v2-live/consultation-plan-*.json .artifacts/strands-v2-live/condition-operations-*.json .artifacts/strands-v2-live/party-condition-*.json .artifacts/strands-v2-live/travel-period-*.json .artifacts/strands-v2-live/budget-condition-*.json .artifacts/strands-v2-live/trip-v2-product-*.json .artifacts/strands-v2-live/reported-trip-flow-*.json; do
+          for file in .artifacts/strands-v2-live/conversation-output-*.json .artifacts/strands-v2-live/consultation-plan-*.json .artifacts/strands-v2-live/condition-operations-*.json .artifacts/strands-v2-live/party-condition-*.json .artifacts/strands-v2-live/travel-period-*.json .artifacts/strands-v2-live/budget-condition-*.json .artifacts/strands-v2-live/trip-v2-product-*.json .artifacts/strands-v2-live/reported-trip-flow-*.json .artifacts/strands-v2-live/model-loop-*.json; do
             if [[ -f "$file" ]]; then
               echo "$(basename "$file")" >> "$GITHUB_STEP_SUMMARY"
               jq '{success,numPassedTests,numFailedTests,numPendingTests}' "$file" >> "$GITHUB_STEP_SUMMARY"

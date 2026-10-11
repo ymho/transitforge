@@ -46,5 +46,9 @@ jobs:
             --filter-pattern '"agent_model_call"' --query 'events[].message' --output json > agent-model-calls.json
           aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
             --filter-pattern '"agent_invocation_failed"' --query 'events[].message' --output json > agent-invocation-failures.json
+          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
+            --filter-pattern '"agent_tool_call"' --query 'events[].message' --output json > agent-tool-calls.json
+          aws logs filter-log-events --log-group-name "$AGENT_STREAM_LOG_GROUP" --start-time "$start_time" \
+            --filter-pattern '"agent_reply_validation"' --query 'events[].message' --output json > agent-reply-validations.json
           node tools/deployment/summarize-agent-diagnostics.mjs \
-            agent-diagnostics.json agent-stream-events.json agent-model-shapes.json agent-model-calls.json agent-invocation-failures.json | tee -a "$GITHUB_STEP_SUMMARY"
+            agent-diagnostics.json agent-stream-events.json agent-model-shapes.json agent-model-calls.json agent-invocation-failures.json agent-tool-calls.json agent-reply-validations.json | tee -a "$GITHUB_STEP_SUMMARY"

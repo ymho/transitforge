@@ -1,6 +1,6 @@
 import { publicCommentaryMarkdown } from "./public-commentary-markdown.js";
 import {
-  Agent, BedrockModel, StructuredOutputError, BeforeModelCallEvent, AfterModelCallEvent, tool,
+  Agent, BedrockModel, StructuredOutputError, MaxTokensError, BeforeModelCallEvent, AfterModelCallEvent, AfterToolCallEvent, tool,
   type AgentConfig, type BaseModelConfig, type InvokableTool,
   type JSONSchema, type JSONValue, type Model, type MessageData,
 } from "@strands-agents/sdk";
@@ -18,6 +18,7 @@ import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
 import { strandsFailureDiagnostic } from "./strands-failure-diagnostic.js";
+import { strandsModelDiagnostic, strandsToolDiagnostic } from "./strands-loop-diagnostic.js";
 import { z } from "zod";
 import { presentedCandidateSelectionSchema, type PresentedCandidateController } from "../contracts/presented-candidate-selection.js";
 
@@ -110,6 +111,10 @@ export class StrandsAgentEngine {
   async run(input: StrandsAgentRunInput): Promise<StrandsAgentRunResult> {
     if (!input.executionId.trim() || !input.userRequest.trim()) throw new Error("Strands Agent requires executionId and userRequest");
     if (input.tools.descriptors().some(({ name }) => [...strandsConditionToolNames, "review_presented_candidates", "select_presented_candidate"].includes(name))) throw new Error("Reserved Agent v2 tool name");
+    let modelCall = 0, modelStartedAt = 0;
+    const log = (event: string, fields: Record<string, unknown>) => {
+      try { this.options.log?.(event, { executionId: input.executionId, modelCall, occurredAt: new Date().toISOString(), ...fields }); } catch { /* Diagnostics cannot fail a turn. */ }
+    };
     const evidence: Evidence[] = [];
     const operationReceipts: AgentV2OperationReceipt[] = [];
     let savedTrip: { tripId: string; tripRevision: number } | undefined;
@@ -232,14 +237,18 @@ export class StrandsAgentEngine {
     const validatedOutputSchema = agentV2StructuredOutputSchema.superRefine(({ reply }, context) => {
       const merged = mergeEvidenceObservations([], [...(input.initialEvidence ?? []), ...evidence], input.maxEvidence);
       if (merged.collisions.length || merged.conflictingObservationIds.length) {
+        log("agent_reply_validation", { outcome: "rejected", code: "evidence_collision", replyKind: reply.kind,
+          collisionCount: merged.collisions.length, conflictCount: merged.conflictingObservationIds.length });
         context.addIssue({ code: "custom", message: "evidence_collision", path: ["reply"] });
         return;
       }
       try {
         admitAgentV2Reply(reply, { renderCommentary: publicCommentaryMarkdown, executionId: input.executionId, evidence: merged.evidence,
           effectiveIntent: currentEffectiveIntent, receipts: operationReceipts, navigation, availableOperations: input.candidateController?.context.canSave ? ["save"] : [] });
+        log("agent_reply_validation", { outcome: "completed", replyKind: reply.kind });
       } catch (error) {
         if (!(error instanceof AgentV2ReplyError)) throw error;
+        log("agent_reply_validation", { outcome: "rejected", code: error.code, replyKind: reply.kind });
         context.addIssue({ code: "custom", path: ["reply"],
           message: error.code === "invalid_question_target" ? "Application review found no save candidate. Return kind=clarification, target=itinerary_target. Application displays its itinerary-screen navigation. Do not ask goal/origin/destination for this save request." : `${error.code}: select an exact reference from the latest Tool replyReferences for facts; otherwise use a supported conversation, clarification, uncertainty or unavailable reply. Never invent fields, IDs or operation receipts.` });
       }
@@ -253,15 +262,18 @@ export class StrandsAgentEngine {
       printer: false, contextManager: false, retryStrategy: null, toolExecutor: "sequential",
     });
     // Observe only bounded metadata; hooks never change retries, messages or publication.
-    let modelCall = 0, modelStartedAt = 0;
-    const log = (event: string, fields: Record<string, unknown>) => {
-      try { this.options.log?.(event, { executionId: input.executionId, ...fields }); } catch { /* Diagnostics cannot fail a turn. */ }
-    };
+    const knownTools = new Set([...tools.map(value => value.toolSpec.name), "strands_structured_output"]);
     agent.addHook?.(BeforeModelCallEvent, () => { modelCall++; modelStartedAt = Date.now(); });
     agent.addHook?.(AfterModelCallEvent, event => {
       log("agent_model_call", { modelCall, elapsedMs: Date.now() - modelStartedAt,
-        occurredAt: new Date().toISOString(), outcome: event.error ? "failed" : "completed",
+        attempt: event.attemptCount, outcome: event.error ? "failed" : "completed",
+        ...(event.stopData ? { stopReason: event.stopData.stopReason } : {}),
+        ...strandsModelDiagnostic(event.error instanceof MaxTokensError ? event.error.partialMessage : event.stopData?.message, knownTools),
         ...(event.error ? strandsFailureDiagnostic(event.error) : {}) });
+    });
+    agent.addHook?.(AfterToolCallEvent, event => {
+      log("agent_tool_call", { tool: knownTools.has(event.toolUse.name) ? event.toolUse.name : "unknown_tool",
+        ...strandsToolDiagnostic(event.result) });
     });
     const startedAt = Date.now();
     const deadlineSignal = input.limits?.maxExecutionMs ? AbortSignal.timeout(input.limits.maxExecutionMs) : undefined;
