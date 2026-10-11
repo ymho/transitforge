@@ -272,7 +272,7 @@ run "japan_access_preparation_defers_enforcement" {
   variables {
     cloudflare_front_door_enabled = true
     require_cloudfront_origin_key = false
-    enforce_japan_country        = false
+    enforce_japan_country         = false
   }
   assert {
     condition = alltrue([
