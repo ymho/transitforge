@@ -18,7 +18,7 @@ import { ServerAgentRuntimeExecutionError, type ServerAgentConditionController,
   type ServerAgentRuntimeFailureKind } from "../ports/server-agent-runtime.js";
 
 import { strandsFailureDiagnostic } from "./strands-failure-diagnostic.js";
-import { strandsModelDiagnostic, strandsToolDiagnostic } from "./strands-loop-diagnostic.js";
+import { strandsModelDiagnostic, strandsReplyReferenceDiagnostic, strandsToolDiagnostic } from "./strands-loop-diagnostic.js";
 import { z } from "zod";
 import { presentedCandidateSelectionSchema, type PresentedCandidateController } from "../contracts/presented-candidate-selection.js";
 
@@ -235,9 +235,11 @@ export class StrandsAgentEngine {
     // Reuse Application admission in the SDK's native validation feedback. This
     // does not repair a reply, start another invoke, or bypass final publication.
     const validatedOutputSchema = agentV2StructuredOutputSchema.superRefine(({ reply }, context) => {
-      const merged = mergeEvidenceObservations([], [...(input.initialEvidence ?? []), ...evidence], input.maxEvidence);
+      const allEvidence = [...(input.initialEvidence ?? []), ...evidence];
+      const merged = mergeEvidenceObservations([], allEvidence, input.maxEvidence);
+      const referenceDiagnostic = strandsReplyReferenceDiagnostic(reply, allEvidence, merged.evidence, merged.omittedCount);
       if (merged.collisions.length || merged.conflictingObservationIds.length) {
-        log("agent_reply_validation", { outcome: "rejected", code: "evidence_collision", replyKind: reply.kind,
+        log("agent_reply_validation", { ...referenceDiagnostic, outcome: "rejected", code: "evidence_collision", replyKind: reply.kind,
           collisionCount: merged.collisions.length, conflictCount: merged.conflictingObservationIds.length });
         context.addIssue({ code: "custom", message: "evidence_collision", path: ["reply"] });
         return;
@@ -245,10 +247,10 @@ export class StrandsAgentEngine {
       try {
         admitAgentV2Reply(reply, { renderCommentary: publicCommentaryMarkdown, executionId: input.executionId, evidence: merged.evidence,
           effectiveIntent: currentEffectiveIntent, receipts: operationReceipts, navigation, availableOperations: input.candidateController?.context.canSave ? ["save"] : [] });
-        log("agent_reply_validation", { outcome: "completed", replyKind: reply.kind });
+        log("agent_reply_validation", { ...referenceDiagnostic, outcome: "completed", replyKind: reply.kind });
       } catch (error) {
         if (!(error instanceof AgentV2ReplyError)) throw error;
-        log("agent_reply_validation", { outcome: "rejected", code: error.code, replyKind: reply.kind });
+        log("agent_reply_validation", { ...referenceDiagnostic, outcome: "rejected", code: error.code, replyKind: reply.kind });
         context.addIssue({ code: "custom", path: ["reply"],
           message: error.code === "invalid_question_target" ? "Application review found no save candidate. Return kind=clarification, target=itinerary_target. Application displays its itinerary-screen navigation. Do not ask goal/origin/destination for this save request." : `${error.code}: select an exact reference from the latest Tool replyReferences for facts; otherwise use a supported conversation, clarification, uncertainty or unavailable reply. Never invent fields, IDs or operation receipts.` });
       }

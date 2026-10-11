@@ -62,6 +62,33 @@ function setup(effect: "read" | "proposal" = "read", agentV2Proposal = false) {
     toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()), effectiveIntent: effectiveDestination("京都") } };
 }
 describe("StrandsAgentEngine", () => {
+  it("reproduces missing_evidence after the model copies a Tool reference excluded by the global evidence cap", async () => {
+    const tools = new AgentToolRegistry(), registry = new ToolEvidenceRegistry(), log = vi.fn();
+    const verified: Evidence = { id: "verified-page-after-discovery", category: "external", knowledgeKind: "deterministic_fact",
+      subject: "京都", facts: { sourceExcerpt: "取得した施設の紹介です。" }, references: [{ sourceType: "external-source",
+        sourceRef: "https://example.test/verified", retrievedAt: "2026-10-11T00:00:00Z", freshness: "current", summary: "fixture" }] };
+    const discovery = Array.from({ length: 20 }, (_, index): Evidence => ({ ...verified,
+      id: `discovery-${index}`, knowledgeKind: "unverified_information" }));
+    tools.register({ name: "explore_destination", description: "旅行先を調べる", effect: "read",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false }, parseInput: () => validAgentToolInput({}),
+      execute: async () => successfulAgentToolResult({ outcome: { status: "partial" } }) });
+    registry.register("explore_destination", () => [...discovery, verified]);
+    const answer: Reply = { tool: "strands_structured_output", input: { kind: "answer",
+      references: [{ evidenceId: verified.id, field: "sourceExcerpt" }], commentary: "資料を確認しました。" } };
+    const model = new ScriptedModel([{ tool: "explore_destination", input: {} }, answer, answer]);
+    const result = await new StrandsAgentEngine({ ...options, maxTurns: 3, log }, { model }).run({
+      executionId: "bounded-evidence", userRequest: "京都を調べて", tools,
+      toolExecutor: new AgentToolExecutor(tools, registry), maxEvidence: 20 });
+    const offered = JSON.parse(model.observedMessages[1]!).at(-1).content[0].toolResult.content[0].json;
+    expect(offered.replyReferences).toEqual([{ reference: { evidenceId: verified.id, field: "sourceExcerpt" }, value: verified.facts.sourceExcerpt }]);
+    expect(result.stopReason).toBe("limitTurns");
+    expect(result.replyProposal).toBeUndefined();
+    expect(log.mock.calls.filter(([event]) => event === "agent_reply_validation").map(([, fields]) => fields.code))
+      .toEqual(["missing_evidence", "missing_evidence"]);
+    expect(log).toHaveBeenCalledWith("agent_reply_validation", expect.objectContaining({
+      evidenceCount: 21, retainedEvidenceCount: 20, omittedEvidenceCount: 1,
+      referenceCount: 1, unknownReferenceCount: 0, omittedReferenceCount: 1, duplicateReferenceCount: 0 }));
+  });
   it("reproduces repeated reply rejection for two identical place observations with different source IDs", async () => {
     const { input } = setup(), log = vi.fn();
     const sourceUrl = "https://example.org/shared-source";

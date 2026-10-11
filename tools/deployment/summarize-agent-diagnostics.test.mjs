@@ -106,3 +106,12 @@ assert.equal(budgetTimeline.status, 0, budgetTimeline.stderr);
 assert.match(budgetTimeline.stdout, /Failed or limited invocation steps/);
 assert.match(budgetTimeline.stdout, /2026-10-11T06:44:03.000Z \| 2026-10-11T06:43:30.000Z \| 7 \| reply_validation \| rejected \| uncertainty \| evidence_collision \| not_recorded \| not_recorded \| not_recorded \| 0 \| 2/);
 assert.doesNotMatch(budgetTimeline.stdout, /private-id|private-observation|private-reply/);
+
+writeFileSync(validations, encode([{ event: "agent_reply_validation", executionId: "private-id", occurredAt: "2026-10-11T06:43:30Z",
+  modelCall: 7, replyKind: "answer", outcome: "rejected", code: "missing_evidence",
+  evidenceCount: 21, retainedEvidenceCount: 20, omittedEvidenceCount: 1, referenceCount: 2,
+  unknownReferenceCount: 0, omittedReferenceCount: 1, duplicateReferenceCount: 0, referenceIds: ["private-reference"] }]));
+const membership = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams, modelShapes, modelCalls, failures, toolCalls, validations], { encoding: "utf8" });
+assert.equal(membership.status, 0, membership.stderr);
+assert.match(membership.stdout, /2026-10-11T06:44:03.000Z \| 7 \| rejected \| missing_evidence \| 21 \| 20 \| 1 \| 2 \| 0 \| 1 \| 0/);
+assert.doesNotMatch(membership.stdout, /private-reference|private-id/);
