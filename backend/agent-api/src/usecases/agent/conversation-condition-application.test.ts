@@ -60,3 +60,16 @@ it("separates a definite conflict from an uncertain storage result", async () =>
   await expect(apply({ target: "destination", place: "京都", quote: "京都" })).rejects.toMatchObject({ code: "condition_conflict" });
   await expect(apply({ target: "destination", place: "京都", quote: "京都" })).rejects.toBeInstanceOf(StateError);
 });
+
+
+it("accepts next Saturday with a one-night stay without asking for a numeric date", async () => {
+  const acceptCondition = vi.fn(async () => ({ version: 1 as const, mutationId: "condition:period", speechAct: "inform" as const,
+    beforeIntentRevision: 0, intentRevision: 1, replayed: false, operations: [] }));
+  const quote = "来週の土曜日から一泊二日";
+  const apply = createConversationConditionApplication({ acceptCondition }, identity, lease, quote, "2026-10-11");
+  await apply({ target: "travel_period", period: { start: { kind: "relative_weekday", week: "next", weekday: 6 }, duration: { amount: 1, unit: "nights" } }, quote });
+  expect(acceptCondition).toHaveBeenCalledWith(identity, lease, { target: "travel_period", quote, period: {
+    start: { kind: "local_date", date: "2026-10-17", expression: "relative_weekday", anchorDate: "2026-10-11", resolverVersion: "calendar-v1" },
+    end: { kind: "local_date", date: "2026-10-18" }, duration: { amount: 1, unit: "nights" },
+  } });
+});

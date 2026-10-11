@@ -38,7 +38,7 @@ describe.skipIf(!enabled)("travel-period condition Tool with real Bedrock", () =
     } };
     const scenarios = [
       { message: "おはよう", start: undefined, end: undefined, duration: undefined, writes: 0, update: false, scenario: false },
-      { message: "明日から2日間で行きます", start: "2026-09-28", end: undefined,
+      { message: "明日から2日間で行きます", start: "2026-09-28", end: "2026-09-29",
         duration: { kind: "quantity", amount: 2, unit: "days" } as const, writes: 1, update: true, scenario: false },
       { message: "やっぱり10月3日から5日までに変更します", start: "2026-10-03", end: "2026-10-05",
         duration: undefined, writes: 2, update: true, scenario: false },

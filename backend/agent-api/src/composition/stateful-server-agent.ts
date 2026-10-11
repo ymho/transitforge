@@ -53,7 +53,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
   onGroundRouteEvidence?: (evidenceId: string, output: Record<string, unknown>) => void;
 }) {
   return { async runAgentTurn(input: ServerAgentTurn, reportProgress?: AgentProgressReporter,
-    acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) {
+    acceptCondition?: (change: ConversationConditionInput, currentIntent?: EffectiveIntent) => Promise<IntentApplicationReceipt>) {
     let retainedCandidatePlan: RetainedCandidatePlan | undefined;
     let trip: Trip | undefined, tripUpdateProposal: TripUpdateProposal | undefined;
     let effectiveIntent: EffectiveIntent | undefined, currentIntentReceipt: IntentApplicationReceipt | undefined;
@@ -87,7 +87,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         }) } : {}),
         ...(acceptCondition ? { conditionController: {
           apply: async (change: ConversationConditionInput) => {
-            const receipt = await acceptCondition(change);
+            const receipt = await acceptCondition(change, effectiveIntent);
             const refreshed = await contextLoader({
               principal: input.principal,
               ...(input.conversationId ? { conversationId: input.conversationId } : {}),

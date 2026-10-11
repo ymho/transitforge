@@ -1,3 +1,4 @@
+import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { AgentRuntimeResult } from "@raiquora/agent/runtime-contract";
 import { StateError, exactObject, requireStatePrincipal } from "../../contracts/server-state.js";
 import type { ConversationTurnContinuity, ConversationTurnIdentity, ConversationTurnLease, ConversationTurnRepository,
@@ -23,7 +24,7 @@ export function createConversationTurnApplication(dependencies: {
   turns: ConversationTurnRepository;
   conditions?: ConversationConditionRepository;
   runAgentTurn: (input: ServerAgentTurn, historyBeforeSequence: number, reportProgress?: AgentProgressReporter,
-    acceptCondition?: (change: ConversationConditionInput) => Promise<IntentApplicationReceipt>) =>
+    acceptCondition?: (change: ConversationConditionInput, currentIntent?: EffectiveIntent) => Promise<IntentApplicationReceipt>) =>
     Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
   adoptTripProposal?: (identity: ConversationTurnIdentity, lease: ConversationTurnLease, proposal: import("@raiquora/trip/trip").TripUpdateProposal) => Promise<void>;
   diagnostics?: AgentDiagnosticsSink;
@@ -52,8 +53,8 @@ export function createConversationTurnApplication(dependencies: {
       const allowConditions = dependencies.conditions &&
         (begun.state === "started" || begun.conditionReceipts !== undefined);
       const applyCondition = allowConditions ? createConversationConditionApplication(dependencies.conditions!, identity, begun.lease, userRequest, uiContext?.calendarDate) : undefined;
-      const acceptCondition = applyCondition ? async (change: ConversationConditionInput) => {
-        const receipt = await applyCondition(change);
+      const acceptCondition = applyCondition ? async (change: ConversationConditionInput, currentIntent?: EffectiveIntent) => {
+        const receipt = await applyCondition(change, currentIntent);
         conditionReceipts.set(receipt.mutationId, receipt);
         acceptedReceipt = summarizeConditionReceipts([...conditionReceipts.values()]);
         await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "accept", "accepted", receipt));

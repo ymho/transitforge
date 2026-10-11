@@ -352,3 +352,48 @@ it("overrides profile hints only in this Conversation and retracts without reviv
   expect(effective?.profileHints.some(({ target }) => target === "origin")).toBe(false);
   expect(effective?.activeBaseFacts.some(({ target, requirement }) => target === "destination" && requirement.type === "destinations")).toBe(true);
 });
+
+
+it("persists next Saturday and its derived return date before research and replay", async () => {
+  const test = await setup();
+  test.operation.mockImplementation(async () => {
+    const working = await test.turns.getWorkingState(test.principal, conversationId);
+    expect(working?.semantic?.overlay.facts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ target: "start_date", value: expect.objectContaining({ date: "2026-10-17" }) }),
+      expect.objectContaining({ target: "end_date", value: { kind: "local_date", date: "2026-10-18" } }),
+    ]));
+    return { statusCode: 200, body: { verified: true } };
+  });
+  const period: ToolStep = { tool: "update_current_travel_period", input: { action: "set", period: {
+    start: { kind: "relative_weekday", week: "next", weekday: 6 }, duration: { amount: 1, unit: "nights" },
+  }, quote: "来週の土曜日から一泊二日" } };
+  const { app, model } = test.build([period, update("京都"), read("京都"), answer("intent-acceptance")], "intent-acceptance", 1501);
+  const input = { ...test.input, userRequest: "来週の土曜日から一泊二日で京都を調べて", uiContext: { calendarDate: "2026-10-11" } };
+  const result = await app.runConversationTurn(input);
+  expect(result.status).toBe("completed");
+  expect(test.operation).toHaveBeenCalledOnce();
+  const saved = (await test.trips.repository.get(test.principal, stateMetadata().tripId))!;
+  expect(saved.request.constraints.map(constraint => constraint.requirement)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ type: "dates", start: { earliest: "2026-10-17", latest: "2026-10-17" }, end: { earliest: "2026-10-18", latest: "2026-10-18" } }),
+  ]));
+  const calls = model.requests.length;
+  expect(await app.runConversationTurn(input)).toEqual(result);
+  expect(model.requests).toHaveLength(calls);
+});
+
+
+it.each([false, true])("combines period components after the previous turn was reflected in Trip (duration first: %s)", async durationFirst => {
+  const test = await setup();
+  const start: ToolStep = { tool: "update_current_travel_period", input: { action: "set", period: { start: { kind: "calendar_date", month: 10, day: 12 } }, quote: "10/12" } };
+  const duration: ToolStep = { tool: "update_current_travel_period", input: { action: "set", period: { duration: { amount: 1, unit: "nights" } }, quote: "1泊2日" } };
+  const first = test.build([durationFirst ? duration : start, { tool: "strands_structured_output", input: { kind: "conversation", message: "acknowledgement" } }], "period-first");
+  await first.app.runConversationTurn({ ...test.input, userRequest: durationFirst ? "1泊2日" : "10/12", uiContext: { calendarDate: "2026-10-11" } });
+  expect((await test.turns.getWorkingState(test.principal, conversationId))?.semantic?.overlay.facts).toEqual([]);
+  const second = test.build([durationFirst ? start : duration, { tool: "strands_structured_output", input: { kind: "conversation", message: "acknowledgement" } }], "period-second");
+  await second.app.runConversationTurn({ ...test.input, turnId: "71200000-0000-4000-8000-000000000003", userRequest: durationFirst ? "10/12" : "1泊2日", uiContext: { calendarDate: "2026-10-11" } });
+  const saved = (await test.trips.repository.get(test.principal, stateMetadata().tripId))!;
+  expect(saved.request.constraints.map(constraint => constraint.requirement)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ type: "dates", start: { earliest: "2026-10-12", latest: "2026-10-12" }, end: { earliest: "2026-10-13", latest: "2026-10-13" } }),
+    { type: "duration", unit: "nights", minimum: 1, maximum: 1 },
+  ]));
+});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { admitConditionChange, admitTripScenario, budgetConditionUpdateInputSchema, conditionDelta, conditionOperationId, conditionPayload, placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, tripScenarioInputSchema } from "./conversation-condition";
+import { admitConditionChange, admitTripScenario, completeConditionFromCurrentIntent, budgetConditionUpdateInputSchema, conditionDelta, conditionOperationId, conditionPayload, placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, tripScenarioInputSchema } from "./conversation-condition";
 import { reduceConversationIntent } from "./conversation-intent-reducer";
 import { compileEffectiveIntent } from "./effective-intent";
 import type { ConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
@@ -102,7 +102,7 @@ describe("small Conversation condition operations", () => {
     expect(reduction.overlay.tombstones).toContainEqual(expect.objectContaining({ target: "duration" }));
   });
 
-  it("keeps duration explicit, resolves trusted relative dates, and rejects inferred or inconsistent periods", () => {
+  it("keeps duration explicit, resolves trusted dates and derives an internally consistent end", () => {
     const duration = admitConditionChange({ target: "travel_period", period: {
       duration: { amount: 3, unit: "nights" },
     }, quote: "3泊" }, "3泊で行きたい", "2026-09-27");
@@ -113,6 +113,7 @@ describe("small Conversation condition operations", () => {
     }, quote: "明日から2日間" }, "明日から2日間で行きたい", "2026-09-27");
     expect(relative).toEqual({ target: "travel_period", period: {
       start: { kind: "local_date", date: "2026-09-28", expression: "tomorrow", anchorDate: "2026-09-27", resolverVersion: "calendar-v1" },
+      end: { kind: "local_date", date: "2026-09-29" },
       duration: { amount: 2, unit: "days" },
     }, quote: "明日から2日間" });
     expect(() => admitConditionChange({ target: "travel_period", period: {
@@ -134,7 +135,7 @@ describe("small Conversation condition operations", () => {
       start: { kind: "relative_date", relation: "tomorrow" }, duration: { amount: 1, unit: "days" },
     }, quote: "明日日帰り" }, "明日日帰りで城崎温泉にいきたい", "2026-10-11");
     expect(change).toMatchObject({ period: { start: { date: "2026-10-12" }, duration: { amount: 1, unit: "days" } } });
-    expect(change).not.toHaveProperty("period.end");
+    expect(change).toHaveProperty("period.end", { kind: "local_date", date: "2026-10-12" });
     const reduced = reduceConversationIntent(empty(), conditionDelta(change, "73000000-0000-4000-8000-000000000010", empty()));
     expect(reduced.overlay.facts).toEqual(expect.arrayContaining([
       expect.objectContaining({ target: "start_date", value: expect.objectContaining({ date: "2026-10-12" }) }),
@@ -222,4 +223,92 @@ describe("small Conversation condition operations", () => {
     expect(conditionOperationId(turn, a.target)).not.toBe(conditionOperationId("71600000-0000-4000-8000-000000000002", a.target));
 
   });
+});
+
+
+it.each([
+  ["2026-10-11", "next", 6, "来週の土曜日", "2026-10-17"],
+  ["2026-10-12", "next", 6, "来週土曜", "2026-10-24"],
+  ["2026-10-17", "this", 6, "今週の土曜日", "2026-10-17"],
+  ["2026-12-27", "after_next", 1, "再来週の月曜日", "2027-01-04"],
+  ["2026-10-11", "next", 7, "来週の日曜日", "2026-10-18"],
+])("resolves %s / %s weekday %s from the trusted Monday-start calendar", (anchor, week, weekday, quote, expected) => {
+  const change = admitConditionChange({ target: "travel_period", period: { start: { kind: "relative_weekday", week, weekday } }, quote }, quote, anchor);
+  expect(change).toMatchObject({ period: { start: { date: expected, expression: "relative_weekday", anchorDate: anchor, resolverVersion: "calendar-v1" } } });
+});
+
+it("rejects invented weekday dates and mismatched week/weekday claims", () => {
+  const quote = "来週の土曜日";
+  for (const start of [{ kind: "calendar_date", month: 10, day: 17 },
+    { kind: "relative_weekday", week: "next", weekday: 5 }, { kind: "relative_weekday", week: "after_next", weekday: 6 }]) {
+    expect(() => admitConditionChange({ target: "travel_period", period: { start }, quote }, quote, "2026-10-11")).toThrow("invalid_source");
+  }
+  expect(() => admitConditionChange({ target: "travel_period", period: { start: { kind: "relative_weekday", week: "next", weekday: 6 } }, quote }, quote)).toThrow("invalid_condition");
+});
+
+it.each([
+  ["10/12から1泊2日", 1, "nights", "2026-10-13"],
+  ["10/12から一泊二日", 1, "nights", "2026-10-13"],
+  ["10/12から1泊2日", 2, "days", "2026-10-13"],
+  ["10/12の日帰り", 1, "days", "2026-10-12"],
+  ["10/12から2泊3日", 2, "nights", "2026-10-14"],
+])("derives the end of %s without a model-authored return date", (quote, amount, unit, expected) => {
+  const change = admitConditionChange({ target: "travel_period", period: { start: { kind: "calendar_date", month: 10, day: 12 }, duration: { amount, unit } }, quote }, quote, "2026-10-11");
+  expect(change).toHaveProperty("period.end", { kind: "local_date", date: expected });
+});
+
+it("crosses month/year/leap-day boundaries and rejects contradictory stay counters", () => {
+  for (const [quote, year, month, day, expected] of [["2026年12月31日から1泊2日", 2026, 12, 31, "2027-01-01"], ["2028年2月28日から1泊2日", 2028, 2, 28, "2028-02-29"]] as const) {
+    const change = admitConditionChange({ target: "travel_period", period: { start: { kind: "calendar_date", year, month, day }, duration: { amount: 1, unit: "nights" } }, quote }, quote);
+    expect(change).toHaveProperty("period.end.date", expected);
+  }
+  for (const quote of ["10/12から1泊3日", "10/12から一泊三日"]) {
+    expect(() => admitConditionChange({ target: "travel_period", period: { start: { kind: "calendar_date", month: 10, day: 12 }, duration: { amount: 1, unit: "nights" } }, quote }, quote, "2026-10-11")).toThrow("invalid_condition");
+  }
+  expect(() => admitConditionChange({ target: "travel_period", period: { duration: { amount: 1, unit: "nights" } }, quote: "11泊" }, "11泊")).toThrow("invalid_source");
+});
+
+it.each([false, true])("combines accepted start and duration across turns (duration first: %s) and recalculates corrections", durationFirst => {
+  const start = admitConditionChange({ target: "travel_period", period: { start: { kind: "calendar_date", month: 10, day: 12 } }, quote: "10/12" }, "10/12", "2026-10-11");
+  const duration = admitConditionChange({ target: "travel_period", period: { duration: { amount: 1, unit: "nights" } }, quote: "1泊2日" }, "1泊2日");
+  let overlay = empty();
+  for (const [index, change] of (durationFirst ? [duration, start] : [start, duration]).entries()) {
+    overlay = reduceConversationIntent(overlay, conditionDelta(change, `turn-${index}`, overlay)).overlay;
+  }
+  const get = (target: string) => overlay.facts.find(fact => fact.target === target)!;
+  expect(get("start_date").value).toMatchObject({ date: "2026-10-12" });
+  expect(get("end_date").value).toMatchObject({ date: "2026-10-13" });
+  expect(get("duration").value).toMatchObject({ amount: 1, unit: "nights" });
+  expect(get(durationFirst ? "duration" : "start_date").provenance.turnId).toBe("turn-0");
+  const corrected = admitConditionChange({ target: "travel_period", period: { start: { kind: "calendar_date", month: 10, day: 17 } }, quote: "10/17" }, "10/17", "2026-10-11");
+  overlay = reduceConversationIntent(overlay, conditionDelta(corrected, "turn-correction", overlay)).overlay;
+  expect(get("end_date").value).toMatchObject({ date: "2026-10-18" });
+  const dayTrip = admitConditionChange({ target: "travel_period", period: { duration: { amount: 1, unit: "days" } }, quote: "日帰り" }, "日帰り");
+  overlay = reduceConversationIntent(overlay, conditionDelta(dayTrip, "turn-daytrip", overlay)).overlay;
+  expect(get("end_date").value).toMatchObject({ date: "2026-10-17" });
+  overlay = reduceConversationIntent(overlay, conditionDelta({ target: "travel_period", period: null, quote: "日程を未定に" }, "turn-clear", overlay)).overlay;
+  overlay = reduceConversationIntent(overlay, conditionDelta(duration, "turn-after-clear", overlay)).overlay;
+  expect(overlay.facts.filter(fact => fact.value.kind === "local_date")).toEqual([]);
+});
+
+
+it.each(["user", "profile", "legacy", "assumption"] as const)("supplements dates only from exact persisted user conditions, source=%s", source => {
+  const current = compileEffectiveIntent({ overlay: empty(), baseRequest: { assumptions: [], constraints: [{ id: "dates", source, strength: "soft", scope: { type: "trip" },
+    requirement: { type: "dates", start: { earliest: "2026-10-12", latest: "2026-10-12" } } }] }, baseSource: "trip" });
+  const change = admitConditionChange({ target: "travel_period", period: { duration: { amount: 1, unit: "nights" } }, quote: "1泊2日" }, "1泊2日");
+  const completed = completeConditionFromCurrentIntent(change, current);
+  if (source === "user") expect(completed).toHaveProperty("period.end.date", "2026-10-13");
+  else expect(completed).not.toHaveProperty("period.end");
+});
+
+it("does not derive a fixed end from a date window or a hypothetical duration", () => {
+  const current = compileEffectiveIntent({ overlay: empty(), baseRequest: { assumptions: [], constraints: [{ id: "dates", source: "user", strength: "soft", scope: { type: "trip" },
+    requirement: { type: "dates", start: { earliest: "2026-10-12", latest: "2026-10-14" } } }] }, baseSource: "trip" });
+  const change = admitConditionChange({ target: "travel_period", period: { duration: { amount: 1, unit: "nights" } }, quote: "1泊2日" }, "1泊2日");
+  expect(completeConditionFromCurrentIntent(change, current)).not.toHaveProperty("period.end");
+  const duration = admitConditionChange({ target: "travel_period", period: { duration: { amount: 1, unit: "nights" } }, quote: "1泊" }, "1泊");
+  const hypothetical = conditionDelta(duration, "scenario", empty()); hypothetical.operations.forEach(operation => operation.frame = "hypothetical");
+  const overlay = reduceConversationIntent(empty(), hypothetical).overlay;
+  const start = admitConditionChange({ target: "travel_period", period: { start: { kind: "calendar_date", month: 10, day: 12 } }, quote: "10/12" }, "10/12", "2026-10-11");
+  expect(reduceConversationIntent(overlay, conditionDelta(start, "actual-start", overlay)).overlay.facts.find(fact => fact.target === "end_date" && fact.frame === "actual")).toBeUndefined();
 });
