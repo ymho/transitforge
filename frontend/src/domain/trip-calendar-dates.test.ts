@@ -28,3 +28,25 @@ it("does not guess from a flexible date, unrelated dated item, or a lone explici
     requirement: { type: "dates", start: { earliest: "2026-10-24", latest: "2026-10-25" } } }] } })]).toEqual([]);
   expect([...tripCalendarDates({ ...base, timeline: { ...base.timeline!, calendarBindings: [{ logicalDayId: "d1", date: "2026-10-24", timeZone: "Asia/Tokyo", basis: "explicit" }] } })]).toEqual([["d1", "2026-10-24"]]);
 });
+
+it.each([1, 2])("keeps the start when the accepted period outlasts %s drafted logical days", count => {
+  const base = trip();
+  const current: Trip = { ...base, timeline: { ...base.timeline!, logicalDays: base.timeline!.logicalDays.slice(0, count) },
+    request: { ...base.request, constraints: [{ id: "date", scope: { type: "trip" }, strength: "soft", source: "user",
+      requirement: { type: "dates", start: { earliest: "2026-10-12", latest: "2026-10-12" },
+        end: { earliest: "2026-10-13", latest: "2026-10-13" } } }] } };
+  const before = structuredClone(current);
+  expect([...tripCalendarDates(current)]).toEqual([["d1", "2026-10-12"], ...(count === 2 ? [["d2", "2026-10-13"]] : [])]);
+  expect(current).toEqual(before);
+});
+
+it("keeps undated days beyond the trip end logical, without suppressing saved calendar bindings", () => {
+  const base = trip();
+  const current: Trip = { ...base, request: { ...base.request, constraints: [{ id: "date", scope: { type: "trip" }, strength: "soft", source: "user",
+    requirement: { type: "dates", start: { earliest: "2026-10-12", latest: "2026-10-12" },
+      end: { earliest: "2026-10-13", latest: "2026-10-13" } } }] } };
+  expect([...tripCalendarDates(current)]).toEqual([["d1", "2026-10-12"], ["d2", "2026-10-13"]]);
+  expect([...tripCalendarDates({ ...current, timeline: { ...current.timeline!, calendarBindings: [
+    { logicalDayId: "d3", date: "2026-10-14", timeZone: "Asia/Tokyo", basis: "explicit" },
+  ] } })]).toEqual([["d1", "2026-10-12"], ["d2", "2026-10-13"], ["d3", "2026-10-14"]]);
+});
