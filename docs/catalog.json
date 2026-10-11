@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "path": "docs/product-brief.md",
+      "category": "product"
+    },
+    {
+      "path": "docs/documentation-policy.md",
+      "category": "product"
+    },
+    {
+      "path": "docs/architecture/agent-runtime.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/agent-streaming.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/authentication.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/domain-model.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/fixed-egress-provider.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/module-boundaries.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/principles.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/security-privacy.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/server-state.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/architecture/train-rendering.md",
+      "category": "architecture"
+    },
+    {
+      "path": "docs/specs/agent-conditions.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/agent-publication.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/brand.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/candidate-assessment.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/consultation.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/in-trip.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/official-guides.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/profile.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/travel-discovery.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-accommodation.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-booking-marks.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-conditions.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-costs.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-feasibility.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-impacts.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-items.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-model.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-monitoring.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-notifications.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-persistence.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-places.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-preparation.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-reservations.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-schedule.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-sharing.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-weather.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/specs/trip-workspace.md",
+      "category": "specs"
+    },
+    {
+      "path": "docs/operations/agent-deployment.md",
+      "category": "operations"
+    },
+    {
+      "path": "docs/operations/testing.md",
+      "category": "operations"
+    },
+    {
+      "path": "docs/operations/trip-rechecks.md",
+      "category": "operations"
+    },
+    {
+      "path": "docs/data/viewer-input.md",
+      "category": "data"
+    },
+    {
+      "path": "README.md",
+      "category": "entry"
+    },
+    {
+      "path": "backend/agent-api/README.md",
+      "category": "entry"
+    },
+    {
+      "path": "infra/README.md",
+      "category": "entry"
+    },
+    {
+      "path": "infra/terraform/environments/dev/README.md",
+      "category": "entry"
+    },
+    {
+      "path": "docs/README.md",
+      "category": "index"
+    },
+    {
+      "path": "docs/decisions/README.md",
+      "category": "index"
+    }
+  ]
+}

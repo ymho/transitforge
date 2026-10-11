@@ -34,4 +34,4 @@
 windowの成立可能は未配置としてunknown。ホテルの日付spanをチェックイン15時や24時間占有へ変換しない。
 全世界の営業時間、運賃、主観疲労、#401 Hazardは実装しない。公開認証/writer gateはOFFのまま。
 TripとReservationのcross-resource transactionは#398の限界を維持する。直後の外部変更まで保証しない。
-契約・AC・確認方法は[Trip Feasibility](../architecture/trip-feasibility.md)を参照する。
+契約・AC・確認方法は[Trip Feasibility](../specs/trip-feasibility.md)を参照する。

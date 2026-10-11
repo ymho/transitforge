@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { currentText, relativeTargets, checkReadmeScripts, checkPreviewFlags, checkRetiredContracts } from "./check_documentation.mjs";
+import { currentText, relativeTargets, implementationReferences, checkReadmeScripts, checkPreviewFlags, checkRetiredContracts } from "./check_documentation.mjs";
 
 test("checks relative files and reference links, excludes fenced examples and external/fragment links", () => {
   assert.deepEqual(relativeTargets('[a](../a.md#title) ![img](img.png) [web](https://example.com) [local](#title)\n[ref]: b.md\n```md\n[x](missing.md)\n```'), ["../a.md", "img.png", "b.md"]);
@@ -27,4 +27,21 @@ test("permits actual Browser UI storage and an explicit retired-runtime note", (
   const prose = '旧MultiStepAgentRuntimeは撤去済み。\nJourneySearchPreferencesはLocalStorage。\nTripの正本はServer。\n## Historical: old\n本番writerはOFF';
   assert.deepEqual(checkRetiredContracts(prose), []);
   assert.ok(!currentText(prose).includes('本番writerはOFF'));
+});
+
+test("catalog covers every current document and rejects duplicates, missing files and wrong categories", async () => {
+  const { checkCatalog } = await import("./check_documentation.mjs");
+  const files = ["docs/specs/weather.md", "docs/decisions/0001-choice.md"];
+  assert.deepEqual(checkCatalog({ version: 1, documents: [{ path: files[0], category: "specs" }] }, files), []);
+  assert.ok(checkCatalog({ version: 1, documents: [] }, files).some(error => error.includes("Unregistered")));
+  assert.ok(checkCatalog({ version: 1, documents: [{ path: files[0], category: "architecture" }] }, files).some(error => error.includes("mismatch")));
+  assert.ok(checkCatalog({ version: 1, documents: [{ path: "docs/specs/absent.md", category: "specs" }] }, files).some(error => error.includes("missing")));
+  const entry = { path: files[0], category: "specs" };
+  assert.ok(checkCatalog({ version: 1, documents: [entry, entry] }, files).some(error => error.includes("Duplicate")));
+  assert.deepEqual(checkCatalog(null, files), ["Invalid documentation catalog"]);
+  assert.ok(checkCatalog({ version: 1, documents: [null] }, files).includes("Invalid documentation catalog entry"));
+});
+
+test("checks concrete repository file references, excluding placeholders and historical paths", () => {
+  assert.deepEqual(implementationReferences('`modules/trip/domain/trip.ts` `tools/check_documentation.mjs` `modules/*/domain` `backend/<service>/handler.ts`\n## Historical: old\n`frontend/removed.ts`'), ["modules/trip/domain/trip.ts", "tools/check_documentation.mjs"]);
 });

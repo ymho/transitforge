@@ -66,7 +66,7 @@ for (const requiredPath of [
   "backend/agent-api/src/ports",
   "backend/agent-api/src/usecases",
   "backend/agent-api/src/adapters",
-  "docs/architecture/typescript-reorganization-audit.md",
+  "docs/architecture/module-boundaries.md",
 ]) {
   if (!existsSync(resolve(repositoryRoot, requiredPath))) {
     errors.push(`${requiredPath}が必要です`);

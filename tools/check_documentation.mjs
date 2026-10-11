@@ -17,6 +17,10 @@ export function relativeTargets(text) {
     .map(target => decodeURIComponent(target.split(/[?#]/)[0]));
 }
 
+export function implementationReferences(text) {
+  return [...new Set([...currentText(text).matchAll(/`((?:frontend|backend|modules|lib|tools|infra|tests)\/[\w./-]+\.(?:ts|mjs|py|json|tf|css|html))`/g)].map(match => match[1]))];
+}
+
 export function checkReadmeScripts(text, scripts) {
   return [...currentText(text).matchAll(/\bnpm run ([\w:-]+)/g)]
     .filter(match => !Object.hasOwn(scripts, match[1]))
@@ -40,27 +44,52 @@ export function checkRetiredContracts(text) {
   return patterns.flatMap(pattern => [...currentText(text).matchAll(pattern)].map(match => `retired Current contract: ${match[0]}`));
 }
 
-const currentDocuments = [
-  "README.md", "docs/product-brief.md", "backend/agent-api/README.md", "infra/README.md",
-  "infra/terraform/environments/dev/README.md",
-  ...["domain-model", "domain-ownership", "module-boundaries", "authentication-boundary", "server-agent-cutover",
-    "server-state-persistence", "travel-profile", "trip-lifecycle", "trip-server-persistence", "trip-workspace",
-    "trip-state", "trip-request", "trip-schedule", "trip-feasibility", "agent-streaming-production",
-    "agent-v2-development-cutover", "product-timeline-design"].map(name => `docs/architecture/${name}.md`),
-];
+export function checkCatalog(catalog, files) {
+  const errors = [];
+  if (!catalog || catalog.version !== 1 || !Array.isArray(catalog.documents)) return ["Invalid documentation catalog"];
+  const registered = new Set();
+  const categories = new Set(["product", "architecture", "specs", "operations", "data", "entry", "index"]);
+  for (const entry of catalog.documents) {
+    if (!entry || typeof entry.path !== "string" || !entry.path.endsWith(".md") || entry.path.startsWith("/") || entry.path.split("/").includes("..") || !categories.has(entry.category)) {
+      errors.push("Invalid documentation catalog entry"); continue;
+    }
+    if (registered.has(entry.path)) errors.push(`Duplicate documentation catalog entry: ${entry.path}`);
+    registered.add(entry.path);
+    if (!files.includes(entry.path)) errors.push(`Catalog document missing: ${entry.path}`);
+    if (["architecture", "specs", "operations", "data"].includes(entry.category) && !entry.path.startsWith(`docs/${entry.category}/`)) errors.push(`Catalog category mismatch: ${entry.path}`);
+  }
+  for (const file of files.filter(file => file.startsWith("docs/") && !file.startsWith("docs/decisions/"))) {
+    if (!registered.has(file)) errors.push(`Unregistered current document: ${file}`);
+  }
+  return errors;
+}
 
 export function checkDocumentation(root) {
   const errors = [];
-  const files = execFileSync("git", ["ls-files", "-z", "--", "*.md"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
+  const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md"], { cwd: root, encoding: "utf8" }).split("\0").filter(file => file && existsSync(resolve(root, file))))];
   for (const file of files) {
     for (const target of relativeTargets(readFileSync(resolve(root, file), "utf8"))) {
       if (!existsSync(resolve(root, dirname(file), target))) errors.push(`${file}: missing relative target ${target}`);
     }
   }
   const read = file => readFileSync(resolve(root, file), "utf8");
+  const catalog = JSON.parse(read("docs/catalog.json"));
+  errors.push(...checkCatalog(catalog, files));
+  if (errors.some(error => error.startsWith("Invalid documentation catalog"))) return { errors, markdownFiles: files.length, currentDocuments: 0 };
+  const currentDocuments = catalog.documents.map(entry => entry.path).filter(file => files.includes(file));
+  const documentationIndex = read("docs/README.md");
+  for (const file of currentDocuments.filter(file => file.startsWith("docs/") && !["docs/README.md", "docs/decisions/README.md"].includes(file))) {
+    if (!relativeTargets(documentationIndex).includes(file.slice(5))) errors.push(`Documentation index missing ${file}`);
+  }
   const implementation = read("frontend/src/composition/viewer-composition.ts");
   errors.push(...checkReadmeScripts(read("README.md"), JSON.parse(read("package.json")).scripts));
   for (const file of currentDocuments) {
+    if (!file.startsWith("docs/decisions/")) {
+      for (const reference of implementationReferences(read(file))) {
+        if (!existsSync(resolve(root, reference))) errors.push(`${file}: missing implementation reference ${reference}`);
+      }
+    }
+    if (/^## Historical:/m.test(read(file)) && !file.startsWith("docs/decisions/")) errors.push(`${file}: history belongs in Git/PR or ADR, not current specifications`);
     errors.push(...checkPreviewFlags(read(file), implementation).map(error => `${file}: ${error}`));
     errors.push(...checkRetiredContracts(read(file)).map(error => `${file}: ${error}`));
   }

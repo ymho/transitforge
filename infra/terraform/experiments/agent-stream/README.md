@@ -36,4 +36,4 @@ Access TokenはAuthorization headerだけに置き、ログ・URL・tfvarsに保
 productionでは#480でWAF/Origin制限、access logの安全な項目、実quotaとcold start、
 旧Function URL閉鎖を確認する。現PoCのログはLambda標準ログのみで、本文/Tokenのdata traceは無効。
 
-詳細と未実施条件: [検証記録](../../../../docs/experiments/agent-stream-462.md)。
+詳細と未実施条件: [検証記録](../../../../docs/architecture/agent-streaming.md)。

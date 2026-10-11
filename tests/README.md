@@ -16,7 +16,7 @@
 
 ### Agent v2
 
-Agent v2のcutover判定は[Agent v2テスト戦略](../docs/architecture/agent-v2-testing.md)と
+Agent v2のcutover判定は[Agent v2テスト戦略](../docs/operations/testing.md)と
 `backend/agent-api/src/composition/agent-v2-acceptance-catalog.ts`を正本にする。
 
 V1 `MultiStepAgentRuntime` のrepair順序、guard名、Prompt本文、内部phase、model callの厳密回数を

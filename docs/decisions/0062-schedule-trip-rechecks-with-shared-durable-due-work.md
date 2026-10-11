@@ -73,4 +73,4 @@ tick配送失敗用のSQS DLQは別で14日保持。本体taskの寿命には影
 Trip/private Reservation/raw payload/ownerをログへ出さず、固定EMF名と数値だけを記録する。
 Trip JSON/LocalStorage/writer gate/Agent/Prompt/Contextに変更なし。Pushと通知dedupeは#395。
 過去の未変更Tripの初回投影は承認したowner/Tripへ内部reconcileを実行する。全owner Scanはしない。
-運用手順、必要catalog、残るunknown、テストは[再チェックruntime](../architecture/trip-recheck-runtime.md)を参照。
+運用手順、必要catalog、残るunknown、テストは[再チェックruntime](../operations/trip-rechecks.md)を参照。

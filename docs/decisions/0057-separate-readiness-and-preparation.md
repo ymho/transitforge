@@ -32,4 +32,4 @@ Tripへ予約・準備の配列を埋め込む方式、LLMが総合完成度を�
 準備完了は成立性や予約確認の証明ではない。readyに非blocking unknownや未完了の準備が共存する。
 Collection CASは異なる項目の同時編集でも競合し得るが、少量の個人準備リストで正確な重複防止を優先する。
 競合/応答消失は再取得して確認し直す。既存sourceへ無条件retry/rebaseしない。
-詳細・AC・後続境界は[旅行前Readiness](../architecture/trip-readiness.md)を参照する。
+詳細・AC・後続境界は[旅行前Readiness](../specs/trip-preparation.md)を参照する。
