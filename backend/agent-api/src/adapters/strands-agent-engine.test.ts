@@ -61,6 +61,23 @@ function setup(effect: "read" | "proposal" = "read", agentV2Proposal = false) {
     toolExecutor: new AgentToolExecutor(tools, new ToolEvidenceRegistry()), effectiveIntent: effectiveDestination("京都") } };
 }
 describe("StrandsAgentEngine", () => {
+  it("captures a native SDK model failure once without raw content or retries", async () => {
+    const { input, execute } = setup();
+    const failure = Object.assign(new Error("private prompt and credentials"), { code: "ECONNRESET" });
+    let calls = 0;
+    class FailingModel extends ScriptedModel {
+      override async *stream(): AsyncGenerator<ModelStreamEvent> { calls++; throw failure; }
+    }
+    const log = vi.fn();
+    const engine = new StrandsAgentEngine({ ...options, log }, { model: new FailingModel([]) });
+    await expect(engine.run(input)).rejects.toMatchObject({ stage: "agent_invoke" });
+    expect(calls).toBe(1);
+    expect(execute).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith("agent_model_call", expect.objectContaining({ modelCall: 1, outcome: "failed", errorName: "ModelError", cause1Code: "ECONNRESET" }));
+    expect(JSON.stringify(log.mock.calls)).not.toContain("private");
+    const brokenLog = new StrandsAgentEngine({ ...options, log: () => { throw new Error("sink unavailable"); } }, { model: new FailingModel([]) });
+    await expect(brokenLog.run(input)).rejects.toMatchObject({ stage: "agent_invoke" });
+  });
   it("requires an actual group ID before reviewing multiple presented groups through the native SDK", async () => {
     const { input, execute } = setup();
     const groups = [

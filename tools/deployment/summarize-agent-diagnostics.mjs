@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { executionSummaryRows } from "./agent-execution-summary.mjs";
 
-const [diagnosticPath, streamPath, modelShapePath] = process.argv.slice(2);
+const [diagnosticPath, streamPath, modelShapePath, modelCallPath, invocationFailurePath] = process.argv.slice(2);
 if (!diagnosticPath || !streamPath) throw new Error("Expected diagnostic and stream event files");
 
 const diagnosticMessages = messages(diagnosticPath).filter((value) => value.event === "agent_diagnostic");
@@ -55,6 +55,21 @@ table(["Stopped (UTC)", "Step", "Tool", "Outcome", "Error code", "At (UTC)"], li
 if (modelShapePath) {
   console.log("");
   table(["Model response rejection", "Block kinds", "Count", "Max blocks"], groupedModelShapes(modelShapes));
+}
+
+if (modelCallPath) {
+  console.log("\n### Model call failures (bounded metadata only)");
+  const allowed = new Set(["Error", "ModelError", "ModelThrottledError", "MaxTokensError", "TypeError", "AbortError", "TimeoutError", "CancelledError", "ContextWindowOverflowError", "StructuredOutputError", "ValidationException", "AccessDeniedException", "ThrottlingException", "ServiceUnavailableException", "InternalServerException", "ModelTimeoutException", "ModelErrorException", "ModelNotReadyException", "ResourceNotFoundException", "CredentialsProviderError", "unclassified"]);
+  const codes = new Set(["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "EPIPE", "ERR_HTTP2_STREAM_CANCEL", "ERR_HTTP2_STREAM_ERROR", "ERR_HTTP2_INVALID_SESSION"]);
+  const safeNumber = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max ? String(value) : "-";
+  table(["At (UTC)", "Stage", "Call", "Elapsed (ms)", "Error", "Code", "Cause", "Cause code", "HTTP status", "AWS attempts", "Bundle throw sites"],
+    [...messages(modelCallPath).filter(value => value.event === "agent_model_call" && value.outcome === "failed"), ...(invocationFailurePath ? messages(invocationFailurePath).filter(value => value.event === "agent_invocation_failed") : [])].slice(-10).map(value => [
+      timestamp(value.occurredAt) ?? "-", value.event === "agent_invocation_failed" ? "invocation" : "model", safeNumber(value.modelCall, 1, 100), safeNumber(value.elapsedMs, 0, 300000),
+      allowed.has(value.errorName) ? value.errorName : "unclassified", codes.has(value.errorCode) ? value.errorCode : "-",
+      [1, 2, 3].map(depth => allowed.has(value[`cause${depth}Name`]) ? value[`cause${depth}Name`] : "-").join(" / "), [1, 2, 3].map(depth => codes.has(value[`cause${depth}Code`]) ? value[`cause${depth}Code`] : "-").join(" / "),
+      safeNumber(["error", "cause1", "cause2", "cause3"].map(prefix => value[`${prefix}httpStatusCode`]).find(value => Number.isSafeInteger(value) && value >= 100 && value <= 599), 100, 599), safeNumber(["error", "cause1", "cause2", "cause3"].map(prefix => value[`${prefix}attempts`]).find(value => Number.isSafeInteger(value) && value >= 1 && value <= 10), 1, 10),
+      ["error", "cause1", "cause2", "cause3"].map(prefix => `${safeNumber(value[`${prefix}BundleLine`], 1, 999999)}:${safeNumber(value[`${prefix}BundleColumn`], 1, 999999)}`).join(" / "),
+    ]));
 }
 
 function messages(path) {

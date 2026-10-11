@@ -69,3 +69,13 @@ const completedFailures = spawnSync(process.execPath, ["tools/deployment/summari
 assert.equal(completedFailures.status, 0, completedFailures.stderr);
 assert.match(completedFailures.stdout, /draft_itinerary \| unavailable \| 2 \| 2026-10-04T08:28:02.000Z/);
 assert.doesNotMatch(completedFailures.stdout, /private-id|private-input/);
+
+const modelCalls = join(directory, "model-calls.json");
+writeFileSync(modelCalls, JSON.stringify([
+  JSON.stringify({ event: "agent_model_call", outcome: "failed", occurredAt: "2026-10-11T05:16:02Z", modelCall: 1, elapsedMs: 59000, errorName: "Error", cause1Name: "Error", cause1Code: "ECONNRESET", cause1httpStatusCode: 503, cause1attempts: 3, message: "private-provider-message", executionId: "private-id" }),
+  JSON.stringify({ event: "agent_model_call", outcome: "failed", errorName: "private-error", errorCode: "private-code", elapsedMs: -1, errorhttpStatusCode: 999 }),
+]));
+const modelFailures = spawnSync(process.execPath, ["tools/deployment/summarize-agent-diagnostics.mjs", diagnostics, streams, modelShapes, modelCalls], { encoding: "utf8" });
+assert.equal(modelFailures.status, 0, modelFailures.stderr);
+assert.match(modelFailures.stdout, /59000 \| Error \| - \| Error \/ - \/ - \| ECONNRESET \/ - \/ - \| 503 \| 3/);
+assert.doesNotMatch(modelFailures.stdout, /private-provider-message|private-id|private-error|private-code|999/);

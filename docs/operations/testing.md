@@ -195,3 +195,9 @@ PLAYWRIGHT_MODULE=/tmp/visual-tools/node_modules/playwright/index.mjs \
 ```
 
 生成画像やverification.jsonは検証artifactであり、本番配信には含めない。実行対象もlocalhostに限定する。
+
+## モデル呼び出し失敗の診断
+
+Strandsのモデル呼び出しごとに、成功・失敗、呼び出しの連番、経過時間とUTC時刻を記録する。失敗時は既知の例外名・通信エラーコードとAWSのHTTPステータス・試行回数・待機時間だけを保存し、causeは最大3段まで辿る。例外の発生箇所は既知のLambda bundleの行・列番号だけを保存する。未知の名前はunclassifiedとし、例外本文・stack・URL・headers・会話内容は記録しない。診断sinkの障害で相談結果を変えず、retryや実行上限も変更しない。
+
+`Agent / Production Diagnostics`は直近2時間のモデル呼び出し失敗を集計する。SDK例外をunknownへ分類する前の観測であり、既存の過去ログから失われた例外を復元するものではない。診断コードの配信後に新しい実行を再現し、モデル呼び出しの失敗とtransport・実行上限の停止を分けて確認する。
