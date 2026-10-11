@@ -58,7 +58,7 @@ export async function refreshTripWeather(trip: Trip, item: ItineraryItem, provid
   const observedAt = observedTimes.sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? fetchedAt;
   const validUntil = expiryTimes.sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? new Date(now.getTime() + 3_600_000).toISOString();
   return { itemId: item.id, basis: tripWeatherBasis(trip, item), fetchedAt: observedAt, validUntil,
-    provider: "open-meteo", sourceUrl: "https://open-meteo.com/", forecasts };
+    checkedAt: new Date(Math.max(now.getTime(), clock().getTime())).toISOString(), provider: "open-meteo", sourceUrl: "https://open-meteo.com/", forecasts };
 }
 function localHour(target: TripWeatherTarget, timeZone: string): string {
   const at = target.at!.at;

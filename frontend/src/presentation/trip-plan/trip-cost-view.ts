@@ -15,11 +15,12 @@ export function itemCostCopy(trip: Trip, item: ItineraryItem): string {
 export function renderItemCost(trip: Trip, item: ItineraryItem, controller: TripWorkspaceController, report: (text: string) => void): HTMLElement | undefined {
   if (isRailItem(item)) return undefined;
   const root = element("div", "trip-item-cost"), value = itemCostCopy(trip, item);
-  root.append(element("span", "trip-item-cost-label", "概算費用"));
-  if (!controller.canConfirm() || controller.source()?.getRole?.() === "viewer") { root.append(element("span", "", value)); return root; }
+  root.append(element("span", "trip-item-cost-label", "費用"));
+  root.append(element("span", "trip-item-cost-copy", value));
+  if (item.decision && !item.decision.needsReconfirmation || !controller.canConfirm() || controller.source()?.getRole?.() === "viewer") { return root; }
   const session = controller.sessionId();
   const current = () => controller.current()?.id === trip.id && controller.current()?.revision === trip.revision && controller.sessionId() === session && controller.canConfirm() && controller.source()?.getRole?.() !== "viewer";
-  const edit = control(value === "未入力" ? "金額を入力" : value, () => {
+  const edit = control("✎", () => {
     if (root.querySelector(".trip-cost-editor")) return;
     const form = element("form", "trip-cost-editor"), label = element("label", "", "概算金額（予定全体） "), input = element("input"), currency = element("select");
     const cost = itemCost(trip, item);
@@ -45,7 +46,7 @@ export function renderItemCost(trip: Trip, item: ItineraryItem, controller: Trip
     });
     root.append(form); input.focus();
   });
-  edit.className = "trip-item-cost-value";
+  edit.className = "trip-field-pencil trip-item-cost-value";
   edit.setAttribute("aria-label", `${item.title}の概算費用を編集`); root.append(edit);
   return root;
 }

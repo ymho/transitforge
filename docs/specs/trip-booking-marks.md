@@ -2,7 +2,7 @@
 
 Trip V2/V3の各itemはoptional bookingStatus（booked / not-required）を持つ。未登録は「未確認」であり、未予約と断定しない。利用者の自己申告であり、外部予約・購入・取消は行わず、Providerで検証済みのReservationFactに変換しない。既存の独立Reservationと予約番号のprivate境界を維持する。
 
-予定詳細のコンパクトな「予約」選択で未確認 / 予約済 / 予約不要を保存する。item_booking patchを既存のTrip mutation・revision CAS・receiptで処理する。Owner / Editorが更新でき、Viewerは閲覧のみ。画面からの保存は即時反映し、成功・失敗を通知する。
+予定詳細は「予約状況」に済／未を表示する。下書きの鉛筆操作で選択欄を開き、済（booked）／未（未登録）を保存する。既存のnot-requiredも済として表示し、確認済み予定には鉛筆を出さない。item_booking patchを既存のTrip mutation・revision CAS・receiptで処理する。Owner / Editorが更新でき、Viewerは閲覧のみ。画面からの保存は即時反映し、成功・失敗を通知する。
 
 旅程を確定・再確定する際は、宿泊と移動（徒歩・自転車・自家用車を除く）のマークが未確認なら対象名をアプリ内確認ダイアログへ表示する。独立ReservationFactのbooked / not-requiredも警告除外に使う。取消は保存せず、続行は通常の確定処理へ進む。予約を必須条件にせず、未確認が実際の未予約を意味するとは扱わない。個別の観光・飲食にも任意でマークを付けられるが、一律に予約必須とは判定しない。
 
