@@ -167,7 +167,11 @@
   & .trip-library-card > strong { display: block; margin: 20px 22px 8px; font-size: 19px; font-weight: 600; }
   & .trip-library-card > p { margin: 8px 22px; font-size: 12px; color: var(--tf-muted); }
   & .trip-library-card > button { margin: 8px 22px 0; padding: 8px 0; background: transparent; border: 0; color: var(--tf-blue); font-size: 12px; }
-  & .trip-library-more { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+  & .trip-library-more { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+  & .trip-library-more:empty { display: none; }
+  & .trip-library-more > button.trip-library-more-link { appearance: none; min-width: 0; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--tf-muted); font: inherit; font-size: 12px; font-weight: 400; text-decoration: underline; text-underline-offset: 3px; }
+  & .trip-library-more > button.trip-library-more-link:hover:not(:disabled) { background: transparent; color: var(--tf-blue); box-shadow: none; }
+  & .trip-library-more > button.trip-library-more-link:focus-visible { outline: 2px solid var(--tf-blue); outline-offset: 2px; }
 }
 @media (max-width:62rem) { #app[data-primary-view]:is([data-primary-view]) .trip-library-entries { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width:44rem) { #app[data-primary-view]:is([data-primary-view]) .trip-library-entries { grid-template-columns: 1fr; } }
