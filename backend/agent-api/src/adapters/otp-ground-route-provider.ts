@@ -20,6 +20,8 @@ export class OtpGroundRouteProvider implements GroundRouteProvider {
   async search(request: GroundRouteRequest, signal?: AbortSignal): Promise<GroundRouteResult> {
     const { origin, destination, departureAt, mode } = request;
     if (![origin, destination].every(point => inside(point, this.coverage.bounds)) ||
+      this.coverage.feeds && ![origin, destination].every(point => this.coverage.feeds!.some(feed => inside(point, feed.bounds) &&
+        (mode === "walk" || departureAt.slice(0, 10) >= feed.serviceStart && departureAt.slice(0, 10) <= feed.serviceEnd))) ||
       mode === "bus" && (departureAt.slice(0, 10) < this.coverage.serviceStart || departureAt.slice(0, 10) > this.coverage.serviceEnd)) {
       return { status: "outside_coverage", reason: "地点または運行日が登録済みの提供範囲外です", coverage: this.coverage };
     }

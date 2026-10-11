@@ -3,6 +3,8 @@ export interface GroundRouteCoverage {
   bounds: { south: number; west: number; north: number; east: number };
   serviceStart: string; serviceEnd: string; feedUrl: string; feedRetrievedAt: string;
   graphBuiltAt: string; attribution: string;
+  /** Per-feed geography and dates; the aggregate envelope is only a summary. */
+  feeds?: { feedId: string; bounds: GroundRouteCoverage["bounds"]; serviceStart: string; serviceEnd: string; feedUrl: string; attribution: string }[];
 }
 export interface RoutePoint { name: string; latitude: number; longitude: number }
 export interface GroundRouteRequest { origin: RoutePoint; destination: RoutePoint; departureAt: string; mode: "walk" | "bus" }

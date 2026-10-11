@@ -46,9 +46,13 @@ it("always constructs the Strands engine when no rollout flag is supplied", () =
     TRIP_TABLE_NAME: "test", FIXED_EGRESS_PROVIDER_FUNCTION_ARN: "test", MODEL_ID: "jp.anthropic.claude-sonnet-4-6",
   });
   expect(StrandsAgentEngine).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-    modelId: "jp.anthropic.claude-sonnet-4-6", systemPrompt: agentV2SystemPrompt,
+    modelId: "jp.anthropic.claude-sonnet-4-6", systemPrompt: expect.stringContaining(agentV2SystemPrompt),
     anthropicAdaptiveEffort: "medium", maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
   }));
+  const prompt = vi.mocked(StrandsAgentEngine).mock.calls.at(-1)![0].systemPrompt;
+  expect(prompt).toContain("SERVICE AREA:");
+  expect(prompt).toContain("島根県");
+  expect(prompt.split("SERVICE AREA:")[1]).not.toContain("宮城県");
   const options = vi.mocked(createProductionConversationAgent).mock.calls.at(-1)![0];
   expect(options.runRuntime).toEqual(expect.any(Function));
   expect(options).not.toHaveProperty("model");

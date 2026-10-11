@@ -87,7 +87,8 @@
     "./cost-lines": "./domain/cost-lines.ts",
     "./item-cost": "./domain/item-cost.ts",
     "./public-cost-proposal": "./domain/public-cost-proposal.ts",
-    "./official-guide": "./domain/official-guide.ts"
+    "./official-guide": "./domain/official-guide.ts",
+    "./service-area": "./domain/service-area.ts"
   },
   "dependencies": {
     "@raiquora/operation": "*",
