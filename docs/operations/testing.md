@@ -130,8 +130,7 @@ Adapterが確定した`limitReason=deadline/tool_calls`は別フィールドで�
 sink障害時の結果維持、未知値・不正数値・本文の除外も確認する。
 集計単体の負例は`node --test tools/deployment/*.test.mjs`で実行する。
 
-本変更は診断の追加であり、model、prompt、4096の出力上限、150秒の時間上限、retry方針、IAM、
-デプロイworkflowを変更しない。実Providerを使うopt-inテストのskipや通常CI成功を、
+診断機能自体はmodel、prompt、実行上限、retry方針、IAM、デプロイworkflowを変更しない。現在のモデル応答単位・相談全体の出力上限は[Server Agent](../architecture/agent-runtime.md)を正とする。実Providerを使うopt-inテストのskipや通常CI成功を、
 実ブラウザでの症状解消・本番ログの取得成功として扱わない。デプロイ後の再現と診断照合が別途必要である。
 
 ## v2表示境界

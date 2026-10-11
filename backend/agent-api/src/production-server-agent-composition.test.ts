@@ -47,7 +47,7 @@ it("always constructs the Strands engine when no rollout flag is supplied", () =
   });
   expect(StrandsAgentEngine).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
     modelId: "jp.anthropic.claude-sonnet-4-6", systemPrompt: expect.stringContaining(agentV2SystemPrompt),
-    anthropicAdaptiveEffort: "medium", maxOutputTokens: 4096, maxInvocationOutputTokens: 4096,
+    anthropicAdaptiveEffort: "medium", maxOutputTokens: 4096, maxInvocationOutputTokens: 8192,
   }));
   const prompt = vi.mocked(StrandsAgentEngine).mock.calls.at(-1)![0].systemPrompt;
   expect(prompt).toContain("SERVICE AREA:");

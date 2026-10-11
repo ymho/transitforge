@@ -75,7 +75,7 @@ export const periodDateExpressionSchema = z.strictObject({
     context.addIssue({ code: "custom", message: "calendar_date requires day and no relation" });
 });
 export const travelDurationSchema = z.strictObject({
-  amount: z.number().int().min(1).max(90),
+  amount: z.number().int().min(1).max(90).describe("明示された日数・泊数。日帰りはamount=1、unit=days。"),
   unit: z.enum(["days", "nights"]),
 });
 export const travelPeriodValueSchema = z.strictObject({
@@ -434,6 +434,7 @@ function nightsAppear(quote: string, amount: number): boolean {
 }
 function durationDaysAppear(quote: string, amount: number): boolean {
   const normalized = quote.normalize("NFKC");
+  if (amount === 1 && normalized.includes("日帰り")) return true;
   return normalized.trim() === `${amount}日` || [`${amount}日間`, `${amount}日で`, `${amount}日ほど`,
     `${amount}日くらい`, `${amount}日程度`, `${amount}日旅行`].some(marker => normalized.includes(marker));
 }

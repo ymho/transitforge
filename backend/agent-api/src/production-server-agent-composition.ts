@@ -115,7 +115,8 @@ export function createProductionServerAgent(executionId: string, environment: Re
 SERVICE AREA: The service accepts travel searches only in Japan, within these prefectures: ${serviceAreaSearchScope.prefectures.join("、")}. Do not recommend candidates elsewhere or invent candidates excluded by Tools. An empty filtered response does not prove that no facilities exist. This product boundary is separate from actual rail/OTP coverage.`,
    maxTurns: 10,
    maxOutputTokens: 4_096,
-   maxInvocationOutputTokens: 4_096,
+   // The per-response cap is separate from the whole condition/read/reply loop.
+   maxInvocationOutputTokens: 8_192,
    ...strandsProductionReasoning(modelId),
  }));
  return createProductionConversationAgent({

@@ -37,6 +37,8 @@ Agent LambdaはVPC外、宿泊はIAM Invoke → 固定egress Provider Lambda →
 残存`/api/agent`の独立read operationとFunction URL / OACは別契約で、汎用会話・feedback・traceは410。
 [旧ingress閉鎖](authentication.md)を参照する。
 
+モデル応答1回の出力上限は4,096 token、条件更新・情報取得・構造化回答を含む1相談全体の累積出力上限は8,192 tokenとする。複数の条件を受理した後も回答を仕上げる余地を確保し、上限到達時の公開検証は緩和しない。
+
 Server business deadlineはTerraform既定150,000ms、整数1,000〜180,000ms。Lambda等のtransport timeoutとは別。
 復旧は[Agent v2実環境運用](../operations/agent-deployment.md)に従い、失効したV1フラグへ戻さない。
 CI成功・固定ProviderのLive成功は実Provider / 実画面E2Eの完成証明ではない。
