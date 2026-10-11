@@ -1,5 +1,4 @@
 import { validateTrip, type Trip } from "@raiquora/trip/trip";
-import { ApiAuthenticationError } from "../auth/api-authentication-error";
 import type { ServerTripClient } from "./server-trip-client";
 
 export type TripListState = "loading" | "available" | "unavailable" | "unauthenticated";
@@ -41,9 +40,9 @@ export function createServerTripListSource(client: Pick<ServerTripClient, "list"
       } while (afterTripId);
       if (request !== generation || requestSession !== client.sessionVersion?.() || !authenticated()) return;
       trips = structuredClone(all); state = "available";
-    } catch (error) {
+    } catch {
       if (request !== generation) return;
-      trips = []; state = error instanceof ApiAuthenticationError || !authenticated() ? "unauthenticated" : "unavailable";
+      trips = []; state = !authenticated() ? "unauthenticated" : "unavailable";
     }
     if (request === generation) publish();
   };

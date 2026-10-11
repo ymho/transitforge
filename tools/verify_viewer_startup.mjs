@@ -135,6 +135,19 @@ try {
 
     // Production DOM and existing server contracts, with synthetic owner-scoped data only.
     const checkLayout = async screen => {
+      // All rendered features share restored authentication, including resumed tabs.
+      const beforeResume = apiCalls.length;
+      await page.evaluate(() => {
+        window.dispatchEvent(new PageTransitionEvent("pageshow"));
+        window.dispatchEvent(new Event("focus"));
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      assert.equal(await page.locator("#app").getAttribute("data-auth-state"), "signed-in", screen);
+      assert.equal(await page.locator("[data-my-login]").isVisible(), false, screen);
+      assert.equal(await page.locator("[data-account]").getAttribute("aria-label"), "設定を開く", screen);
+      assert.match(await page.locator("[data-my-account-status]").textContent(), /ログイン中/, screen);
+      assert.equal(await page.locator('[data-primary="trips"]').isVisible(), true, screen);
+      assert.equal(apiCalls.length, beforeResume, `resume must not repeat business requests: ${screen}`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${screen} overflow at ${viewport.width}`);
       assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(250, 250, 250)");
       await page.screenshot({ path: `.artifacts/product-design/${screen}-${viewport.width}.png` });

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTrip } from "@raiquora/trip/trip";
+import { ApiAuthenticationError } from "../auth/api-authentication-error";
 import { createServerTripListSource } from "./server-trip-list-source";
 
 const trip = (id: string) => createTrip(id, id, "2026-09-18T00:00:00Z");
@@ -17,6 +18,10 @@ describe("server Trip list source", () => {
     const source = createServerTripListSource({ list }, () => true);
     await source.refresh();
     expect(source.getState()).toBe("unavailable"); expect(source.getTrips()).toEqual([]);
+  });
+  it.each(["forbidden", "session-changed"] as const)("keeps a signed-in session after %s rather than reporting a guest", async code => {
+    const source = createServerTripListSource({ list: vi.fn().mockRejectedValue(new ApiAuthenticationError(code)) }, () => true);
+    await source.refresh(); expect(source.getState()).toBe("unavailable"); expect(source.getTrips()).toEqual([]);
   });
   it("keeps signed-out reads silent even inside a synchronous subscriber", () => {
     const list = vi.fn(), source = createServerTripListSource({ list }, () => false);
