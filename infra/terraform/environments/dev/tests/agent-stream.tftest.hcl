@@ -210,6 +210,10 @@ run "custom_domain_contract" {
     environment                        = "prod"
   }
   assert {
+    condition     = length(aws_cloudfront_function.japan_access_probe) == 1
+    error_message = "Keep the probe resource during enforcement cutover to avoid deleting a still-deployed association."
+  }
+  assert {
     condition     = length([for b in aws_cloudfront_distribution.website.ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 0 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent-stream"]) == 1 && length([for b in aws_cloudfront_distribution.viewer[0].ordered_cache_behavior : b if b.path_pattern == "/api/agent"]) == 1
     error_message = "Use the active custom-domain distribution without replacing the Browser route."
   }
