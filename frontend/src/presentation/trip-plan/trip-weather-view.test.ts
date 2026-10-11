@@ -3,9 +3,9 @@ import { expect, it } from "vitest";
 import { tripWeatherFixture } from "../../../../modules/trip/domain/trip-weather.fixture";
 import { renderTripWeather } from "./trip-weather-view";
 import { tripWeatherBasis, tripWeatherTargets } from "@raiquora/trip/trip-weather";
-it("renders saved day weather with attribution and never labels failures as clear weather",()=>{
+it("renders saved day weather without source chrome and never labels failures as clear weather",()=>{
  const f=tripWeatherFixture(), text=renderTripWeather(f.trip,f.item)?.textContent;
- expect(text).toContain("雨 15〜22℃・雨80%"); expect(text).toContain("取得"); expect(text).toContain("Open-Meteo");
+ expect(text).toContain("雨 15〜22℃・降水80%"); expect(text).not.toContain("Open-Meteo"); expect(text).not.toContain("予報地点");
  const trip={...f.trip,weather:[{...f.weather,forecasts:[{target:f.weather.forecasts[0]!.target,status:"unavailable" as const,rows:[]}]}]};
  expect(renderTripWeather(trip,f.item)?.textContent).toContain("取得できません");
  expect(renderTripWeather({...f.trip,weather:undefined},f.item)).toBeUndefined();

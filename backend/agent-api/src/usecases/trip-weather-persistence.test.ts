@@ -40,3 +40,13 @@ it("does not accept provider facts supplied by a public create request",async()=
  const f=fixture(), saved=tripWeatherFixture();
  await expect(f.app.execute(owner,{version:"trip-api-v1",operation:"create",trip:{...saved.trip,id:f.crypto.id()}})).rejects.toMatchObject({code:"invalid-input"});
 });
+
+it("limits even failed weather attempts to once per 24 hours across requests", async () => {
+ const f = fixture(); let now = new Date("2026-10-10T01:00:00Z"); vi.spyOn(f.clock, "now").mockImplementation(() => now);
+ const first = await f.app.execute(owner, f.command) as { trip: { weather: { checkedAt: string }[] } };
+ expect(f.search).toHaveBeenCalledOnce(); expect(first.trip.weather[0]!.checkedAt).toBe(now.toISOString());
+ now = new Date("2026-10-11T00:59:59Z");
+ await f.app.execute(owner, { ...f.command, baseRevision: 1, mutationId: f.crypto.id() }); expect(f.search).toHaveBeenCalledOnce();
+ now = new Date("2026-10-11T01:00:00Z");
+ await f.app.execute(owner, { ...f.command, baseRevision: 2, mutationId: f.crypto.id() }); expect(f.search).toHaveBeenCalledTimes(2);
+});

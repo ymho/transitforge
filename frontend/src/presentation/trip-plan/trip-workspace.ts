@@ -1,3 +1,5 @@
+import { createAutoTripWeather } from "../../usecases/trip-plan/auto-trip-weather";
+import { tripWeatherRefreshDue } from "@raiquora/trip/trip-weather";
 import { notifySaved } from "../shared/save-notification";
 import { confirmAction, requestText } from "../shared/app-dialog";
 import { openTripEditor } from "./trip-editor-dialog";
@@ -92,15 +94,16 @@ export function configureTripWorkspace(options: {
   heading.append(back, emblem, hero, notice, adoptionHelp);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   let metadataPending: Promise<void> = Promise.resolve();
-  const saveMetadata = (build: (current: Trip) => import("@raiquora/trip/trip").TripUpdateProposal): Promise<void> => {
+  const queueWrite = (work: (current: Trip) => Promise<void>): Promise<void> => {
     const session = controller.sessionId(), source = controller.source(), tripId = controller.current()?.id;
     const next = metadataPending.catch(() => {}).then(async () => {
       const current = controller.current();
       if (!current || current.id !== tripId || controller.sessionId() !== session || controller.source() !== source || !controller.canConfirm()) throw new Error("旅程が更新されました");
-      await controller.applyConfirmed(build(current));
+      await work(current);
     });
     metadataPending = next; return next;
   };
+  const saveMetadata = (build: (current: Trip) => import("@raiquora/trip/trip").TripUpdateProposal) => queueWrite(current => controller.applyConfirmed(build(current)));
   const memoExpanded = new Map<string, boolean>();
   const memoDrafts = new Map<string, { value: string; base?: string }>();
   const pendingCostEditors = new Map<string, { tripId: string; node: Element }>();
@@ -161,6 +164,13 @@ export function configureTripWorkspace(options: {
     if (!views.has(activeSession)) views.set(activeSession, { scroll: 0, chatScroll: 0, view: "chat" });
     return views.get(activeSession)!;
   };
+  const autoWeather = createAutoTripWeather({ current: () => controller.current(), identity: () => controller.source(),
+    enabled: () => viewState().view === "trip" && controller.loadState() === "loaded" && controller.canConfirm() && !controller.proposal() && controller.source()?.getRole?.() !== "viewer" && !!options.refreshWeather,
+    refresh: (trip, itemId) => queueWrite(async current => {
+      const item = current.items.find(item => item.id === itemId);
+      if (current.id !== trip.id || !item || !tripWeatherRefreshDue(current, item) || controller.proposal()) return;
+      await options.refreshWeather!(current, itemId);
+    }) });
   const show = (view: "chat" | "trip") => {
     const state = viewState();
     if (state.view === "trip") state.scroll = panel.scrollTop;
@@ -174,7 +184,7 @@ export function configureTripWorkspace(options: {
     for (const button of [chatButton, tripButton]) button.setAttribute("aria-pressed", String(button === (view === "trip" ? tripButton : chatButton)));
     panel.scrollTop = state.scroll;
     if (view === "chat") { options.messages.scrollTop = state.chatScroll; (state.focus?.isConnected ? state.focus : options.input).focus({ preventScroll: true }); }
-    else panel.focus({ preventScroll: true });
+    else { panel.focus({ preventScroll: true }); void autoWeather.trigger(); }
   };
   const chat = (prompt: string) => { show("chat"); options.ask(prompt); };
   const chatButton = control("会話", () => show("chat")), tripButton = control("旅程", () => show("trip"));
@@ -309,7 +319,6 @@ export function configureTripWorkspace(options: {
         if (card?.key !== key) {
           const node = renderWorkspaceCard(trip, item, controller, { entry, collapsed: collapsed.get(collapseKey) ?? true,
             collapse: (value) => collapsed.set(collapseKey, value), chat, report, memoDrafts, memoExpanded, saveMetadata,
-            ...(role !== "viewer" && options.refreshWeather ? { refreshWeather: options.refreshWeather } : {}),
             ...(personalOwner && options.changeItemDecision ? { changeItemDecision: options.changeItemDecision } : {}) }, evaluation.issues.filter((i) => i.itemIds.includes(item.id)));
           const pending = pendingCostEditors.get(entryKey);
           if (pending?.tripId === trip.id && controller.canConfirm()) node.querySelector(".trip-item-cost")?.append(pending.node);
@@ -363,6 +372,7 @@ export function configureTripWorkspace(options: {
       }
     }
     panel.scrollTop = scroll;
+    void autoWeather.trigger();
   };
   const canLeave = (): boolean | Promise<boolean> => {
     const editors = [...panel.querySelectorAll(".trip-cost-editor"), ...[...pendingCostEditors.values()].map(value => value.node)];
@@ -373,7 +383,7 @@ export function configureTripWorkspace(options: {
   const unsubscribe = controller.subscribe(render); render();
   return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,
     showPlan() { show("trip"); },
-    destroy() { unsubscribeSaved(); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
+    destroy() { autoWeather.destroy(); unsubscribeSaved(); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
 }
 
 /** Display the authored calendar day without using the device timezone. */

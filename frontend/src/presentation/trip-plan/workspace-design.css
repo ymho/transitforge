@@ -298,3 +298,23 @@ dialog.trip-order-editor :focus-visible { outline: 2px solid #37675f; outline-of
   & .trip-manual-transport-disclosure > summary { min-height: 28px; padding: 3px 0; font-size: 12px; color: var(--tf-muted); cursor: pointer; }
   & .trip-manual-transport-disclosure > .trip-workspace-manual-transport { margin-top: 4px; }
 }
+
+#app[data-primary-view]:not([data-primary-view="map"]) {
+  & .trip-item-booking, & .trip-item-cost { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 6px; align-items: center; margin: 10px 0; }
+  & .trip-item-field-label, & .trip-item-cost-label { color: var(--tf-muted); }
+  & .trip-item-booking .ds-control { grid-column: 2 / -1; width: 100%; }
+  & .trip-field-pencil { display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 26px; min-width: 26px; height: 26px; min-height: 26px; border: 0; background: transparent; color: var(--tf-muted); box-shadow: none; font-size: 16px; }
+  & .trip-field-pencil:hover { color: var(--tf-red); background: var(--tf-red-soft); }
+  & .trip-cost-editor { grid-column: 1 / -1; }
+  & .trip-stay-facts { grid-template-columns: 90px minmax(0, 1fr); gap: 8px 6px; }
+  & .trip-stay-photo { width: 100%; }
+  & .trip-timeline-content > header > .trip-workspace-item-decision { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; background: #fff1dc; color: #80551c; font-size: 10px; }
+  & .trip-timeline-content > header > .trip-workspace-item-decision[data-item-status="confirmed"] { background: #e4f2ec; color: #28654b; }
+  & .trip-timeline-content > header > .trip-workspace-item-decision[data-item-status="reconfirm"] { background: #fce9e8; color: #9b433d; }
+  & .trip-warning-box summary > span { margin-right: 0; }
+  & .trip-workspace-actions { justify-content: flex-end; gap: 14px; }
+  & .trip-workspace-actions button { padding: 2px 0; min-height: 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-decoration: underline; text-underline-offset: .25em; color: var(--tf-muted); }
+  & .trip-item-weather { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--tf-line); }
+  & .trip-item-weather p { margin: 4px 0; }
+  & .trip-research-date { display: block; margin-top: 6px; color: var(--tf-muted); }
+}

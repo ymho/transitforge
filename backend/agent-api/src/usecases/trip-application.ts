@@ -1,5 +1,5 @@
 import { refreshTripWeather } from "./refresh-trip-weather.js";
-import { currentTripWeather, tripWeatherTargets, validateTripWeather } from "@raiquora/trip/trip-weather";
+import { currentTripWeather, tripWeatherRefreshDue, tripWeatherTargets, validateTripWeather } from "@raiquora/trip/trip-weather";
 import { parseTripCommand, TripResourceError, tripApiVersion } from "../contracts/trip-api.js";
 import { requireTripPrincipal, type TripPrincipal, type TripRepository, type TripConversationReferences } from "../ports/trip-repository.js";
 import { applyTripProposal, TripRevisionConflict } from "@raiquora/trip/trip";
@@ -106,7 +106,7 @@ export class TripApplication {
           const item = current.items.find(item => item.id === command.itemId);
           if (!item || !tripWeatherTargets(current, item).length) throw new TripResourceError("invalid-input");
           const existing = currentTripWeather(current, item), now = this.clock.now();
-          const weather = existing && Date.parse(existing.validUntil) > now.getTime() && existing.forecasts.every(f => f.status !== "unavailable") ? existing : await refreshTripWeather(current, item, this.weatherProvider!, now, this.stationCatalog, () => this.clock.now(), this.accommodationProvider);
+          const weather = existing && !tripWeatherRefreshDue(current, item, now.getTime()) ? existing : await refreshTripWeather(current, item, this.weatherProvider!, now, this.stationCatalog, () => this.clock.now(), this.accommodationProvider);
           const values = [...(current.weather ?? []).filter(value => value.itemId !== item.id), weather];
           try { validateTripWeather(values, current); } catch { throw new TripResourceError("unavailable"); }
           return { ...current, weather: values };

@@ -45,10 +45,12 @@ const config = { issuer: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-no
   clientId: "startupfixture", loginOrigin: "https://startup.auth.ap-northeast-1.amazoncognito.com",
   scopes: ["openid", "email", "raiquora/user"], callbackUrls: [`${origin}/index.html`], logoutUrls: [`${origin}/`] };
 const key = `raiquora.auth.${config.clientId}.session`;
+const initialWeather = structuredClone(trips[0].weather);
 const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of [{ width: 360, height: 844 }, { width: 390, height: 844 }, { width: 768, height: 1000 }, { width: 1280, height: 900 }, { width: 1440, height: 900 }]) {
-    trips[0] = { ...trips[0], revision: 0, items: trips[0].items.map(({ bookingStatus: _booking, memo: _memo, ...item }) => item) };
+    trips[0] = { ...trips[0], revision: 0, weather: structuredClone(initialWeather), items: trips[0].items.map(({ bookingStatus: _booking, memo: _memo, ...item }) => item) };
+    const weatherRefreshes = [];
     const context = await browser.newContext({ viewport });
     const page = await context.newPage(), errors = [], apiCalls = [], dataCalls = [], failures = [], consoleErrors = [];
     page.on("requestfailed", request => failures.push(new URL(request.url()).pathname));
@@ -65,6 +67,13 @@ try {
       const path = new URL(route.request().url()).pathname;
       const command = route.request().postDataJSON();
       const trip = trips.find(t => t.id === command?.tripId || t.id === command?.conversationId);
+      if (path === "/api/trips/v1" && command?.operation === "refresh-weather") {
+        assert.equal(command.baseRevision, trip.revision);
+        weatherRefreshes.push(command.itemId);
+        const updated = { ...trip, revision: trip.revision + 1, weather: trip.weather.map(value => value.itemId === command.itemId ? { ...value, checkedAt: new Date().toISOString() } : value) };
+        trips[trips.findIndex(value => value.id === trip.id)] = updated;
+        return route.fulfill({ json: { version: "trip-api-v1", trip: updated, revision: updated.revision, mutationId: command.mutationId } });
+      }
       if (path === "/api/trips/v1" && command?.operation === "mutate") {
         assert.equal(command.baseRevision, trip.revision);
         const updated = { ...applyTripProposal(trip, command.proposal), revision: trip.revision + 1 };
@@ -202,7 +211,9 @@ try {
     if (await weatherCard.locator('.trip-item-toggle').getAttribute('aria-expanded') === 'false') await weatherCard.locator('.trip-item-toggle').click();
     assert.equal(await weatherCard.locator('.trip-item-weather p').count(), 2);
     assert.match(await weatherCard.locator('.trip-item-weather').textContent(), /出発.*雨.*到着.*雨/s);
-    assert.equal(await weatherCard.getByRole("button", { name: "天気を更新", exact: true }).isVisible(), true);
+    assert.equal(await weatherCard.getByRole("button", { name: "天気を更新", exact: true }).count(), 0);
+    assert.deepEqual(weatherRefreshes, ["rail"]);
+    await weatherCard.locator(".trip-item-booking .trip-field-pencil").click();
     assert.ok(await weatherCard.locator(".trip-item-booking select").evaluate(el => el.getBoundingClientRect().height) <= 34);
     await weatherCard.locator(".trip-item-booking select").selectOption("booked");
     await page.waitForFunction(() => document.querySelector('[data-item-id="rail"] .trip-item-booking select')?.value === "booked" && !document.querySelector('[data-item-id="rail"] .trip-item-booking select')?.disabled);
@@ -213,7 +224,7 @@ try {
     const memoField = weatherCard.locator(".trip-item-memo textarea");
     assert.equal(await weatherCard.locator(".trip-item-memo button").count(), 0);
     await memoField.fill("ブラウザからの自動保存メモ");
-    await weatherCard.locator(".trip-item-booking select").focus();
+    await weatherCard.locator(".trip-item-booking .trip-field-pencil").focus();
     await page.waitForFunction(() => document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.value === "ブラウザからの自動保存メモ" && !document.querySelector('[data-item-id="rail"] .trip-item-memo textarea')?.readOnly);
     assert.equal(trips[0].items[0].memo, "ブラウザからの自動保存メモ");
     await memoField.fill("自動保存メモを再編集");
