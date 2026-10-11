@@ -15,11 +15,11 @@ export interface JourneySearchTrace {
   [key: string]: unknown;
 }
 
-interface ServiceCall { stationName: string; arrivalTimeMinutes?: number; departureTimeMinutes?: number; }
+interface ServiceCall { stationName: string; stationKey?: string; arrivalTimeMinutes?: number; departureTimeMinutes?: number; }
 interface SearchService { serviceUid: string; trainNumber: string; serviceType: string; trainName: string; originStation: string; destinationStation: string; calls: ServiceCall[]; }
 interface DelayInfo { delayMinutes: number; delayStatus?: "observed" | "estimated"; delaySampleCount?: number; delayBasis?: string; }
 type NormalizedRequest = Required<Pick<JourneySearchRequest, "limit" | "maxTransfers" | "transferPace" | "rankingPreference">> & JourneySearchRequest;
-interface SearchContext { request: NormalizedRequest; servicesByStation: Map<string, SearchService[]>; stationTransferMinutes: Record<string, number>; defaultTransferMinutes: number; delays: Map<string, DelayInfo>; labels: Map<string, Array<{ arrival: number; departure: number }>>; reachableStationsByLeg: Array<Set<string>>; trace: JourneySearchTrace; }
+interface SearchContext { request: NormalizedRequest; destinationKey: string; servicesByStation: Map<string, Array<{ service: SearchService; from: number }>>; stationTransferMinutes: Record<string, number>; defaultTransferMinutes: number; delays: Map<string, DelayInfo>; labels: Map<string, Array<{ arrival: number; departure: number }>>; reachableStationsByLeg: Array<Set<string>>; trace: JourneySearchTrace; }
 
 export function searchJourneyIndex(request: JourneySearchRequest, input: JourneySearchRuntimeInput): JourneySearchResponse & { trace: JourneySearchTrace } {
   const strategy = input.index.schema_version === "direct-service-index-v1" ? "direct-service-index" : "multi-criteria-connection-scan";
@@ -34,21 +34,23 @@ export function searchJourneyIndex(request: JourneySearchRequest, input: Journey
     connectionsScanned: connectionCount, estimatedDelayTrips: 0, observedDelayTrips: 0,
     stationTransferRulesUsed: {}, selectedJourneys: [], ...constraintTrace(normalizedRequest),
   };
+  const destinationKey = requestStationKey(request.destinationStation, services);
+  const originKey = requestStationKey(request.originStation, services);
   const realtimeServices = realtimeAdjustedServices(eligible, input.operations, input.realtimeRouteTime, trace);
   const delayInfo = delaysFor(realtimeServices, input.delays ?? {}, input.operations, normalizedRequest.departureTimeMinutes);
   trace.estimatedDelayTrips = [...delayInfo.values()].filter(({ delayStatus }) => delayStatus === "estimated").length;
   trace.observedDelayTrips = [...delayInfo.values()].filter(({ delayStatus, delayMinutes }) => delayStatus === "observed" && delayMinutes > 0).length;
-  const servicesByStation = new Map<string, SearchService[]>();
-  for (const service of realtimeServices) for (const call of service.calls.slice(0, -1)) {
+  const servicesByStation = new Map<string, Array<{ service: SearchService; from: number }>>();
+  for (const service of realtimeServices) for (const [from, call] of service.calls.slice(0, -1).entries()) {
     if (call.departureTimeMinutes === undefined) continue;
-    const key = normalizeStation(call.stationName);
+    const key = call.stationKey ?? normalizeStation(call.stationName);
     const values = servicesByStation.get(key) ?? [];
-    if (!values.includes(service)) values.push(service);
+    values.push({ service, from });
     servicesByStation.set(key, values);
   }
-  const context: SearchContext = { request: normalizedRequest, servicesByStation, stationTransferMinutes, defaultTransferMinutes, delays: delayInfo, labels: new Map(), reachableStationsByLeg: reachableStations(realtimeServices, request.destinationStation, normalizedRequest.maxTransfers + 1), trace };
+  const context: SearchContext = { request: normalizedRequest, destinationKey, servicesByStation, stationTransferMinutes, defaultTransferMinutes, delays: delayInfo, labels: new Map(), reachableStationsByLeg: reachableStations(realtimeServices, destinationKey, normalizedRequest.maxTransfers + 1), trace };
   const found: JourneySearchResponse["journeys"] = [];
-  explore(context, normalizeStation(request.originStation), request.departureTimeMinutes, [], new Set(), found);
+  explore(context, originKey, request.departureTimeMinutes, [], new Set(), found);
   const journeys = pareto(found.filter((journey) =>
     requirementsSatisfied(journey.legs, normalizedRequest) &&
     (normalizedRequest.arrivalTimeLimitMinutes === undefined ||
@@ -63,10 +65,8 @@ function explore(context: SearchContext, station: string, availableAt: number, l
   if (legs.length > context.request.maxTransfers) return;
   const remainingLegs = context.request.maxTransfers + 1 - legs.length;
   if (!context.reachableStationsByLeg[remainingLegs]?.has(station)) return;
-  for (const service of context.servicesByStation.get(station) ?? []) {
+  for (const { service, from } of context.servicesByStation.get(station) ?? []) {
     if (used.has(service.serviceUid)) continue;
-    const from = service.calls.findIndex((call) => normalizeStation(call.stationName) === station && call.departureTimeMinutes !== undefined);
-    if (from < 0) continue;
     if (legs.length > 0 && station === "小田") { context.trace.labelsRejectedByNonUniqueStation += 1; continue; }
     const delay = context.delays.get(service.serviceUid) ?? { delayMinutes: 0 };
     const departure = service.calls[from]!.departureTimeMinutes! + delay.delayMinutes;
@@ -75,12 +75,15 @@ function explore(context: SearchContext, station: string, availableAt: number, l
     for (let to = from + 1; to < service.calls.length; to += 1) {
       const destination = service.calls[to]!;
       if (destination.arrivalTimeMinutes === undefined) continue;
+      const nextStation = destination.stationKey ?? normalizeStation(destination.stationName);
+      const reachesDestination = nextStation === context.destinationKey;
+      const nextRemainingLegs = context.request.maxTransfers - legs.length;
+      const canTransfer = legs.length < context.request.maxTransfers && context.reachableStationsByLeg[nextRemainingLegs]?.has(nextStation);
+      if (!reachesDestination && !canTransfer) continue;
       const leg = toLeg(service, from, to, delay);
       const next = [...legs, leg];
-      if (normalizeStation(destination.stationName) === normalizeStation(context.request.destinationStation)) found.push({ departureTimeMinutes: next[0]!.departureTimeMinutes, arrivalTimeMinutes: leg.arrivalTimeMinutes, transferCount: next.length - 1, legs: next });
-      const nextStation = normalizeStation(destination.stationName);
-      const nextRemainingLegs = context.request.maxTransfers + 1 - next.length;
-      if (next.length <= context.request.maxTransfers && context.reachableStationsByLeg[nextRemainingLegs]?.has(nextStation) && acceptLabel(context, destination.stationName, next)) explore(context, nextStation, leg.arrivalTimeMinutes, next, new Set([...used, service.serviceUid]), found);
+      if (reachesDestination) found.push({ departureTimeMinutes: next[0]!.departureTimeMinutes, arrivalTimeMinutes: leg.arrivalTimeMinutes, transferCount: next.length - 1, legs: next });
+      if (canTransfer && acceptLabel(context, nextStation, next)) explore(context, nextStation, leg.arrivalTimeMinutes, next, new Set([...used, service.serviceUid]), found);
     }
   }
 }
@@ -90,14 +93,14 @@ function reachableStations(
   destinationStation: string,
   maximumLegs: number,
 ): Array<Set<string>> {
-  const result = [new Set([normalizeStation(destinationStation)])];
+  const result = [new Set([destinationStation])];
   for (let leg = 1; leg <= maximumLegs; leg += 1) {
     const previous = result[leg - 1]!;
     const current = new Set(previous);
     for (const service of services) {
       let reachesPreviousRound = false;
       for (let index = service.calls.length - 1; index >= 0; index -= 1) {
-        const station = normalizeStation(service.calls[index]!.stationName);
+        const station = service.calls[index]!.stationKey ?? normalizeStation(service.calls[index]!.stationName);
         if (previous.has(station)) reachesPreviousRound = true;
         if (reachesPreviousRound) current.add(station);
       }
@@ -130,6 +133,7 @@ function toLeg(service: SearchService, from: number, to: number, delay: DelayInf
 export function scheduledSearchServices(index: Record<string, unknown>) {
   if (index.schema_version === "direct-service-index-v1" && isRecord(index.services)) {
     const services = Object.entries(index.services).flatMap(([id, value]) => isRecord(value) ? [serviceFromCalls(id, value)] : []);
+    identifyStations(services, index);
     return { services, defaultTransferMinutes: 5, stationTransferMinutes: {}, connectionCount: services.reduce((sum, item) => sum + Math.max(0, item.calls.length - 1), 0) };
   }
   if (index.schema_version !== "timetable-connection-index-v1" || !isRecord(index.trips) || !Array.isArray(index.connections)) throw new Error("指定日の接続インデックス形式が不正です。");
@@ -150,6 +154,7 @@ export function scheduledSearchServices(index: Record<string, unknown>) {
     for (const edge of edges) { const previous = calls.at(-1)!; if (normalizeStation(previous.stationName) === normalizeStation(edge.from_station)) previous.departureTimeMinutes = num(edge.departure_time_minutes); calls.push({ stationName: String(edge.to_station ?? ""), arrivalTimeMinutes: num(edge.arrival_time_minutes) }); }
     return [makeService(id, value, calls)];
   });
+  identifyStations(services, index);
   const stationTransferMinutes = isRecord(index.station_transfer_minutes) ? Object.fromEntries(Object.entries(index.station_transfer_minutes).map(([key, value]) => [key, nonNegative(value, 5)])) : {};
   return { services, defaultTransferMinutes: nonNegative(index.default_transfer_minutes, 5), stationTransferMinutes, connectionCount: connections.length };
 }
@@ -198,7 +203,7 @@ function requirementsSatisfied(legs: JourneySearchLeg[], request: JourneySearchR
 function trainNameMatches(actual: string, wanted: string): boolean { const a = normalize(actual); const w = normalize(wanted); return /[0-9]+号$/u.test(w) ? a === w : a.replace(/[0-9]+号$/u, "") === w; }
 function equal(a: string, b: string): boolean { return normalize(a) === normalize(b); }
 function normalize(value: unknown): string { return String(value ?? "").normalize("NFKC").replace(/\s+/gu, ""); }
-function normalizeStation(value: unknown): string { return normalize(value).replace(/駅$/u, ""); }
+function normalizeStation(value: unknown): string { return normalize(value).replace(/駅$/u, "").replaceAll("ヶ", "ケ"); }
 function pareto(values: JourneySearchResponse["journeys"]): JourneySearchResponse["journeys"] { const unique = [...new Map(values.map((journey) => [`${journey.departureTimeMinutes}:${journey.arrivalTimeMinutes}:${journey.legs.map(({ serviceUid }) => serviceUid).join(",")}`, journey])).values()]; return unique.filter((journey) => !unique.some((other) => other !== journey && other.arrivalTimeMinutes <= journey.arrivalTimeMinutes && other.departureTimeMinutes >= journey.departureTimeMinutes && other.transferCount <= journey.transferCount && (other.arrivalTimeMinutes < journey.arrivalTimeMinutes || other.departureTimeMinutes > journey.departureTimeMinutes || other.transferCount < journey.transferCount))); }
 function compareJourney(a: JourneySearchResponse["journeys"][number], b: JourneySearchResponse["journeys"][number], request: NormalizedRequest): number { const score = (journey: typeof a) => { const later = Math.max(0, journey.departureTimeMinutes - request.departureTimeMinutes); if (request.rankingPreference === "earliest-arrival") return [journey.arrivalTimeMinutes, journey.transferCount, -journey.departureTimeMinutes]; if (request.rankingPreference === "fewest-transfers") return [journey.transferCount, journey.arrivalTimeMinutes, -journey.departureTimeMinutes]; if (request.rankingPreference === "latest-departure") return [journey.arrivalTimeMinutes - later * .5 + journey.transferCount * 4, journey.arrivalTimeMinutes, journey.transferCount]; return [journey.arrivalTimeMinutes + journey.transferCount * 8 - later * .25, journey.arrivalTimeMinutes, journey.transferCount]; }; const l = score(a), r = score(b); return l[0]! - r[0]! || l[1]! - r[1]! || l[2]! - r[2]!; }
 const constraintNames = ["excludedServiceTypes", "excludedTrainNames", "excludedTrainNumbers", "excludedServiceUids", "requiredServiceTypes", "requiredTrainNames", "requiredTrainNumbers", "allowedServiceTypes"] as const;
@@ -207,3 +212,51 @@ function responseConstraints(request: JourneySearchRequest): Record<string, stri
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function num(value: unknown): number { if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("接続インデックス内の時刻形式が不正です。"); return value; }
 function nonNegative(value: unknown, fallback: number): number { return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback; }
+
+/** A catalog coordinate distinguishes homonyms. A train's adjacent calls must
+ * identify exactly one location; unresolved homonyms cannot be transfer points.
+ * Names of unique stations remain shared across lines, preserving interchanges. */
+function identifyStations(services: SearchService[], index: Record<string, unknown>): void {
+  const catalog = index.station_line_catalog;
+  const locations = new Map<string, Map<string, { label: string; neighbors: Set<string> }>>();
+  if (isRecord(catalog) && Array.isArray(catalog.lines)) for (const line of catalog.lines) {
+    if (!isRecord(line) || !Array.isArray(line.stations)) continue;
+    const stations = line.stations.filter(isRecord);
+    for (const [i, station] of stations.entries()) {
+      if (typeof station.name !== "string" || !Array.isArray(station.coordinate) || station.coordinate.length !== 2) continue;
+      const name = normalizeStation(station.name);
+      const coordinate = station.coordinate.map(Number);
+      if (coordinate.some(value => !Number.isFinite(value))) continue;
+      const groups = locations.get(name) ?? new Map();
+      // Coordinates for platforms on different lines may vary within the same
+      // station complex. A 250m walking interchange still uses transfer time.
+      const nearby = [...groups.keys()].find(key => {
+        const [longitude, latitude] = key.split(",").map(Number);
+        return Math.hypot((coordinate[0]! - longitude!) * Math.cos(latitude! * Math.PI / 180) * 111_320,
+          (coordinate[1]! - latitude!) * 111_320) <= 250;
+      });
+      const key = nearby ?? coordinate.map(value => value.toFixed(5)).join(",");
+      const group = groups.get(key) ?? { label: String(line.line), neighbors: new Set<string>() };
+      for (const other of [stations[i - 1], stations[i + 1]]) if (other) group.neighbors.add(normalizeStation(other.name));
+      groups.set(key, group); locations.set(name, groups);
+    }
+  }
+  const originalNames = new Map(services.map(service => [service, service.calls.map(call => normalizeStation(call.stationName))]));
+  for (const service of services) for (const [i, call] of service.calls.entries()) {
+    const name = normalizeStation(call.stationName), groups = locations.get(name);
+    call.stationKey = name;
+    if (!groups || groups.size < 2) continue;
+    const neighbors = [originalNames.get(service)![i - 1], originalNames.get(service)![i + 1]].filter((value): value is string => !!value);
+    const matches = [...groups].filter(([, group]) => neighbors.some(neighbor => group.neighbors.has(neighbor)));
+    if (matches.length === 1) {
+      const [key, group] = matches[0]!;
+      call.stationName = `${call.stationName}（${group.label}）`;
+      call.stationKey = `${name}@${key}`;
+    } else call.stationKey = `${name}@unresolved:${service.serviceUid}:${i}`;
+  }
+}
+
+function requestStationKey(name: string, services: SearchService[]): string {
+  const keys = new Set(services.flatMap(service => service.calls.filter(call => normalizeStation(call.stationName) === normalizeStation(name)).map(call => call.stationKey ?? normalizeStation(call.stationName))));
+  return keys.size === 1 && ![...keys][0]!.includes("@unresolved:") ? [...keys][0]! : normalizeStation(name);
+}

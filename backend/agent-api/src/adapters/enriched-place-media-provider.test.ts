@@ -165,3 +165,14 @@ function evidence(provider: string) {
     confidence: "observed" as const,
   };
 }
+
+it("adds discovery photos through the photo Port without replacing the POI identity or facts", async () => {
+  const place = { providerPlaceId: "mapbox.poi", name: "城崎温泉", sourceUrl: "https://identity.example/poi", latitude: 35.6, longitude: 134.8, openingHoursStatus: "unknown" as const,
+    sources: [{ provider: "mapbox", label: "Mapbox", url: "https://identity.example/poi", role: "identity" as const }] };
+  const provider = new EnrichedPlaceMediaProvider({ search: async () => availableExternalInformation({ places: [place] }, [evidence("mapbox")], new Date("2026-08-30T00:00:00Z")) },
+    { search: async () => { throw new Error("identity enrichment is unnecessary for a photo read"); } }, () => new Date("2026-08-30T00:00:00Z"), undefined,
+    { searchPhotos: async target => { expect(target.providerPlaceId).toBe("mapbox.poi"); return availableExternalInformation({ images: [{ url: "https://imgs.search.brave.com/photo.jpg", descriptionUrl: "https://travel.example/kinosaki", attribution: "Travel", hotlinkAllowed: true }] }, [evidence("brave-image-search")], new Date("2026-08-30T00:00:00Z")); } });
+  const result = await provider.search({ query: "城崎温泉" });
+  expect(result.data?.places[0]).toMatchObject({ ...place, image: { attribution: "Travel" } });
+  expect(result.data?.places[0]?.sourceUrl).toBe(place.sourceUrl);
+});

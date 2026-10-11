@@ -1,4 +1,4 @@
-import { gunzipSync } from "node:zlib";
+import { gunzip } from "node:zlib";
 
 import type { JsonObject } from "../contracts/agent-request.js";
 import type { JourneyDataRepository, JourneyIndexKind } from "../ports/journey-data.js";
@@ -13,6 +13,7 @@ export interface S3JourneyDataOptions {
   indexPrefix: string;
   snapshotBucket?: string;
   snapshotKey?: string;
+  stationCatalog?: import("../ports/station-catalog-repository.js").StationCatalogRepository;
 }
 
 export class S3JourneyDataRepository implements JourneyDataRepository {
@@ -30,8 +31,9 @@ export class S3JourneyDataRepository implements JourneyDataRepository {
       if (cached?.etag === ETag) return cached.value;
       const { Body } = await this.client.getObject({ Bucket: this.options.indexBucket, Key: key });
       if (!(Body instanceof Uint8Array)) throw new Error("missing body");
-      const value: unknown = JSON.parse(gunzipSync(Body).toString("utf8"));
+      const value: unknown = JSON.parse((await new Promise<Buffer>((resolve, reject) => gunzip(Body, (error, data) => error ? reject(error) : resolve(data)))).toString("utf8"));
       if (!isRecord(value) || value.schema_version !== schema) throw new Error("invalid schema");
+      if (this.options.stationCatalog) value.station_line_catalog = await this.options.stationCatalog.load();
       this.cache.clear(); this.cache.set(key, { etag: ETag, value }); return value;
     } catch { throw new Error("指定日の検索インデックスを読み込めません。"); }
   }

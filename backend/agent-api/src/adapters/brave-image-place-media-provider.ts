@@ -33,7 +33,15 @@ export class BraveImagePlaceMediaProvider implements PlaceMediaProvider {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
+  async searchPhotos(place: PlaceMedia): Promise<ExternalTravelInformation<{ images: NonNullable<PlaceMedia["images"]> }>> {
+    const context = place.administrativeAreas?.filter(area => ["locality", "region"].includes(area.kind)).map(area => area.name).join(" ") ?? "";
+    const result = await this.searchFor({ query: `${place.name} ${context}`.trim(), limit: 8 }, place.name);
+    return { ...result, data: result.data ? { images: result.data.places[0]?.images ?? [] } : undefined };
+  }
   async search(query: PlaceMediaQuery): Promise<ExternalTravelInformation<PlaceMediaSearchResult>> {
+    return this.searchFor(query);
+  }
+  private async searchFor(query: PlaceMediaQuery, photoName?: string): Promise<ExternalTravelInformation<PlaceMediaSearchResult>> {
     const text = query.query.normalize("NFKC").replace(/\s+/gu, " ").trim().slice(0, 300);
     if (!text) {
       return failedExternalInformation({
@@ -70,7 +78,7 @@ export class BraveImagePlaceMediaProvider implements PlaceMediaProvider {
           retryable: response.status !== 401 && response.status !== 403,
         });
       }
-      const images = webImages(await response.json()).slice(0, 8);
+      const images = webImages(await response.json(), photoName).slice(0, 8);
       if (images.length === 0) {
         return failedExternalInformation({
           code: "invalid_request",
@@ -124,10 +132,12 @@ function imageSearchUrl(query: string): string {
   return `${SEARCH_ENDPOINT}?${params}`;
 }
 
-function webImages(value: unknown): WebImage[] {
+function webImages(value: unknown, photoName?: string): WebImage[] {
   if (!isRecord(value) || !Array.isArray(value.results)) return [];
   return value.results.flatMap((raw): WebImage[] => {
     if (!isRecord(raw) || !isRecord(raw.thumbnail)) return [];
+    const normalize = (value: string) => value.normalize("NFKC").replace(/\s+/gu, "").toLocaleLowerCase("ja");
+    if (photoName && !normalize(clean(raw.title, 500)).includes(normalize(photoName))) return [];
     const imageUrl = safePublicHttpsUrl(raw.thumbnail.src);
     const sourcePageUrl = safePublicHttpsUrl(raw.url);
     if (!imageUrl || !sourcePageUrl) return [];

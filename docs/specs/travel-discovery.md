@@ -173,3 +173,11 @@ AWS公式参照（2026-09-23確認）:
 - [Retrieve metadata filtering](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_KnowledgeBaseVectorSearchConfiguration.html)
 - [Rerank permissions](https://docs.aws.amazon.com/bedrock/latest/userguide/rerank-prereq.html)
 - [Rerank API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_Rerank.html)
+
+目的地の説明回答でも、選択された出典ページと完全一致するcurrentな説明Evidenceの写真カードを公開する。
+読了ページは説明の根拠、Brave画像検索は代表写真の発見、Mapbox POIは地図上の地点同定を所有する。
+代表写真の掲載元が公式ページと一致することを地点IDの照合条件に混ぜない。
+`PlacePhotoProvider`は写真だけを返し、地点ID・座標・名称・説明・営業時間を上書きしない。
+画像タイトルに対象名がないものや既存の写真選別に反するものは公開しない。
+目的地説明は読了ページURLをその説明カードのsource identityとして保持できるが、
+そのカードをMapbox POIや採用可能な地点へ昇格させない。モデルによる写真URL提出を許可しない。

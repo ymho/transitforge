@@ -191,9 +191,27 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
       // Publish all eligible hotels from the selected search, rather than making
       // model prose a second candidate/price store. Never mix searches or revisions.
       const publicAccommodationPresentation = accommodationComparison(selected, claims, context);
+      const selectedPages = new Set([...selected.values()].flatMap(item => typeof item.facts.sourceUrl === "string" ? [item.facts.sourceUrl] : []));
+      const cards: PublicPlaceCard[] = [];
+      for (const item of context.evidence) {
+        if (!selected.has(item.id) && !(typeof item.facts.sourceUrl === "string" && selectedPages.has(item.facts.sourceUrl))) continue;
+        let card: PublicPlaceCard;
+        try { card = placeCard(item, context.effectiveIntent); }
+        catch (error) { if (error instanceof AgentV2ReplyError) continue; throw error; }
+        if (!card.photo || cards.some(previous => previous.photo?.url === card.photo?.url && previous.title === card.title)) continue;
+        selected.set(item.id, structuredClone(item)); cards.push(card);
+        for (const [field, statement, transform] of [["sourceTitle", card.title, "identity"], ["sourceExcerpt", card.description, "bounded_quote"]] as const) {
+          proof.references.push({ evidenceId: item.id, field });
+          claims.push({ id: `v2-answer-place-${claims.length + 1}`, statement, kind: "fact", evidenceIds: [item.id], bindings: [{
+            evidenceId: item.id, fieldPath: `facts.${field}`, subjectRef: card.placeRef, applicabilityScope: item.observation!.scopeKey, transform }] });
+        }
+        if (cards.length === 4) break;
+      }
+      const publicPlacePresentation = cards.length ? parsePublicPlacePresentation({ version: publicPlacePresentationVersion, cards }) : undefined;
       if (!parts.length && publicAccommodationPresentation) parts.push("宿泊候補をパネルで比較できます。");
       return { text: parts.join("\n\n") + followUp(), evidence: [...selected.values()], claims, proof,
-        ...(publicAccommodationPresentation ? { publicAccommodationPresentation } : {}) };
+        ...(publicAccommodationPresentation ? { publicAccommodationPresentation } : {}),
+        ...(publicPlacePresentation ? { publicPlacePresentation } : {}) };
     }
   }
 }

@@ -8,14 +8,20 @@ import type { JourneyDataRepository } from "../ports/journey-data.js";
 const constraintNames = ["excludedServiceTypes", "excludedTrainNames", "excludedTrainNumbers", "excludedServiceUids", "requiredServiceTypes", "requiredTrainNames", "requiredTrainNumbers", "allowedServiceTypes"] as const;
 export const journeySearchContractVersion = "journey-search-v1";
 
-export function createJourneySearchOperation(repository: JourneyDataRepository, options: { onVerifiedResult?: (result: import("@raiquora/journey/journey-search-service").JourneySearchResponse, index: JsonObject, retrievedAt: string) => void; now?: () => Date; log?: (event: string, fields: Record<string, unknown>) => void } = {}): AgentOperation {
+export function createJourneySearchOperation(repository: JourneyDataRepository, options: { executor?: import("../ports/journey-search-executor.js").JourneySearchExecutor; onVerifiedItems?: (result: import("@raiquora/journey/journey-search-service").JourneySearchResponse, items: import("@raiquora/trip/trip").ItineraryItem[]) => void; onVerifiedResult?: (result: import("@raiquora/journey/journey-search-service").JourneySearchResponse, index: JsonObject, retrievedAt: string) => void; now?: () => Date; log?: (event: string, fields: Record<string, unknown>) => void } = {}): AgentOperation {
   const now = options.now ?? (() => new Date()); const log = options.log ?? (() => undefined);
   return async (value, context) => {
     const request = validatedJourneyRequest(value);
     const realtime = await currentRealtime(repository, request, now());
     const index = await repository.loadIndex(request.serviceDate, request.maxTransfers! <= 1 ? "direct-service" : "connection");
     let result;
-    try { result = searchJourneyIndex(request, { index, operations: realtime.operations, realtimeRouteTime: realtime.routeTime }); }
+    try {
+      const input = { index, operations: realtime.operations, realtimeRouteTime: realtime.routeTime };
+      if (options.executor) {
+        const searched = await options.executor.execute(request, input, now().toISOString(), context.signal);
+        result = searched.result; options.onVerifiedItems?.(result, searched.items);
+      } else result = searchJourneyIndex(request, input);
+    }
     catch (error) { throw new RequestError(503, error instanceof Error ? error.message : "経路を検索できません。"); }
     options.onVerifiedResult?.(result, index, now().toISOString());
     const realtimeMetadata = realtime.metadata;

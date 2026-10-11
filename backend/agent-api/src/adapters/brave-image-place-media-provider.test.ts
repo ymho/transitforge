@@ -100,3 +100,12 @@ describe("BraveImagePlaceMediaProvider", () => {
     expect(result.failure?.retryable).toBe(false);
   });
 });
+
+it("returns only photos for the requested name and does not claim a POI identity", async () => {
+  const fetcher = vi.fn(async (_url: string) => Response.json({ results: ["城崎温泉の風景", "別の温泉"].map((title, i) => ({ title, url: `https://tourism.example/${i}`, thumbnail: { src: `https://imgs.search.brave.com/${i}.jpg`, width: 600, height: 400 } })) }));
+  const provider = new BraveImagePlaceMediaProvider({ fetch: fetcher }, { load: async () => ({ apiKey: "secret" }) });
+  const result = await provider.searchPhotos({ providerPlaceId: "mapbox.poi", name: "城崎温泉", sourceUrl: "https://identity.example/place", openingHoursStatus: "unknown", administrativeAreas: [{ kind: "locality", name: "豊岡市" }] });
+  expect(result.data?.images).toHaveLength(1);
+  expect(new URL(String(fetcher.mock.calls[0]![0])).searchParams.get("q")).toBe("城崎温泉 豊岡市");
+  expect(JSON.stringify(result.data)).not.toMatch(/providerPlaceId|latitude|longitude/);
+});

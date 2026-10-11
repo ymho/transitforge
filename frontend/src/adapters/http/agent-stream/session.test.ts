@@ -163,3 +163,15 @@ it("retains both cost and condition review proposals without promoting either to
   s.fetcher.mockResolvedValueOnce(new Response(progress + frame(2, { type: "final", status: "completed", response: "案を確認", tripCostProposal, tripUpdateProposal }) + 'event: done\ndata: {"v":1,"runId":"run","seq":3}\n\n', { headers: { "content-type": "text/event-stream" } }));
   expect(await s.session.start("概算して").send()).toEqual({ text: "案を確認", tripCostProposal, tripUpdateProposal }); s.session.dispose();
 });
+
+it("recovers a lost final through an exact read and can immediately switch to another trip", async () => {
+  const s = setup();
+  s.fetcher.mockResolvedValueOnce(new Response(progress, { headers: { "content-type": "text/event-stream" } }))
+    .mockResolvedValueOnce(Response.json({ version: "conversation-api-v1", state: "completed", result: { status: "completed", response: "保存された回答" } }));
+  expect(await s.session.start("経路検索").send()).toEqual({ text: "保存された回答" });
+  expect(s.fetcher.mock.calls[1]![0]).toBe("/api/conversations/v1");
+  expect(JSON.parse(String(s.fetcher.mock.calls[1]![1]?.body))).toMatchObject({ operation: "turn", turnId: "turn-1", conversationId: "conversation-a" });
+  s.refs.conversationId = "conversation-b"; s.refs.tripId = "trip-b"; s.session.contextChanged();
+  const pending = s.session.start("別旅程の相談").send(); await vi.waitFor(() => expect(s.fetcher).toHaveBeenCalledTimes(3)); s.complete();
+  expect(await pending).toEqual({ text: "保存された回答" }); s.session.dispose();
+});

@@ -139,7 +139,7 @@ export class SseFrameParser {
   }
 }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
-function validEvent(event: unknown): event is AgentTurnEvent {
+export function validEvent(event: unknown): event is AgentTurnEvent {
   if (!record(event)) return false;
   if (event.type === "progress") return agentProgressPhases.includes(event.phase as typeof agentProgressPhases[number]) && Object.keys(event).every(k => ["type", "phase"].includes(k));
   if (event.type === "intent_accepted") {

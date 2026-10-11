@@ -14,3 +14,13 @@ describe("S3JourneyDataRepository", () => {
     expect(getObject).toHaveBeenCalledTimes(1);
   });
 });
+
+it("uses the station catalog in the same immutable search/selection input and refuses missing identity data", async () => {
+  const index = { schema_version: "timetable-connection-index-v1", trips: {}, connections: [] };
+  const client = { headObject: async () => ({ ETag: "v1" }), getObject: async () => ({ Body: gzipSync(JSON.stringify(index)) }) };
+  const catalog = { schema_version: "station-line-catalog-v1" as const, source: "fixture", lines: [] };
+  const repository = new S3JourneyDataRepository(client, { indexBucket: "bucket", indexPrefix: "graph", stationCatalog: { load: async () => catalog } });
+  expect((await repository.loadIndex("2026-10-12", "connection")).station_line_catalog).toEqual(catalog);
+  const missing = new S3JourneyDataRepository(client, { indexBucket: "bucket", indexPrefix: "graph", stationCatalog: { load: async () => { throw new Error("missing"); } } });
+  await expect(missing.loadIndex("2026-10-12", "connection")).rejects.toThrow("検索インデックスを読み込めません");
+});

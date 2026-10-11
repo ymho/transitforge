@@ -125,3 +125,13 @@ describe("V2 place candidate publication", () => {
     expect(() => parsePublicPlacePresentation({ ...parsed, cards: [{ ...parsed.cards[0], imageUrl: "https://example.org/image" }] })).toThrow();
   });
 });
+
+it("publishes a photo on an explanation answer only when its exact source page is selected", () => {
+  const photo = place("garden", "庭園", "池を散策する庭園です。", true);
+  const other = place("other", "別の庭園", "無関係な説明です。", true);
+  const result = admitAgentV2Reply({ kind: "answer", commentary: "庭園を散策できます。", references: [{ evidenceId: photo.id, field: "sourceExcerpt" }] },
+    { executionId: "v2-cards", evidence: [photo, other], effectiveIntent: intent });
+  expect(validateEvidenceAndClaims(result.evidence, result.claims).valid).toBe(true);
+  expect(result.publicPlacePresentation?.cards.map(card => card.title)).toEqual(["庭園"]);
+  expect(result.publicPlacePresentation?.cards[0]?.photo?.sourceUrl).toBe("https://photos.example.org/garden");
+});

@@ -473,7 +473,12 @@ export async function executeExternalTravelTool(
       }];
     }).slice(0, 6) : [];
     if (candidates.length === 0) throw new Error("Webページで確認できる施設候補がありません。");
-    const outputs = await Promise.all(candidates.map(({ name }) => dependencies.searchPlaceMedia!({ query: name, limit: 3 })));
+    const searches = new Map<string, Promise<unknown>>();
+    const outputs = await Promise.all(candidates.map(({ name }) => {
+      const key = name.normalize("NFKC").trim();
+      const search = searches.get(key) ?? dependencies.searchPlaceMedia!({ query: name, limit: 3 });
+      searches.set(key, search); return search;
+    }));
     const identityObservations: Array<{ name: string; status: "unresolved"; reason: "missing-source-binding" }> = [];
     const places = outputs.flatMap((output, index) => {
       if (!isRecord(output) || !isRecord(output.result) || !isRecord(output.result.data) || !Array.isArray(output.result.data.places)) return [];
@@ -495,7 +500,7 @@ export async function executeExternalTravelTool(
     });
     const evidence = [
       ...state.webPages.evidence,
-      ...outputs.flatMap((output) => isRecord(output) && isRecord(output.result) && Array.isArray(output.result.evidence) ? output.result.evidence : []),
+      ...[...new Set(outputs)].flatMap((output) => isRecord(output) && isRecord(output.result) && Array.isArray(output.result.evidence) ? output.result.evidence : []),
     ] as ExternalTravelInformation<PlaceMediaSearchResult>["evidence"];
     const resolvedPlaces = uniquePlaces(places) as unknown as PlaceMediaSearchResult["places"];
     const result = availableExternalInformation<PlaceMediaSearchResult>({ places: resolvedPlaces }, evidence);

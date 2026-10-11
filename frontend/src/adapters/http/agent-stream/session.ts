@@ -1,3 +1,4 @@
+import { recoverConversationTurn } from "./recovery";
 import type { AssistantTurnView } from "../../../domain/assistant-turn-view";
 import type { AuthSession } from "../../../usecases/auth/auth-session";
 import { ApiAuthenticationError } from "../../../usecases/auth/api-authentication-error";
@@ -87,6 +88,14 @@ export function createConversationStreamSession(options: {
                 });
                 break;
               } catch (error) {
+                if (error instanceof AgentStreamError && measurement.runId && current() &&
+                    (measurement.abortReason === "idle_timeout" || ["missing_final", "incomplete_stream", "stream_error"].includes(error.message))) {
+                  options.diagnostics?.record(error, measurement, request.turnId, diagnosticEpoch);
+                  const recovered = await recoverConversationTurn({ token, conversationId: request.conversationId, turnId: request.turnId,
+                    signal: controller.signal, isCurrent: current, fetcher: options.fetcher, deadlineMs: Math.max(1, 270_000 - (performance.now() - began)) });
+                  if (!current()) throw new AgentStreamError("stale_generation");
+                  if (recovered) { final = projectAssistantTurn(recovered); onEvent?.(recovered); break; }
+                }
                 if (!(error instanceof AgentStreamError) || error.message !== "http_401" || attempt !== 0) throw error;
                 const refreshed = await options.auth.refreshAccessToken(token);
                 if (!current()) throw new AgentStreamError("stale_generation");
