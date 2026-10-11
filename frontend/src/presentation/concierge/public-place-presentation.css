@@ -59,3 +59,17 @@
   line-height: 1.7;
   white-space: pre-line;
 }
+
+.public-place-illustration {
+  min-width: 0;
+  width: 100%;
+  margin-block: .65rem 1rem;
+}
+.public-place-illustration > .public-place-photo {
+  margin: 0;
+  border-radius: .75rem;
+}
+.public-place-illustration .public-place-photo figcaption {
+  padding: .3rem 0;
+  background: var(--product-surface);
+}

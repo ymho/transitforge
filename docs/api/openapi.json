@@ -4235,6 +4235,15 @@
           },
           "photo": {
             "$ref": "#/components/schemas/PublicPlacePhoto"
+          },
+          "photoPlacement": {
+            "description": "Illustration only; the optional heading identifies its position in the answer.",
+            "type": "object",
+            "properties": {
+              "sectionHeading": {
+                "type": "string"
+              }
+            }
           }
         },
         "required": [

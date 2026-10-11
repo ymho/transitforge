@@ -96,21 +96,32 @@ export function productionServerTools(options: {
       }
       // A read destination page is its own source identity. Discovery photos do
       // not resolve a Mapbox POI and never provide coordinates or factual prose.
-      if (name === "explore_destination" && resolvedPhotoCount(resolvedOutput) === 0 && options.destinationPhotos && typeof input.destination === "string") {
-        const sourcePages = pages.filter(page => normalizedIncludes(page.title ?? "", input.destination as string));
-        const page = sourcePages[0];
-        if (page) {
-          const place = { providerPlaceId: page.url, name: input.destination, sourceUrl: page.url,
-            summary: page.text.slice(0, 1_200), sources: [{ provider: "web-page", label: page.title ?? input.destination, url: page.url, role: "identity" as const }],
+      if (name === "explore_destination" && options.destinationPhotos && typeof input.destination === "string") {
+        const destination = input.destination;
+        const interests = Array.isArray(input.interests) ? input.interests.filter((item): item is string => typeof item === "string" && !!item.trim()) : [];
+        const needsDestinationPhoto = resolvedPhotoCount(resolvedOutput) === 0;
+        const sourcePages = pages.filter(page => normalizedIncludes(page.title ?? "", destination));
+        const queries = new Map<string, ReturnType<NonNullable<typeof options.destinationPhotos>["searchPhotos"]>>();
+        const media = await Promise.all(sourcePages.map(async source => {
+          // A topic must occur in the read page's title; a generic destination
+          // image must not masquerade as a photo of its food or specific activity.
+          const topic = interests.find(interest => normalizedIncludes(source.title ?? "", interest));
+          if (!topic && !needsDestinationPhoto) return [];
+          const place = { providerPlaceId: source.url, name: destination, sourceUrl: source.url,
+            summary: source.text.slice(0, 1_200), sources: [{ provider: "web-page", label: source.title ?? destination, url: source.url, role: "identity" as const }],
             openingHoursStatus: "unknown" as const };
           try {
-            const photos = await options.destinationPhotos.searchPhotos(place);
-            if (photos.status === "available" && photos.freshness === "fresh" && photos.data?.images.length) resolvedOutput = { ...resolvedOutput, destinationMedia: availableExternalInformation({ places: sourcePages.map(source => ({ ...place,
-              providerPlaceId: source.url, sourceUrl: source.url, summary: source.text.slice(0, 1_200),
-              sources: [{ provider: "web-page", label: source.title ?? input.destination as string, url: source.url, role: "identity" as const }],
-              image: photos.data!.images[0], images: photos.data!.images })) }, state.webPages!.evidence.filter(e => sourcePages.some(source => source.url === e.sourceUrl))) };
-          } catch { placeEnrichmentFailed = true; }
-        }
+            const key = topic ?? "";
+            if (!queries.has(key)) queries.set(key, options.destinationPhotos!.searchPhotos(place, topic));
+            const photos = await queries.get(key)!;
+            if (photos.status !== "available" || photos.freshness !== "fresh" || !photos.data?.images.length) return [];
+            return [{ ...place, name: topic ? (source.title ?? destination).slice(0, 160) : destination,
+              image: photos.data.images[0], images: photos.data.images }];
+          } catch { placeEnrichmentFailed = true; return []; }
+        }));
+        const places = media.flat();
+        if (places.length) resolvedOutput = { ...resolvedOutput, destinationMedia: availableExternalInformation({ places },
+          state.webPages!.evidence.filter(e => places.some(place => place.sourceUrl === e.sourceUrl))) };
       }
       const verifiedCandidateCount = Math.max(pages.length, resolvedPlaceCount(resolvedOutput));
       const photoCandidateCount = resolvedPhotoCount(resolvedOutput);

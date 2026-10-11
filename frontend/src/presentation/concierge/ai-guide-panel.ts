@@ -540,6 +540,7 @@ export function resolveAssistantMessage(
     ...(response.publicAccommodationPresentation ? [`宿${response.publicAccommodationPresentation.cards.length}件`] : []),
   ];
   const text = visibleAssistantText(response.text);
+  let animatedCopy: HTMLElement | undefined;
   if (candidateGroups.length && !response.publicAccommodationPresentation) {
     renderAssistantCopy(item, `${candidateGroups.join("・")}を表示しました。パネルで比較できます。`, false);
     // Keep explanations available without duplicating the comparison in the main reading flow.
@@ -548,7 +549,7 @@ export function resolveAssistantMessage(
       details.className = "candidate-reply-details"; summary.textContent = "比較の補足";
       details.append(summary, renderAssistantMarkdown(text)); item.append(details);
     }
-  } else renderAssistantCopy(item, text, options.animate ?? true);
+  } else animatedCopy = renderAssistantCopy(item, text, false);
   if (response.delivery && response.delivery.status !== "full") item.append(renderDeliveryStatus(response.delivery));
   if (response.semanticReceipt) item.append(renderSemanticReceipt(response.semanticReceipt));
   const combined = response.publicJourneyPresentation && response.publicPlanPresentation &&
@@ -567,7 +568,11 @@ export function resolveAssistantMessage(
   if (response.publicAccommodationPresentation) item.append(renderPublicAccommodationPresentation(response.publicAccommodationPresentation,
     combinedAccommodation ? response.publicPlanPresentation : undefined));
   if (response.publicGroundRoutePresentation) item.append(renderPublicGroundRoutePresentation(response.publicGroundRoutePresentation, options.onGroundRoute));
-  if (response.publicPlacePresentation) item.append(renderPublicPlacePresentation(response.publicPlacePresentation, options.placeMemoSelection));
+  if (response.publicPlacePresentation) {
+    const places = renderPublicPlacePresentation(response.publicPlacePresentation, options.placeMemoSelection, animatedCopy);
+    if (places.childElementCount) item.append(places);
+  }
+  if (animatedCopy && (options.animate ?? true)) typewriteText(animatedCopy);
   appendConversationFeedback(item);
   item.scrollIntoView({ block: "nearest" });
 }
@@ -604,12 +609,13 @@ export function semanticReceiptLabel(receipt: PublicSemanticReceipt): string {
   return accepted.length ? `${prefix}: ${accepted.join("・")}` : prefix;
 }
 
-function renderAssistantCopy(item: HTMLElement, text: string, animate: boolean): void {
+function renderAssistantCopy(item: HTMLElement, text: string, animate: boolean): HTMLElement {
   const copy = document.createElement("div");
   copy.className = "ai-guide-message-copy";
   copy.append(renderAssistantMarkdown(text));
   item.replaceChildren(copy);
   if (animate) typewriteText(copy);
+  return copy;
 }
 
 function appendConversationFeedback(item: HTMLLIElement): void {
