@@ -1,3 +1,4 @@
+import { bindTimelineFromAnchor } from "@raiquora/trip/itinerary-schedule";
 import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 import { createTrip, type ItineraryItem } from "@raiquora/trip/trip";
 import type { ItineraryCandidateSet } from "@raiquora/trip/itinerary-candidates";
@@ -12,15 +13,21 @@ export function projectCandidatePresentation(set: ItineraryCandidateSet, unknown
     const ordered = variant.timeline.itemOrder.map(id => byId.get(id)!);
     if (ordered.some(item => item.evidenceRefs.length || item.sourceCandidateRef && !set.selectionItems?.some(source => source.id === item.sourceCandidateRef) || item.sourcePlaceRef) ||
         variant.assessmentRefs.length || variant.discoveryRefs?.length) throw new Error("Unverified candidate references");
-    const items: ItineraryItem[] = ordered.map(item => item.sourceCandidateRef ? { ...structuredClone(set.selectionItems!.find(source => source.id === item.sourceCandidateRef)!), id: item.componentId } : ({ id: item.componentId, title: item.title, schedule: item.schedule,
+    const items: ItineraryItem[] = ordered.map(item => item.sourceCandidateRef ? { ...structuredClone(set.selectionItems!.find(source => source.id === item.sourceCandidateRef)!), id: item.componentId, ...(item.logicalDayId && variant.timeline.dayOrder.includes(item.logicalDayId) ? { logicalDayId: item.logicalDayId } : {}), ...(item.plannedTiming ? { plannedTiming: item.plannedTiming } : {}) } : ({ id: item.componentId, title: item.title, schedule: item.schedule,
       ...(item.logicalDayId ? { logicalDayId: item.logicalDayId } : {}),
       ...(item.kind === "transport" ? { type: "transport" as const, detail: { status: "unresolved" as const } } :
-        item.kind === "stay" ? { type: "stay" as const, selection: { status: "unselected" as const } } :
+        item.kind === "stay" ? { type: "stay" as const, selection: { status: "unselected" as const }, ...(item.plannedTiming ? { plannedTiming: item.plannedTiming } : {}) } :
           { type: "activity" as const, category: "other" as const }) }));
     // Reuse the Domain's calendar, cross-day and unscheduled projection rules.
     // The ephemeral value exists only for projection and is never persisted.
-    const timeline = variant.timeline.dayOrder.length ? { version: 1 as const,
+    let timeline: import("@raiquora/trip/itinerary-schedule").TripTimeline | undefined = variant.timeline.dayOrder.length ? { version: 1 as const,
       logicalDays: variant.timeline.dayOrder.map((id, index) => ({ id, label: `${index + 1}日目` })), calendarBindings: [] } : undefined;
+    const anchor = items.find(item => item.logicalDayId && (item.schedule.type === "fixed" || item.schedule.type === "day" && item.schedule.timeZone));
+    if (timeline && anchor?.logicalDayId) {
+      const s = anchor.schedule;
+      if (s.type === "fixed") timeline = bindTimelineFromAnchor(timeline, anchor.logicalDayId, s.startAt.at.slice(0, 10), s.startAt.timeZone);
+      else if (s.type === "day" && s.timeZone) timeline = bindTimelineFromAnchor(timeline, anchor.logicalDayId, s.date, s.timeZone);
+    }
     const daily = projectDailyItinerary(createTrip(set.contextRef.tripId!, variant.label, set.issuedAt, items,
       undefined, "inspiration", undefined, timeline), { limit: 90 });
     if (!daily.coverage.complete) throw new Error("Candidate display exceeds day limit");
@@ -31,7 +38,7 @@ export function projectCandidatePresentation(set: ItineraryCandidateSet, unknown
         role: entry.role === "possible-window" ? "possible" : entry.role })) }));
     if (daily.unscheduled.length) days.push({ dayRef: `${variant.id}:unscheduled`, label: "日程未定", status: "planned",
       entries: daily.unscheduled.map(entry => ({ entryRef: entry.entryKey, itemRef: entry.sourceItemId, role: "possible" })) });
-    return { variantId: variant.id, label: variant.label, dayOrder: days.map(day => day.dayRef), days,
+    return { variantId: variant.id, label: variant.label, ...(variant.comparisonOnly ? { comparisonOnly: true as const } : {}), dayOrder: days.map(day => day.dayRef), days,
       items: ordered.map(item => ({ itemRef: item.componentId, sourceRef: item.sourceCandidateRef ?? item.componentId, title: item.title, kind: item.kind,
         timing: item.schedule.type === "relative" ? "day" : item.schedule.type, evidenceRefs: [], photoRefs: [] })),
       unknowns: [...unknowns], cost: { status: "unknown" }, workload: { status: "unknown" },

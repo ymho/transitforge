@@ -120,3 +120,17 @@ it("a restored AI replacement only writes on explicit confirmation and cannot be
   expect(f.controller.current()?.items).toEqual(before.items);
   expect(() => f.controller.preview(proposal)).toThrow();
 });
+
+it("keeps the same fetched trip visible while refreshing, with confirmation gated", async () => {
+  let finish!: (value: Trip) => void;
+  const get = vi.fn().mockResolvedValueOnce(trip).mockReturnValueOnce(new Promise<Trip>(resolve => { finish = resolve; }));
+  const source = createServerTripWorkspaceSource(trip.id, { get });
+  await source.refresh(); const refreshing = source.refresh();
+  expect(source.getLoadState!()).toBe("loading");
+  expect(source.getCurrentTrip()).toEqual(trip);
+  const controller = createTripWorkspaceController("refresh"); controller.attach("refresh", source);
+  expect(controller.canConfirm()).toBe(false);
+  finish({ ...trip, revision: 1 }); await refreshing;
+  expect(source.getCurrentTrip()?.revision).toBe(1);
+  expect(source.getLoadState!()).toBe("loaded");
+});

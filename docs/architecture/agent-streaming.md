@@ -46,3 +46,5 @@ LambdaのINIT_REPORT、許可したRuntimeエラー分類、60秒単位のInvoca
 追加診断では同じ19:12の60秒窓にThrottles=3を確認し、Runtime初期化エラーは0だった。
 入口のLambda呼び出し制限を直接原因として扱う。REPORT後の実行枠解放が遅れた理由は未確定であり、
 予約同時実行数2の対策と混同しない。CDはデプロイ先の予約同時実行数を読み、2であることも検証する。
+
+Browser consumerは検証済みfinalとdoneのフレームを受け取った時点で送信中を解除する。socketのEOFやcancel Promiseの完了を待たない。done前の切断・未完了frame・順序違反は成功と扱わない。相談履歴の末尾が利用者発言だけの場合は回答未取得を表示し、自動で再送しない。

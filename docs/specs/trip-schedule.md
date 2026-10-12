@@ -6,7 +6,7 @@ ZonedInstantは明示offsetとIANA zoneを検証し、端末timezoneや今日で
 宿のoptional plannedTimingは利用者の予定時刻で、宿泊spanをfixedへ変えない。日別表示は同じitem IDから導出する。
 一次根拠: `modules/trip/domain/itinerary-schedule.ts` / `itinerary-schedule.test.ts`、
 `modules/trip/domain/trip.ts`、[相対時間・構造](trip-schedule.md)と[最新UI差分](trip-workspace.md)。
-保存はServer CAS。日時の不明値は推測で補わない。
+保存はServer CAS。日時の不明値は推測で補わない。国内旅行案の明示時刻はdraft_itineraryのstartTime/endTimeと今回発言のtimeQuoteから保存する。日付は受理済み条件または保存済み宿泊日・calendar binding、zoneは日本国内サービスのAsia/Tokyo policyから解決する。日付または根拠が欠ける場合は拒否し、タイトルの時刻を保存時刻と扱わない。選択済み宿の到着・出発予定はplannedTimingだけを更新し、施設・宿泊日・採用日時を保持する。
 
 保存・認可は[Trip保存](trip-persistence.md)、型契約は[Trip lifecycle](trip-model.md)を参照する。
 

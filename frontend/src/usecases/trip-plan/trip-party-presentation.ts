@@ -13,6 +13,17 @@ export function tripPartyLabel(party: TripParty): string {
     c.ageGroup !== undefined ? ageLabels[c.ageGroup] : undefined].filter(Boolean).join("・") || "年齢未確認");
   return [adults, ages.length ? `子ども${ages.length}人（${ages.join("、")}）` : ""].filter(Boolean).join(" + ");
 }
+/** Share accepted composition across labels and editors; never invent a split. */
+export function acceptedTripParty(request: TripRequest): TripParty | undefined {
+  const accepted = request.partialConditions?.find(({ target, scope }) => target === "party_size" &&
+    (scope.type === "conversation" || scope.type === "trip"));
+  if (accepted?.value.kind === "party") {
+    const { kind: _kind, ...fields } = accepted.value;
+    return { ...fields, source: "user" };
+  }
+  return accepted ? undefined : request.party;
+}
+
 /** Read-only projection, no separate party state or guessed profile defaults. */
 export function tripPartyView(trip: Pick<Trip, "request" | "items">) {
   validateTripRequest(trip.request, trip.items);
@@ -23,6 +34,8 @@ export function tripPartyView(trip: Pick<Trip, "request" | "items">) {
     const { kind: _kind, ...fields } = accepted.value;
     return { text: tripPartyLabel({ ...fields, source: "user" }), source: "user" as const };
   }
+  if (accepted?.value.kind === "quantity" && accepted.value.unit === "people")
+    return { text: `${accepted.value.amount}人（大人・子どもの内訳未確認）`, source: "user" as const };
   if (!request.party) return undefined;
   const assumption = request.assumptions.find((a) => a.id === request.party!.assumptionId);
   return { text: `${assumption?.status === "unconfirmed" ? "⚠ 仮置き: " : ""}${tripPartyLabel(request.party)}`,

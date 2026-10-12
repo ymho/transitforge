@@ -1,3 +1,4 @@
+import { tripCalendarDates } from "./trip-calendar-dates";
 import type { Trip, ItineraryItem } from "@raiquora/trip/trip";
 import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
 
@@ -29,7 +30,8 @@ export function tripConsultationTopics(trip: Trip): TripConsultationTopic[] {
   const result: TripConsultationTopic[] = [];
   const projection = projectDailyItinerary(trip, { limit: 90 });
   const add = (item: ItineraryItem, label: string, intent: string, section: TripConsultationTopic["section"] = "undecided") => {
-    const date = projection.days.find(day => day.entries.some(entry => entry.sourceItemId === item.id))?.localDate;
+    const day = projection.days.find(day => day.entries.some(entry => entry.sourceItemId === item.id));
+    const date = day?.localDate ?? (day?.logicalDayId ? tripCalendarDates(trip).get(day.logicalDayId) : undefined);
     const position = trip.items.findIndex(value => value.id === item.id) + 1;
     result.push({ label, context: `${date ?? "日付未定"}・${position}番目`, itemId: item.id, section,
       prompt: `相談対象：旅程「${trip.title}」の${position}番目の予定「${item.title}」${date ? `（${date}）` : ""}。\n${intent}` });
@@ -47,7 +49,7 @@ export function tripConsultationTopics(trip: Trip): TripConsultationTopic[] {
         add(item, `${item.title}：宿泊先を選び直す`, "この宿泊予定の宿泊先を選び直したい。新しい宿を採用するまで元の宿を残してください", "review");
       }
     } else if (item.category === "free-time") add(item, `${item.title}：観光・過ごし方を決める`, "この自由時間の前後の予定を踏まえて、観光や過ごし方を相談したい");
-    else if (!item.place) add(item, `${item.title}：行き先を決める`, "この予定の行き先を相談して決めたい");
+    else if (!item.place) add(item, `${item.title}：場所・訪問時刻を確認する`, "この予定の名称を踏まえて、具体的な場所と訪問時刻を確認したい。名前が決まっていても、所在地・営業時間は未確認です");
     else if (item.schedule.type !== "fixed") add(item, `${item.title}：訪問時刻を決める`, "前後の予定を踏まえて、この予定の訪問時刻を決めたい");
   }
   for (const day of projection.days) {

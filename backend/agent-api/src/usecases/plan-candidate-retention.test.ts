@@ -108,3 +108,48 @@ describe("canonical candidate retention and deterministic presentation", () => {
     expect(f.publish).not.toHaveBeenCalled();
   });
 });
+
+it("persists explicit activity clock times as schedule data, rejecting invented times", async () => {
+  const { createTrip, applyTripProposal } = await import("@raiquora/trip/trip");
+  const { trustedCandidateItem } = await import("./retained-candidate-item.js");
+  const { proposePlanAdoption } = await import("@raiquora/trip/itinerary-candidates");
+  const trip = createTrip(scope.tripId, "倉敷", "2026-10-03T00:00:00Z", [], { constraints: [{ id: "dates", source: "user", strength: "soft",
+    scope: { type: "trip" }, requirement: { type: "dates", start: { earliest: "2026-10-31", latest: "2026-10-31" } } }], assumptions: [] });
+  let saved: ItineraryCandidateSet | undefined;
+  const app = new PlanCandidateRetentionApplication({ put: async (_owner, value) => { saved = value; }, get: async () => saved }, () => new Date("2026-10-03T00:00:00Z"));
+  const tools = new AgentToolRegistry();
+  registerPlanCandidateRetentionTool(tools, app, { ...scope, baseTripRevision: 0, currentTrip: trip, userRequest: "13時から15時まで街歩き" }, vi.fn());
+  const input = { variants: [{ label: "街歩き", dayCount: 1, items: [{ kind: "activity", title: "倉敷美観地区", day: 1,
+    startTime: "13:00", endTime: "15:00", timeQuote: "13時から15時まで" }] }], unknowns: [] };
+  expect(await tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: true });
+  const proposal = proposePlanAdoption({ candidateSet: saved!, variantId: "plan-1", currentTrip: trip, requestFingerprint: saved!.contextRef.requestFingerprint,
+    now: saved!.issuedAt, trustedFactory: item => trustedCandidateItem(item, saved!.id, "plan-1") }).proposal;
+  expect(applyTripProposal(trip, proposal).items[0]?.schedule).toMatchObject({ type: "fixed", startAt: { at: "2026-10-31T13:00:00+09:00" }, endAt: { at: "2026-10-31T15:00:00+09:00" } });
+  input.variants[0]!.items[0]!.startTime = "12:00";
+  expect(await tools.execute("draft_itinerary", input, { executionId: scope.executionId })).toMatchObject({ ok: false });
+});
+
+it("keeps a comparison at its requested horizon and prevents its adoption", async () => {
+  const f = fixture([], () => 3);
+  const value = { variants: [{ label: "日帰り比較", dayCount: 1, comparisonOnly: true, items: [{ kind: "activity", title: "美術館", day: 1 }] }], unknowns: [] };
+  expect(await f.tools.execute("draft_itinerary", value, { executionId: scope.executionId })).toMatchObject({ ok: true });
+  const presentation = f.publish.mock.calls[0]![0].presentation;
+  expect(presentation.candidates[0]).toMatchObject({ comparisonOnly: true, days: [{ label: "1日目" }] });
+  expect(presentation.candidates[0].days).toHaveLength(1);
+});
+
+it("compares unchanged saved activities without omitting them as duplicate additions", async () => {
+  const { createTrip } = await import("@raiquora/trip/trip");
+  const current = createTrip(scope.tripId, "比較前", "2026-10-03T00:00:00Z", [{ id: "visit", type: "activity", title: "美術館", category: "sightseeing",
+    schedule: { type: "relative", dayId: "day-1" } }], undefined, undefined, undefined, { version: 1, logicalDays: [{ id: "day-1" }], calendarBindings: [] });
+  let saved: ItineraryCandidateSet | undefined;
+  const app = new PlanCandidateRetentionApplication({ put: async (_owner, value) => { saved = value; }, get: async () => saved }, () => new Date("2026-10-03T00:00:00Z"));
+  const tools = new AgentToolRegistry(); registerPlanCandidateRetentionTool(tools, app, { ...scope, baseTripRevision: current.revision, currentTrip: current, baseItemIds: ["visit"], baseDayIds: ["day-1"] }, vi.fn());
+  expect(await tools.execute("draft_itinerary", { variants: [{ label: "比較", dayCount: 1, comparisonOnly: true,
+    items: [{ kind: "activity", title: "美術館", day: 1 }] }], unknowns: [] }, { executionId: scope.executionId })).toMatchObject({ ok: true });
+  expect(saved?.variants[0]?.items).toHaveLength(1);
+  expect(saved?.variants[0]?.retainedBaseItemIds).toEqual([]);
+  const { proposePlanAdoption } = await import("@raiquora/trip/itinerary-candidates");
+  expect(() => proposePlanAdoption({ candidateSet: saved!, variantId: "plan-1", currentTrip: current, requestFingerprint: saved!.contextRef.requestFingerprint,
+    now: saved!.issuedAt, trustedFactory: vi.fn() })).toThrow("Comparison-only");
+});

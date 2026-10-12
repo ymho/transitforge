@@ -139,3 +139,13 @@ it.each([
   expect(options.measurement.error).toBe(code);
   expect(options.fetcher).toHaveBeenCalledOnce();
 });
+
+it("settles after final+done even when the socket and cancellation never finish", async () => {
+  const response = new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode(progress + final + done)); },
+    cancel() { return new Promise(() => {}); },
+  }), { headers: { "content-type": "text/event-stream" } });
+  const options = setup(response);
+  await consumeAgentStream(options);
+  expect(options.onEvent).toHaveBeenLastCalledWith({ type: "final", status: "completed", response: "日本語の回答" });
+});

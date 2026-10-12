@@ -15,7 +15,7 @@ import { renderWorkspaceProposal } from "./trip-workspace-proposal";
 import { element, control } from "./trip-workspace-elements";
 import { tripCoverImage } from "../shared/trip-cover";
 import { travelIcon } from "../shared/travel-icon";
-import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
+import { tripDateLabel, tripDateMismatchNotice } from "../../usecases/trip-plan/trip-header-presentation";
 import { renderTripPartyControl } from "./trip-party-control";
 import { renderTripTravelMode } from "./trip-travel-mode";
 import type { InTripContextSnapshot } from "@raiquora/trip/in-trip-context";
@@ -96,7 +96,7 @@ export function configureTripWorkspace(options: {
     });
   });
   consult.dataset.tripConsultation = "";
-  const adoptionHelp = element("p", "trip-workspace-notice");
+  const adoptionHelp = element("p", "trip-workspace-notice"), dateNotice = element("p", "trip-workspace-notice"); dateNotice.setAttribute("role", "status");
   adoption.classList.add("trip-confirm-button");
   const identity = element("div", "trip-header-identity");
   const folioBadge = element("p", "trip-header-eyebrow"); folioBadge.hidden = true;
@@ -122,7 +122,7 @@ export function configureTripWorkspace(options: {
   const coverContent = element("div", "trip-header-content"); coverContent.append(identity, headerActions);
   const hero = element("div", "trip-header-hero"); hero.append(cover, coverContent);
   const topRow = element("div", "trip-detail-top-row"); topRow.append(back, management);
-  heading.append(topRow, emblem, hero, notice, adoptionHelp);
+  heading.append(topRow, emblem, hero, notice, adoptionHelp, dateNotice);
   const retry = control("旅程を再読み込み", () => { void controller.source()?.retry?.(); });
   let metadataPending: Promise<void> = Promise.resolve();
   const queueWrite = (work: (current: Trip) => Promise<void>): Promise<void> => {
@@ -322,7 +322,8 @@ export function configureTripWorkspace(options: {
     summary.textContent = tripDateLabel(trip);
     const folioKind = options.folioKind?.(trip) ?? (["editor", "viewer"].includes(controller.source()?.getRole?.() ?? "") ? "shared" : undefined);
     folioBadge.textContent = folioKind === "official" ? "公式しおり" : folioKind === "shared" ? "共有しおり" : ""; folioBadge.hidden = !folioKind;
-    const nextPartyKey = JSON.stringify([trip.id, trip.revision, trip.request.party]);
+    dateNotice.textContent = tripDateMismatchNotice(trip) ?? ""; dateNotice.hidden = !dateNotice.textContent;
+    const nextPartyKey = JSON.stringify([trip.id, trip.revision, trip.request.party, trip.request.partialConditions]);
     if (partyKey !== nextPartyKey) { partyKey = nextPartyKey; party.replaceChildren(renderTripPartyControl(trip, controller, report)); }
     const ids = new Set<string>(), dates = new Set<string>();
     const dayLabels = new Map<string, string>();

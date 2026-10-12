@@ -637,7 +637,7 @@ configureTravelProfile(document, profileUi);
 loadingScreen.complete();
 const consultationScreen = configureConsultationScreen(aiGuidePanel, aiGuideMessages, aiGuideForm, aiGuideInput, {
   read: () => ({ sessionId: tripWorkspaceController.sessionId(), trip: tripWorkspaceController.current(),
-    unavailable: tripWorkspaceController.blocksLegacy() && !tripWorkspaceController.current(),
+    unavailable: tripWorkspaceController.loadState() === "unavailable",
     viewer: tripWorkspaceController.source()?.getRole?.() === "viewer" }),
   profile: () => profileUi.current()?.profile, subscribe: (listener) => {
     const left = tripWorkspaceController.subscribe(listener), right = profileUi.subscribe(listener), draft = conversationUi.subscribe(listener);

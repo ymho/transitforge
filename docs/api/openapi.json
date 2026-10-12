@@ -3716,6 +3716,10 @@
           "variantId": {
             "type": "string"
           },
+          "comparisonOnly": {
+            "const": true,
+            "type": "boolean"
+          },
           "label": {
             "type": "string"
           },
@@ -10625,6 +10629,10 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 80
+              },
+              "children": {
+                "description": "Count only; age/meal/bedding pricing categories remain unverified.",
+                "type": "number"
               },
               "adults": {
                 "type": "integer",

@@ -27,7 +27,7 @@ export function renderPublicPlanPresentation(value: PublicPlanPresentation, opti
     panel.append(dayList);
     if (candidate.unknowns.length) panel.append(text(`未確認: ${candidate.unknowns.join("・")}`));
     if (candidate.scenarioRefs.length) { const scenario = text(`耐性評価: ${candidate.scenarioRefs.length}シナリオ（仮定に基づく比較）`); scenario.className = "public-plan-scenarios"; panel.append(scenario); }
-    if (value.candidateSetRef.kind === "candidate-set-ref" && value.target) {
+    if (!candidate.comparisonOnly && value.candidateSetRef.kind === "candidate-set-ref" && value.target) {
       const candidateSetRef = value.candidateSetRef, target = value.target;
       const adopt = document.createElement("button"); adopt.type = "button"; adopt.className = "public-plan-adopt"; adopt.textContent = "この案を採用する";
       adopt.addEventListener("click", () => adopt.dispatchEvent(new CustomEvent("raiquora:preview-plan-adoption", { bubbles: true, detail: {

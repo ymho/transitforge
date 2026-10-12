@@ -19,7 +19,7 @@ export function previewPlanAdoption(event: Event, options: {
     confirm.addEventListener("click", () => {
       if (!options.isCurrent()) { status.textContent = "対象が変わりました。最新の旅程で確認し直してください。"; return; }
       confirm.disabled = true;
-      void result.confirm().then(() => { status.textContent = ""; notifySaved(status.ownerDocument, "選んだ案を旅程へ保存しました。"); })
+      void result.confirm().then(() => { status.textContent = "選んだ案を旅程へ保存しました。"; notifySaved(status.ownerDocument, "選んだ案を旅程へ保存しました。"); })
         .catch(() => { confirm.disabled = false; status.textContent = "保存できませんでした。最新の旅程で案を作り直してください。"; });
     });
     status.replaceChildren(summary, confirm);

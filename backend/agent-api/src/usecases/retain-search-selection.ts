@@ -21,15 +21,28 @@ export function searchSelectionDraft(items: readonly ItineraryItem[], trip: Trip
   if (!focused && !reselection && kind === "transport" && trip.items.some(item =>
     item.type === "transport" && item.detail.status === "selected")) return undefined;
   const dated = !focused && !reselection && slots.length > 1 ? datedSearchSelectionTarget(items, slots, trip) : undefined;
-  if (!focused && !reselection && slots.length > 1 && !dated) return undefined;
+  const choices = !focused && !reselection && slots.length > 1 && !dated
+    ? slots.filter(slot => datedSearchSelectionTarget(items, [slot], trip)) : [];
+  if (!focused && !reselection && slots.length > 1 && !dated && !choices.length) return undefined;
+  if (choices.length * items.length > 20) return undefined;
   const target = focused ?? reselection ?? dated ?? slots[0];
-  const logicalDayId = target?.logicalDayId ?? (target?.schedule.type === "relative" ? target.schedule.dayId : undefined);
+  // A first dated selection establishes ordered days from that verified span.
+  const first = items[0]!.schedule;
+  const zone = first.type === "fixed" ? first.startAt.timeZone : first.type === "day" ? first.timeZone : undefined;
+  const start = first.type === "fixed" ? first.startAt.at.slice(0, 10) : first.type === "day" ? first.date : undefined;
+  const end = first.type === "day" ? first.endDate ?? start : start;
+  const count = start && end ? Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1 : 0;
+  const dayOrder = !trip.items.length && !trip.timeline && zone && count > 0 && count <= 90
+    ? Array.from({ length: count }, (_, index) => `day-${index + 1}`) : [];
   return { selectionItems: structuredClone(items), coverage: { coveredScopes: ["取得済み候補の旅程への採用"], omittedScopes: [], complete: true },
-    variants: items.map((item, index) => ({ id: `option-${index + 1}`, label: item.title, timeline: { dayOrder: [], itemOrder: ["selection-item"] },
+    variants: (choices.length ? choices : [target]).flatMap((choice, choiceIndex) => items.map((item, index) => {
+      const logicalDayId = choice?.logicalDayId ?? (choice?.schedule.type === "relative" ? choice.schedule.dayId : dayOrder[0]);
+      return { id: choices.length ? `target-${choiceIndex + 1}-option-${index + 1}` : `option-${index + 1}`,
+      label: choices.length ? `${item.title}（「${choice!.title}」を差し替え）` : item.title, timeline: { dayOrder, itemOrder: ["selection-item"] },
       items: [{ componentId: "selection-item", kind: item.type, title: item.title, schedule: structuredClone(item.schedule),
         ...(logicalDayId ? { logicalDayId } : {}),
-        sourceCandidateRef: item.id, evidenceRefs: [], ...(target ? { baseItemId: target.id } : {
+        sourceCandidateRef: item.id, evidenceRefs: [], ...(choice ? { baseItemId: choice.id } : {
           placement: trip.items.length ? { afterRef: focusedItemId ?? trip.items.at(-1)!.id } : { atBeginning: true as const } }) }],
       assumptionRefs: [], assessmentRefs: [], changedComponentIds: ["selection-item"], removedBaseItemIds: [],
-      retainedBaseItemIds: trip.items.filter(value => value.id !== target?.id).map(value => value.id) })) };
+      retainedBaseItemIds: trip.items.filter(value => value.id !== choice?.id).map(value => value.id) }; })) };
 }

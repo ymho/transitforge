@@ -49,7 +49,8 @@ export function createServerTripWorkspaceSource(tripId: string, client: Pick<Ser
   const refresh = async () => {
     checkSession();
     const request = ++generation;
-    current = undefined; reservations = undefined; checklist = undefined; loadState = "loading"; publish();
+    // Keep the same owner/trip fetched view during refresh; writes remain gated by loading.
+    reservations = undefined; checklist = undefined; loadState = "loading"; publish();
     try {
       const trip = await client.get(tripId);
       checkSession();

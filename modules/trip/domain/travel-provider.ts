@@ -6,6 +6,8 @@ export interface TravelProviderSearch {
   checkInDate: string;
   checkOutDate: string;
   adults: number;
+  /** Count only; age/meal/bedding pricing categories remain unverified. */
+  children?: number;
   limit: number;
 }
 

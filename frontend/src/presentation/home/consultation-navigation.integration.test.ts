@@ -38,7 +38,7 @@ it("uses the same consultation surface from Trip, returns to Trip, and makes the
   expect(app.dataset.primaryView).toBe("trip"); expect(ask).not.toHaveBeenCalled();
   document.querySelector<HTMLButtonElement>(".trip-consultation-options button")!.click();
   expect(app.dataset.primaryView).toBe("chat"); expect(app.dataset.consultationMode).toBe("conversation");
-  expect(window.history.state.tripId).toBe(trip.id); expect(ask).toHaveBeenCalledWith("相談対象：旅程「出雲旅行」の1番目の予定「出雲大社」。\nこの予定の行き先を相談して決めたい");
+  expect(window.history.state.tripId).toBe(trip.id); expect(ask).toHaveBeenCalledWith("相談対象：旅程「出雲旅行」の1番目の予定「出雲大社」。\nこの予定の名称を踏まえて、具体的な場所と訪問時刻を確認したい。名前が決まっていても、所在地・営業時間は未確認です");
   expect(controller.uiFocus()).toEqual({ itemId: "shrine" });
   expect(controller.sessionId()).toBe("trip-conversation");
   workspace.show("trip"); expect(app.dataset.primaryView).toBe("trip");

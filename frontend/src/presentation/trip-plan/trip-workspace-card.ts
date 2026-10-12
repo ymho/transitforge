@@ -209,12 +209,14 @@ export function renderWorkspaceCard(trip: Trip, item: ItineraryItem, controller:
     const form = element("form", "trip-workspace-manual-transport");
     const modeLabel = element("label", "", "交通手段"), mode = element("select");
     for (const value of nonRailTransportModes) mode.append(option(transportModeLabel(value), value));
+    const unset = option("交通手段を選択", ""); unset.disabled = true; mode.prepend(unset);
+    mode.value = item.detail.mode && item.detail.mode !== "rail" ? item.detail.mode : ""; mode.required = true;
     modeLabel.append(mode);
     const fromLabel = element("label", "", "出発地"), from = element("input"); from.required = true; from.maxLength = 200; fromLabel.append(from);
     const toLabel = element("label", "", "到着地"), to = element("input"); to.required = true; to.maxLength = 200; toLabel.append(to);
     const submit = element("button", "", "確定"); submit.type = "submit";
     const fields = element("div", "trip-manual-transport-fields"); fields.append(modeLabel, fromLabel, toLabel);
-    form.append(fields, element("p", "trip-workspace-copy", "便・時刻・所要時間と予約は未確認です。"), submit);
+    form.append(fields, element("p", "trip-workspace-copy", "鉄道は相談から列車を検索して選んでください。手入力では便・時刻・所要時間と予約は未確認です。"), submit);
     form.addEventListener("submit", async event => { event.preventDefault();
       const current = controller.current();
       if (!current || current.id !== trip.id || current.revision !== trip.revision) { options.report("旅程が更新されました。最新の予定から編集し直してください。"); return; }

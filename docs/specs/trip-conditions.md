@@ -77,7 +77,9 @@ Strands Adapterは、同じtargetを以前呼んだという理由で成功を�
 3. Proposalをturn leaseへstageし、Conversation・Trip・base revision・binding・accepted operationの一致を検証する。
 4. Trip Applicationはdurable reservationを取得して既存Trip mutation receipt/CASで`Trip.request`を更新する。
 5. Trip commit後に、採用したfact/tombstoneだけをoverlayから消費し、無関係な条件を保持する。
-6. Trip保存とWorking State完了後だけ、公開receiptと「今回の相談条件（反映済み）」を返す。
+6. 後続調査が上限や実行失敗になっても、receiptから検証できる独立したrequest更新は既存CASでTripへ反映できる。検索結果や未確認の予定は保存しない。同じturnの再試行はdurable adoptionとTrip revisionを読んで既に反映した操作を確認し、古いoverlayを再適用しない。
+
+Trip保存とWorking State完了後だけ、公開receiptと「今回の相談条件（反映済み）」を返す。
 
 Trip commit前の失敗ではreservationを解放する。Trip commit後に応答またはWorking State完了だけが失われた場合は、
 同じmutation IDの再送でTrip receiptをread-backし、状態完了だけを冪等に再開する。Tripを巻き戻したり、

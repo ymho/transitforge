@@ -11,8 +11,9 @@ export function providerSearchFrom(value: JsonObject): TravelProviderSearch {
   if (nights <= 0) throw new RequestError(400, "checkOutDateはcheckInDateより後にしてください。");
   if (nights > 31) throw new RequestError(400, "宿泊日数は31泊以下にしてください。");
   const adults = boundedInteger(value.adults ?? 1, 1, 10, "adultsは1から10にしてください。");
+  const children = value.children === undefined ? undefined : boundedInteger(value.children, 0, 10, "childrenは0から10にしてください。");
   const limit = boundedInteger(value.limit ?? 10, 1, 10, "limitは1から10にしてください。");
-  return { destination: destination.trim(), checkInDate, checkOutDate, adults, limit };
+  return { destination: destination.trim(), checkInDate, checkOutDate, adults, ...(children === undefined ? {} : { children }), limit };
 }
 
 function calendarDate(value: unknown, field: string): string {

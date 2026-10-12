@@ -21,6 +21,7 @@ export interface PublicPlanPresentation {
 
 export interface PublicPlanCandidate {
   readonly variantId: string;
+  readonly comparisonOnly?: true;
   readonly label: string;
   readonly dayOrder: readonly string[];
   readonly days: readonly { readonly dayRef: string; readonly label: string; readonly entries: readonly { readonly entryRef: string; readonly itemRef: string; readonly role: "start" | "continue" | "end" | "visit" | "possible" }[]; readonly status: "planned" | "free" | "not-retrieved" }[];
@@ -83,8 +84,8 @@ export function bindPublicPlanTarget(value: PublicPlanPresentation, target: { tr
 }
 
 function parseCandidate(value: unknown): PublicPlanCandidate {
-  if (!record(value) || !only(value, ["variantId", "label", "dayOrder", "days", "items", "unknowns", "workload", "cost", "comparisonAssessmentRefs", "scenarioRefs"]) ||
-      !reference(value.variantId) || typeof value.label !== "string" || !value.label.trim() || value.label.length > 200 || !references(value.dayOrder, 90) ||
+  if (!record(value) || !only(value, ["variantId", "comparisonOnly", "label", "dayOrder", "days", "items", "unknowns", "workload", "cost", "comparisonAssessmentRefs", "scenarioRefs"]) ||
+      value.comparisonOnly !== undefined && value.comparisonOnly !== true || !reference(value.variantId) || typeof value.label !== "string" || !value.label.trim() || value.label.length > 200 || !references(value.dayOrder, 90) ||
       !Array.isArray(value.days) || value.days.length > 90 || !Array.isArray(value.items) || value.items.length > 500 || !references(value.unknowns, 100) ||
       !references(value.comparisonAssessmentRefs, 100) || !references(value.scenarioRefs, 100)) throw new Error("Invalid public plan candidate");
   const items = value.items.map((item) => {
