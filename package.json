@@ -13,8 +13,8 @@
     "build": "npm run typecheck:tools && npm run build --workspace @raiquora/frontend && npm run build --workspace @raiquora/agent-api",
     "typecheck:tools": "tsc --noEmit -p tsconfig.tools.json",
     "bundle:check": "node tools/check_bundle_budget.mjs dist/assets",
-    "test": "TMPDIR=/tmp vitest run frontend/src backend/agent-api/src modules tools/agent-transport/stream-contract.test.ts tools/strands-v2-live-evaluation.test.ts",
-    "test:tools": "vitest run --root . tools/agent-transport/stream-contract.test.ts tools/strands-v2-live-evaluation.test.ts",
+    "test": "TMPDIR=/tmp vitest run frontend/src backend/agent-api/src modules tools/agent-transport/stream-contract.test.ts tools/strands-v2-live-evaluation.test.ts tools/agent-transport/interactive-trip-session.test.ts tools/agent-transport/evaluation-authentication.test.ts tools/agent-transport/evaluation-login.test.ts tools/agent-transport/evaluation-state-reader.test.ts",
+    "test:tools": "vitest run --root . tools/agent-transport/stream-contract.test.ts tools/strands-v2-live-evaluation.test.ts tools/agent-transport/interactive-trip-session.test.ts tools/agent-transport/evaluation-authentication.test.ts tools/agent-transport/evaluation-login.test.ts tools/agent-transport/evaluation-state-reader.test.ts",
     "test:agent-stream-contract": "vitest run tools/agent-transport/stream-contract.test.ts",
     "workspace:check": "node tools/check_workspace_layout.mjs",
     "architecture:check": "npm run workspace:check && node --test tools/browser_global_reference.test.mjs && node tools/check_architecture_boundaries.mjs",
@@ -46,7 +46,8 @@
     "docs:check": "node --test tools/check_documentation.test.mjs && node tools/check_documentation.mjs",
     "api:generate": "node --import tsx tools/generate_openapi.mjs",
     "api:check": "node --import tsx tools/generate_openapi.mjs --check && node --import tsx --test tools/openapi-contract.test.mjs",
-    "test:agent:v2:model-loop-live": "vitest run --root . backend/agent-api/src/composition/strands-model-loop-live.test.ts --maxWorkers=1"
+    "test:agent:v2:model-loop-live": "vitest run --root . backend/agent-api/src/composition/strands-model-loop-live.test.ts --maxWorkers=1",
+    "eval:trip:interactive": "node --import tsx tools/run_interactive_trip_evaluation.ts"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "12.1.0",

@@ -63,6 +63,19 @@ resource "aws_iam_role" "github_agent_eval" {
 }
 
 data "aws_iam_policy_document" "github_agent_eval" {
+  dynamic "statement" {
+    for_each = local.interactive_evaluation_owner != null ? [local.interactive_evaluation_owner] : []
+    content {
+      sid       = "ReadOnlyDedicatedEvaluationOwner"
+      actions   = ["dynamodb:GetItem"]
+      resources = [aws_dynamodb_table.server_state.arn, aws_dynamodb_table.trips.arn]
+      condition {
+        test     = "ForAllValues:StringEquals"
+        variable = "dynamodb:LeadingKeys"
+        values   = ["OWNER#${statement.value}"]
+      }
+    }
+  }
   statement {
     sid       = "DiscoverSystemInferenceProfiles"
     actions   = ["bedrock:ListInferenceProfiles", "bedrock:GetInferenceProfile"]

@@ -146,6 +146,58 @@ Chromiumのページ再読込後にServer履歴から取得・描画し、追加
 
 ## Trip V2 の製品横断評価
 
+### 結果を読んで次の操作を決める試験
+
+`npm run eval:trip:interactive` は公開HTTP APIへ1操作ずつ送るJSON-linesの実行口である。
+事前の会話配列や期待応答を流さず、評価者が直前の回答・公開候補・保存済みTrip・履歴を読み、
+次の相談または採用操作を決める。LLMに試験の合否や次の操作を自動委任せず、本番Prompt/Tool/保存処理は変更しない。
+
+管理者が専用のCognito試験ユーザーを作り、その`sub`をdevの`cognito_interactive_evaluation_subject`へ設定する。
+空の既定値では試験用callback・内部観測権限は追加しない。有効化時だけ、既存のSPA clientへ
+`http://127.0.0.1:8788/index.html`を追加し、既存の評価IAM roleへ試験ownerのpartitionに限ったGetItemを許可する。
+パスワード認証flow、M2M client、公開debug API、認可の例外は追加しない。
+CDではdev Environmentの`INTERACTIVE_EVALUATION_SUBJECT`を同じ変数へ渡す。未設定なら無効となるため、
+手動で設定したsubjectを次回のCDで意図せず消さないよう、試験期間中はこの値を管理する。
+
+`terraform output -json cognito_interactive_evaluation_config`の結果を管理用の設定ファイルへ保存する。
+この出力には試験subjectとtable名を含むため、公開frontendのauth-config.jsonとして配布しない。
+`KAIHO_EVAL_ORIGIN` に既存アプリorigin、`KAIHO_EVAL_AUTH_CONFIG` にその設定ファイル、
+`KAIHO_EVAL_REPORT` に未作成の記録ファイルを指定し、`npm run eval:trip:interactive`を起動する。
+実行機と同じ機械のブラウザで表示されたCognito URLを開き、試験ユーザーで通常のCode/PKCEログインを行う。
+ブラウザのCookieやTokenを抽出せず、secretをコマンド引数・stdin・結果へ出さない。
+OIDC libraryのstate/nonce/PKCEに加え、既存Cognito verifierで署名・client・期限・scope・試験subjectを確認する。
+Tokenと認証途中の状態はメモリだけに保持し、5分のAccess Tokenを更新しても最初の12時間期限は延ばさない。
+callback待受はloopbackだけで認証中のみ起動し、10分の期限、成功・失敗・取消で閉じる。
+プロセスの終了・SIGINT/SIGTERMでは通信を中断してRefresh Tokenを失効させる。失効結果不明は成功と扱わない。
+
+APIへの接続は日本から行う。内部観測には評価roleのAWS認証も必要で、Cognito TokenをIAM権限の代わりにしない。
+認証・IAM・Terraform有効化が未設定なら実環境試験は未実施である。401/403や地域制限も実行制約として記録する。
+
+stdinへ`action`と操作理由`reason`を持つJSONを1行ずつ渡す。`start`（title）で試験用の新規旅程を作り、
+`say`（message、任意itemId）で相談、`inspect`で再読込、`use`（sessionId）でこのプロセスが作った別旅程へ戻る。
+`retry`は直前の同じturnId・発言を再送する。候補のボタン採用は`preview`（candidateSetId / candidateSetRevision /
+variantId）の返り値を評価者が確認してから`confirm`を別操作として送る。確認keyは実行口内に保持し、
+新しい相談・再試行では以前のpreviewを捨てる。自然言語の採用は`say`を使い、画面と同じServer境界へ通す。
+手入力操作は`edit`（proposal）で既存のTrip mutation/CASを使い、`retry-edit`は同じmutationIdを再送する。
+予定の確定・撤回は`preview-item`（itemId、decision）、旅程全体は`preview-trip`（decision）で確認し、
+次の`confirm`でその対象だけを確定する。候補生成や内部観測から自動採用・保存は行わない。
+
+各結果に公開回答、カード、保存済みTrip、履歴、ストリーム計測とHTTPステータスを返す。
+内部観測はHTTPを増設せず、試験subjectから固定したownerと、実行口が作った現在の旅程のキーだけを読む。
+Working stateのoverlay/receipt revision/未完了の採用、turnの状態・条件journalの受理状況、
+保持候補の差し替え先・日時を投影する。原文Evidence、実行中の内部思考、token、確認keyは返さない。
+GetItem以外を拒否し、IAMも試験ownerに限定する。内部の観測失敗は公開回答・Trip取得と別に記録し、
+内部情報をモデルに再投入して意味解釈を補修したり、DBを直接編集して成功にしたりしない。
+回答取得と保存状態の読み戻しは独立して扱い、片方が失敗してももう片方の観測を失わない。
+旅程生成結果を評価用の想定で補修・自動採用しない。1プロセスの相談・再送は合計64回（内部上限80）、
+履歴は最大200発言。試験開始は12回、操作総数は200回まで。開始時のscope判定にもモデル呼出しがあり得るため、
+相談回数の上限だけを全有料呼出しの上限と扱わない。終了後も試験旅程は残し、自動削除しない。記録はGitへ追加しないprivate artifactとし、
+共有用の報告には会話本文・資料抜粋・認証情報を除いた結果と理由を抜き出す。
+
+この実行口を実環境へ接続した場合は実AI・実Provider・実保存の観測となる。操作口の合成HTTPテスト成功は
+その実環境試験の成功ではない。写真・出典・候補の対応はAPIで確認できるが、画像ファイルの取得成功、
+画面の見た目、スクロール・タップ、Cognitoのログイン・更新は別の試験として残す。
+
 ### 合否の境界
 
 候補の有用性、Tripの保存状態、Evidence、部分失敗からの継続、処理時間・Tool/モデル呼出・使用量を別々に記録する。

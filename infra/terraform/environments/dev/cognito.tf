@@ -1,7 +1,27 @@
 # One source for browser configuration and the #484 verifier configuration.
 locals {
-  auth_origin  = "https://${var.viewer_domain_name}"
-  auth_origins = concat([local.auth_origin], var.cognito_local_development_enabled ? ["http://localhost:5173"] : [])
+  auth_origin = "https://${var.viewer_domain_name}"
+  auth_origins = concat([local.auth_origin], var.cognito_local_development_enabled ? ["http://localhost:5173"] : [],
+  var.cognito_interactive_evaluation_subject != "" ? ["http://127.0.0.1:8788"] : [])
+  interactive_evaluation_owner = var.cognito_interactive_evaluation_subject != "" ? "identity-v1:${sha256(jsonencode(["https://${aws_cognito_user_pool.users.endpoint}", var.cognito_interactive_evaluation_subject]))}" : null
+  cognito_public_config = {
+    issuer       = "https://${aws_cognito_user_pool.users.endpoint}"
+    clientId     = aws_cognito_user_pool_client.spa.id
+    loginOrigin  = "https://${aws_cognito_user_pool_domain.login.domain}.auth.${var.aws_region}.amazoncognito.com"
+    scopes       = aws_cognito_user_pool_client.spa.allowed_oauth_scopes
+    callbackUrls = aws_cognito_user_pool_client.spa.callback_urls
+    logoutUrls   = aws_cognito_user_pool_client.spa.logout_urls
+  }
+}
+
+variable "cognito_interactive_evaluation_subject" {
+  description = "Cognito sub of an administrator-created dedicated evaluation user; empty disables the loopback callback and internal state reads."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.cognito_interactive_evaluation_subject == "" || can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.cognito_interactive_evaluation_subject))
+    error_message = "Use the dedicated evaluation user's Cognito UUID sub, or an empty value."
+  }
 }
 
 variable "cognito_local_development_enabled" {
@@ -104,14 +124,17 @@ resource "aws_cognito_managed_login_branding" "spa" {
 
 output "cognito_frontend_config" {
   description = "Public configuration; publish verbatim as auth-config.json, never add secrets."
-  value = {
-    issuer       = "https://${aws_cognito_user_pool.users.endpoint}"
-    clientId     = aws_cognito_user_pool_client.spa.id
-    loginOrigin  = "https://${aws_cognito_user_pool_domain.login.domain}.auth.${var.aws_region}.amazoncognito.com"
-    scopes       = aws_cognito_user_pool_client.spa.allowed_oauth_scopes
-    callbackUrls = aws_cognito_user_pool_client.spa.callback_urls
-    logoutUrls   = aws_cognito_user_pool_client.spa.logout_urls
-  }
+  value       = local.cognito_public_config
+}
+
+output "cognito_interactive_evaluation_config" {
+  description = "Administrator-only evaluation setup; do not publish this output as frontend auth-config.json. No credentials."
+  value = var.cognito_interactive_evaluation_subject != "" ? {
+    authConfig = local.cognito_public_config
+    subject    = var.cognito_interactive_evaluation_subject
+    stateTable = aws_dynamodb_table.server_state.name
+    tripTable  = aws_dynamodb_table.trips.name
+  } : null
 }
 
 output "cognito_api_auth_config" {

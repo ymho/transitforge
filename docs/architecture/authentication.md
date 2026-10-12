@@ -9,6 +9,12 @@ Gateway authorizerとBackendの同じCognito verifierがissuer / client / token_
 TrustedPrincipal.subjectをownerへ写し、bodyのownerId / userId / email / claimsを認可根拠にしない。
 401 / 403はApplication・Repository・model / Toolの実行前に拒否する。
 
+対話評価は専用の試験ユーザーが同じCognito client / Code / PKCE / scope検証を使う。
+devの試験subject設定が空でない場合だけloopback callbackを許可する。待受は認証中だけ起動し、
+Tokenは試験プロセスのメモリへ保持して終了時に失効する。Browser sessionの抽出・代替JWT・M2Mによる
+user ownerの偽装は行わない。内部状態は別のIAM read-only経路で試験ownerのGetItemに限り、
+利用者JWTへDynamoDBの直接権限を与えず、公開debug routeも増設しない。[対話評価の手順](../operations/testing.md)を参照する。
+
 ## 公開経路とgate
 
 | 経路 / 能力 | Currentの接続 |
