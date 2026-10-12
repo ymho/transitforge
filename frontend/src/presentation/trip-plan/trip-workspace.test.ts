@@ -5,6 +5,8 @@ import { applyTripProposal, createTrip } from "@raiquora/trip/trip";
 import { multiCityTrip, placeActivity, placesAt, placesTripId } from "../../../../modules/trip/domain/trip-places.fixture";
 import { tripWorkspacePreviewSource } from "../../dev/trip-workspace-preview";
 import { createTripWorkspaceController, type TripWorkspaceSource } from "../../usecases/trip-plan/trip-workspace-controller";
+import { configureAiGuidePanel } from "../concierge/ai-guide-panel";
+import type { AssistantTurnView } from "../../domain/assistant-turn-view";
 import { configureTripWorkspace } from "./trip-workspace";
 import { createServerTripWorkspaceSource } from "../../usecases/trip-plan/server-trip-workspace-source";
 import { inTripFixture } from "../../../../modules/trip/domain/in-trip-context.fixture";
@@ -252,11 +254,11 @@ describe("Trip workspace DOM and mobile navigation", () => {
     button(f.ui.nav, "旅程").click(); f.ui.panel.scrollTop = 330;
     const card = f.ui.panel.querySelector<HTMLElement>('[data-item-id="activity"]')!;
     card.querySelector<HTMLButtonElement>(".trip-item-toggle")!.click(); card.querySelector<HTMLButtonElement>(".trip-item-toggle")!.click(); expect(card.querySelector<HTMLButtonElement>(".trip-item-toggle")!.getAttribute("aria-expanded")).toBe("false");
-    button(f.ui.nav, "会話").click();
+    button(f.ui.nav, "チャット").click();
     expect(f.input.value).toBe("編集中の文章"); expect(document.activeElement).toBe(f.input); expect(f.messages.scrollTop).toBe(240);
     expect(f.controller.sessionId()).toBe("one"); expect(f.controller.uiFocus()?.itemId).toBe("activity"); expect(f.controller.proposal()?.summary).toBe("順序変更");
     button(f.ui.nav, "旅程").click(); expect(f.ui.panel.scrollTop).toBe(330); expect(card.querySelector<HTMLButtonElement>(".trip-item-toggle")!).toBeDefined();
-    expect(button(f.ui.nav, "旅程").getAttribute("aria-pressed")).toBe("true");
+    expect(button(f.ui.nav, "旅程").getAttribute("aria-selected")).toBe("true");
     expect(f.app.contains(f.chat)).toBe(true); expect(f.ui.panel.querySelectorAll(".trip-order-preview")).toHaveLength(1);
   });
   it("renames an item through the popup and saves without a separate proposal panel", async () => {
@@ -482,7 +484,7 @@ it("moves sharing and owner-only deletion to details and returns to the list onl
   f.controller.attach("viewer", { getCurrentTrip: () => trip, getRole: () => "viewer" }); f.controller.activateSession("viewer");
   expect(button(f.ui.panel, "削除").hidden).toBe(true); expect(button(f.ui.panel, "相談").hidden).toBe(true);
   f.controller.attach("editor", { getCurrentTrip: () => trip, getRole: () => "editor" }); f.controller.activateSession("editor");
-  expect(button(f.ui.panel, "削除").hidden).toBe(true); expect(button(f.ui.panel, "相談").hidden).toBe(false);
+  expect(button(f.ui.panel, "削除").hidden).toBe(true); expect(button(f.ui.panel, "相談").hidden).toBe(true);
 });
 
 it("does not delete a different Trip after the confirmation opens", async () => {
@@ -502,4 +504,37 @@ it("uses the same pencil SVG for all edit buttons", () => {
   expect(pencils.length).toBeGreaterThan(3);
   expect(new Set(pencils.map(button => button.querySelector("svg")?.outerHTML)).size).toBe(1);
   expect(pencils.every(button => button.hasAttribute("aria-label") && !button.textContent)).toBe(true);
+});
+
+it.each(["viewer", "editor"] as const)("keeps a shared %s on the itinerary and blocks even a programmatic chat switch", role => {
+  const f = setup({ getCurrentTrip: multiCityTrip, getRole: () => role });
+  const tab = f.ui.nav.querySelector<HTMLButtonElement>('[aria-controls="chat"]')!;
+  expect(tab.hidden).toBe(true); expect(f.chat.hidden).toBe(true); expect(f.app.dataset.tripWorkspaceView).toBe("trip");
+  f.ui.show("chat"); expect(f.app.dataset.tripWorkspaceView).toBe("trip"); expect(f.chat.hidden).toBe(true);
+  expect(f.ask).not.toHaveBeenCalled(); expect(f.ui.panel.querySelector<HTMLElement>("[data-trip-consultation]")!.hidden).toBe(true);
+});
+
+it("delivers an in-flight guide response once even when the user switches tabs before it finishes", async () => {
+  const f = setup({ getCurrentTrip: multiCityTrip });
+  const form = document.createElement("form"), submit = document.createElement("button"); submit.type = "submit";
+  form.append(f.input, submit); f.chat.append(form);
+  const button = () => document.createElement("button"), select = () => document.createElement("select");
+  let complete!: (response: AssistantTurnView) => void;
+  const handle = vi.fn(() => new Promise<AssistantTurnView>(resolve => { complete = resolve; }));
+  const append = vi.fn((_session: string, entry: import("../../usecases/concierge/conversation-history-repository").NewConversationMessage) => ({ ...entry, messageId: crypto.randomUUID() }));
+  const guide = configureAiGuidePanel({ conversationSessionId: f.controller.sessionId(), panel: f.chat, messages: f.messages, form, input: f.input,
+    submit, toggle: button(), close: button(), suggestions: [], settingsToggle: button(), settingsPanel: document.createElement("div"),
+    transferPace: select(), rankingPreference: select(), storage: localStorage,
+    responseContextKey: () => `${f.controller.sessionId()}:${f.controller.current()?.revision}`,
+    historyRepository: { list: () => [], append, delete: vi.fn() },
+  }, handle);
+  guide.ask("この旅の移動を相談したい"); expect(handle).toHaveBeenCalledOnce(); expect(submit.disabled).toBe(true);
+  f.ui.show("trip"); f.ui.show("chat"); f.ui.show("trip");
+  expect(handle).toHaveBeenCalledOnce(); expect(submit.disabled).toBe(true);
+  complete({ text: "確認した移動候補をお伝えします。" });
+  await vi.waitFor(() => expect(f.messages.textContent).toContain("確認した移動候補"));
+  f.ui.show("chat"); expect(submit.disabled).toBe(false);
+  expect(f.messages.textContent).not.toContain("会話の状態が変わった");
+  expect(append.mock.calls.filter(([, entry]) => entry.role === "assistant")).toHaveLength(1);
+  expect(handle).toHaveBeenCalledOnce(); f.ui.destroy();
 });

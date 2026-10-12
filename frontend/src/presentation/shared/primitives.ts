@@ -1,6 +1,7 @@
-export type ProductIconName = "arrowDown" | "pencil" | "back" | "account" | "chat" | "close" | "compose" | "explore" | "send" | "train" | "trips" | "child" | "clock" | "settings" | "info" | "thumbUp" | "thumbDown" | "refresh";
+export type ProductIconName = "home" | "arrowDown" | "pencil" | "back" | "account" | "chat" | "close" | "compose" | "explore" | "send" | "train" | "trips" | "child" | "clock" | "settings" | "info" | "thumbUp" | "thumbDown" | "refresh";
 
 const paths: Record<ProductIconName, string> = {
+  home: '<path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/>',
   arrowDown: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
   pencil: '<path d="m16 3 5 5-12 12-6 1 1-6ZM14 5l5 5"/>',
   refresh: '<path d="M20 7v5h-5"/><path d="M19 12a7 7 0 1 1-2-5l3 5"/>',

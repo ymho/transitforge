@@ -34,6 +34,7 @@ export function configureTripWorkspace(options: {
   showTripList?(): void;
   folioKind?(trip: Trip): "official" | "shared" | undefined;
   onViewChange?(view: "chat" | "trip"): void;
+  canChat?(): boolean;
   openSharing?(): void;
   archiveTrip?(trip: Trip): Promise<void>;
   changeAdoption?(trip: Trip, action: "confirm" | "withdraw"): Promise<void>;
@@ -45,9 +46,10 @@ export function configureTripWorkspace(options: {
   onPlanAdoption?: AiGuidePanelElements["onPlanAdoption"];
 }) {
   const { controller, app } = options;
+  const canChat = () => (options.canChat?.() ?? true) && !["viewer", "editor"].includes(controller.source()?.getRole?.() ?? "");
   const panel = element("section", "trip-workspace"); panel.id = "trip-workspace"; panel.hidden = true;
   panel.setAttribute("aria-label", "旅程"); panel.tabIndex = -1;
-  const nav = element("nav", "trip-workspace-navigation"); nav.setAttribute("aria-label", "会話と旅程の切替"); nav.hidden = true;
+  const nav = element("div", "trip-workspace-navigation"); nav.setAttribute("role", "tablist"); nav.setAttribute("aria-label", "この旅の表示"); nav.hidden = true;
   const status = element("p", "trip-workspace-status"); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   const report = (text: string) => { setLoadingStatus(status, text, controller.loadState() === "loading"); };
   const heading = element("header", "trip-workspace-heading"); const title = element("h1"); const summary = element("p", "trip-workspace-copy");
@@ -88,7 +90,7 @@ export function configureTripWorkspace(options: {
   let consultationDialog: HTMLDialogElement | undefined;
   const consult = control("相談", () => {
     const trip = controller.current(), session = controller.sessionId(), source = controller.source();
-    if (!trip || source?.getRole?.() === "viewer" || consultationDialog?.isConnected) return;
+    if (!trip || !canChat() || consultationDialog?.isConnected) return;
     consultationDialog = openTripConsultation(trip, topic => {
       if (controller.current()?.id !== trip.id || controller.current()?.revision !== trip.revision || controller.sessionId() !== session || controller.source() !== source || source?.getRole?.() === "viewer") { report("旅程が更新されました。相談したい内容を選び直してください。"); return; }
       controller.focus(topic.itemId);
@@ -144,6 +146,8 @@ export function configureTripWorkspace(options: {
   const selectedDays = new Map<string, string>();
   const itinerary = element("section", "trip-detail-panel");
   itinerary.id = "trip-detail-itinerary";
+  itinerary.setAttribute("role", "tabpanel"); itinerary.setAttribute("aria-labelledby", "trip-workspace-itinerary-tab");
+  options.chat.setAttribute("role", "tabpanel"); options.chat.setAttribute("aria-labelledby", "trip-workspace-chat-tab");
   const add = element("form", "trip-workspace-add"); add.hidden = true;
   let addContext: { tripId: string; revision: number; session: string; dayKey: string; afterId?: string; beforeId?: string } | undefined;
   let addAnchor: HTMLElement | undefined;
@@ -181,10 +185,10 @@ export function configureTripWorkspace(options: {
   reorder.className = "trip-order-open";
   const itineraryHeading = element("div", "trip-itinerary-heading"); itineraryHeading.append(summary, reorder);
   itinerary.append(planDraft, itineraryHeading, dayTabs, days, addFirst, add);
-  const detail = element("div", "trip-detail-view"); detail.append(heading, status, retry, itinerary, proposal);
+  const detail = element("div", "trip-detail-view"); detail.append(heading, nav, status, retry, itinerary, proposal, options.chat);
   const travelMode = element("div"); travelMode.hidden = true;
   panel.append(detail, travelMode);
-  app.append(panel, nav);
+  app.append(panel);
   const views = new Map<string, { scroll: number; chatScroll: number; view: "chat" | "trip"; focus?: HTMLElement }>();
   const collapsed = new Map<string, boolean>();
   const cards = new Map<string, { node: HTMLElement; key: string }>();
@@ -203,7 +207,9 @@ export function configureTripWorkspace(options: {
       await options.refreshWeather!(current, itemId);
     }) });
   const show = (view: "chat" | "trip") => {
+    if (view === "chat" && !canChat()) return;
     const state = viewState();
+    const changed = state.view !== view;
     if (state.view === "trip") state.scroll = panel.scrollTop;
     if (view === "trip" && state.view !== "trip") {
       state.chatScroll = options.messages.scrollTop;
@@ -211,16 +217,35 @@ export function configureTripWorkspace(options: {
     }
     state.view = view; options.returnToConversation(); options.showContext(view === "trip" ? "trip-plan" : "map");
     app.dataset.tripWorkspaceView = view;
+    paintTabs();
     options.onViewChange?.(view);
-    for (const button of [chatButton, tripButton]) button.setAttribute("aria-pressed", String(button === (view === "trip" ? tripButton : chatButton)));
-    panel.scrollTop = state.scroll;
-    if (view === "chat") { options.messages.scrollTop = state.chatScroll; (state.focus?.isConnected ? state.focus : options.input).focus({ preventScroll: true }); }
-    else { panel.focus({ preventScroll: true }); void autoWeather.trigger(); }
+    panel.scrollTop = view === "trip" ? state.scroll : 0;
+    if (view === "chat" && changed) { options.messages.scrollTop = state.chatScroll; (state.focus?.isConnected ? state.focus : options.input).focus({ preventScroll: true }); }
+    else if (view === "trip") { panel.focus({ preventScroll: true }); void autoWeather.trigger(); }
   };
-  const chat = (prompt: string) => { show("chat"); options.ask(prompt); };
-  const chatButton = control("会話", () => show("chat")), tripButton = control("旅程", () => show("trip"));
-  chatButton.setAttribute("aria-controls", options.chat.id); tripButton.setAttribute("aria-controls", panel.id);
-  nav.append(chatButton, tripButton, control("地図", options.showMap));
+  const chat = (prompt: string) => { if (!canChat()) return; show("chat"); options.ask(prompt); };
+  const chatButton = control("チャット", () => show("chat")), tripButton = control("旅程", () => show("trip"));
+  chatButton.id = "trip-workspace-chat-tab"; tripButton.id = "trip-workspace-itinerary-tab";
+  chatButton.setAttribute("aria-controls", options.chat.id); tripButton.setAttribute("aria-controls", itinerary.id);
+  for (const button of [tripButton, chatButton]) {
+    button.setAttribute("role", "tab");
+    button.addEventListener("keydown", event => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const next = event.key === "Home" ? tripButton : event.key === "End" ? chatButton : button === tripButton ? chatButton : tripButton;
+      if (!next.hidden) { next.click(); next.focus(); }
+    });
+  }
+  nav.append(tripButton, chatButton);
+  function paintTabs() {
+    const view = viewState().view;
+    for (const button of [tripButton, chatButton]) {
+      const selected = button === (view === "trip" ? tripButton : chatButton);
+      button.setAttribute("aria-selected", String(selected)); button.tabIndex = selected ? 0 : -1;
+    }
+    itinerary.hidden = proposal.hidden = view !== "trip";
+    options.chat.hidden = view !== "chat";
+  }
 
   async function showTravelMode() {
     const trip = controller.current(); if (!trip) return;
@@ -267,9 +292,12 @@ export function configureTripWorkspace(options: {
     if (trip && travelTripKey && travelTripKey !== `${trip.id}:${trip.revision}`) { travelGeneration++; travelTripKey = ""; travelMode.hidden = true; detail.hidden = false; }
     panel.hidden = nav.hidden = !controller.blocksLegacy();
     if (!controller.blocksLegacy()) { delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; return; }
-    app.dataset.tripWorkspace = "v2"; app.dataset.tripWorkspaceView = viewState().view;
-    chatButton.setAttribute("aria-pressed", String(viewState().view === "chat"));
-    tripButton.setAttribute("aria-pressed", String(viewState().view === "trip"));
+    app.dataset.tripWorkspace = "v2";
+    chatButton.hidden = !canChat();
+    if (chatButton.hidden) viewState().view = "trip";
+    app.dataset.tripWorkspaceView = viewState().view;
+    tripButton.disabled = chatButton.disabled = !controller.current();
+    paintTabs();
     const server = true;
     notice.textContent = controller.source()?.getRole?.() === "viewer" ? "共有された旅程です（閲覧専用）。会話履歴・予約の個人情報は共有されません。"
       : controller.source()?.confirmationPersistence === "server" ? "変更案を確認するとサーバに保存します。競合した場合は最新の旅程で確認し直してください。"
@@ -277,7 +305,7 @@ export function configureTripWorkspace(options: {
     notice.hidden = controller.source()?.getRole?.() !== "viewer";
     retry.hidden = controller.loadState() !== "unavailable" || !controller.source()?.retry;
     retry.disabled = controller.loadState() === "loading";
-    addFirst.hidden = !trip || trip.items.length > 0 || controller.source()?.getRole?.() === "viewer";
+    addFirst.hidden = !trip || trip.items.length > 0 || !canChat();
     reorder.hidden = !trip || trip.items.length < 2 || controller.source()?.getRole?.() === "viewer";
     adoption.hidden = !trip;
     if (!trip) {
@@ -314,10 +342,10 @@ export function configureTripWorkspace(options: {
     share.hidden = !options.openSharing;
     archive.hidden = !personalOwner || !options.archiveTrip;
     management.hidden = share.hidden && archive.hidden;
-    consult.hidden = role === "viewer";
+    consult.hidden = !canChat();
     adoptionHelp.textContent = adoption.hidden || !adoption.disabled || adoptionBusy ? "" : !trip.items.length ? "予定を追加すると確定できます。" : "すべての予定に日程を設定すると確定できます。";
     adoptionHelp.hidden = !adoptionHelp.textContent;
-    const labels = [notice.textContent ?? "", role === "viewer" ? "" : role === "editor" ? "共有された旅程です（共同編集）。" : "", trip.officialOrigin ? `公式しおりから作成（第${trip.officialOrigin.version}版）` : ""].filter(Boolean);
+    const labels = [notice.textContent ?? "", role === "viewer" ? "" : role === "editor" ? "共有された旅程です（共同編集）。チャットは共有されません。" : "", trip.officialOrigin ? `公式しおりから作成（第${trip.officialOrigin.version}版）` : ""].filter(Boolean);
     notice.textContent = labels.join(" "); notice.hidden = role !== "viewer" && role !== "editor" && !trip.officialOrigin;
     summary.textContent = tripDateLabel(trip);
     const folioKind = options.folioKind?.(trip) ?? (["editor", "viewer"].includes(controller.source()?.getRole?.() ?? "") ? "shared" : undefined);
@@ -336,7 +364,7 @@ export function configureTripWorkspace(options: {
       group.querySelectorAll(".trip-timeline-add").forEach(node => node.remove());
       let childIndex = 0;
       const addGap = (dayKey: string, afterId?: string, beforeId?: string) => {
-        if (controller.source()?.getRole?.() === "viewer") return;
+        if (!canChat()) return;
         const button = control("＋ 予定を追加", () => startAdd(trip, dayKey, afterId, beforeId, button));
         button.classList.add("trip-timeline-add");
         button.dataset.dayKey = dayKey;
@@ -420,7 +448,7 @@ export function configureTripWorkspace(options: {
   const unsubscribe = controller.subscribe(render); render();
   return { panel, nav, render, show, report, canLeave, openTravelMode: showTravelMode,
     showPlan() { show("trip"); },
-    destroy() { consultationDialog?.close(); autoWeather.destroy(); unsubscribeSaved(); unsubscribe(); panel.remove(); nav.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
+    destroy() { consultationDialog?.close(); autoWeather.destroy(); unsubscribeSaved(); unsubscribe(); app.append(options.chat); panel.remove(); delete app.dataset.tripWorkspace; delete app.dataset.tripWorkspaceView; } };
 }
 
 /** Display the authored calendar day without using the device timezone. */

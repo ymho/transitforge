@@ -37,3 +37,32 @@ it("missing or archived Trip cannot reuse a stale conversation", async () => {
   const f = fixture(); f.ports.getTrip.mockResolvedValueOnce(undefined as never);
   await expect(f.navigation.open(a, "chat")).rejects.toThrow("unavailable"); expect(f.ports.activate).not.toHaveBeenCalled();
 });
+
+it.each(["editor", "viewer"] as const)("opens a shared %s without any Conversation call and rejects chat navigation", async role => {
+  let current = { conversationId: "old", tripId: "old" };
+  const f = fixture();
+  const openShared = vi.fn(async (value: ReturnType<typeof trip>, valid: () => boolean) => { if (valid()) current = { conversationId: `ui-shared-${value.id}`, tripId: value.id }; });
+  const navigation = createTripConsultationNavigation({ ...f.ports, role: () => role, openShared, current: () => current });
+  await navigation.open(a, "trip");
+  expect(openShared).toHaveBeenCalledOnce(); expect(f.ports.show).toHaveBeenCalledExactlyOnceWith("trip");
+  expect(f.ports.findConversation).not.toHaveBeenCalled(); expect(f.ports.createConversation).not.toHaveBeenCalled(); expect(f.ports.activate).not.toHaveBeenCalled();
+  await expect(navigation.open(a, "chat")).rejects.toThrow("chat unavailable"); expect(openShared).toHaveBeenCalledOnce();
+});
+
+it("fences a pending shared display on cancellation and account change", async () => {
+  for (const cancel of [true, false]) {
+    const f = fixture(); let finish!: () => void, valid!: () => boolean;
+    const openShared = vi.fn((_trip: ReturnType<typeof trip>, isCurrent: () => boolean) => { valid = isCurrent; return new Promise<void>(resolve => { finish = resolve; }); });
+    const navigation = createTripConsultationNavigation({ ...f.ports, role: () => "viewer", openShared });
+    const pending = navigation.open(a, "trip"); await vi.waitFor(() => expect(openShared).toHaveBeenCalledOnce());
+    if (cancel) navigation.cancel(); else f.changeAccount();
+    expect(valid()).toBe(false); finish(); await pending;
+    expect(f.ports.show).not.toHaveBeenCalled(); expect(f.ports.findConversation).not.toHaveBeenCalled();
+  }
+});
+
+it("does not report a shared display as successful without matching Trip read-back", async () => {
+  const f = fixture(); const navigation = createTripConsultationNavigation({ ...f.ports, role: () => "editor", openShared: vi.fn(async () => {}) });
+  await expect(navigation.open(a, "trip")).rejects.toThrow("Shared Trip unavailable");
+  expect(f.ports.show).not.toHaveBeenCalled(); expect(f.ports.findConversation).not.toHaveBeenCalled();
+});
