@@ -38,8 +38,8 @@ validity after asynchronous boundaries and verifies both active IDs. Metadata
 alone is not successful Trip read-back. A failed list refresh cannot suppress an
 otherwise valid first submission.
 
-Top-level Consultation is always a fresh Hero. Existing consultation is resumed
-through Trip list -> Trip -> consultation. Opening an existing Trip can create its
+The top-level Home entry always opens a fresh Hero. Existing consultation is resumed
+through Trip list -> Trip -> consultation. Opening an owned Trip can create its
 missing history under the same deterministic ID, only after owner authorization.
 Updating metadata cannot move a history stream to another Trip. Streaming cannot
 implicitly create an unknown/general Conversation.
@@ -249,19 +249,28 @@ Tool still requires a deployed graph and its manifest to become available.
 
 ## 画面契約
 
-主要メニューは「相談・旅程・運行・設定」の4項目。探すを独立した画面・routeにしない。
-`#chat`が共通の相談画面で、新規時だけ従来の写真Heroとcomposerを表示する。
+主要メニューは「ホーム・旅程・運行・設定」の4項目。探すを独立した画面・routeにしない。
+`#chat`はホームとTripに属するチャットの画面参照を区別して使う。ホームでは写真Heroと新規相談composerを表示し、Trip参照がある場合は共通旅程ヘッダーの下にチャットを表示する。
 利用者が送信するとTripとそのServer Conversationを原子的に作成して通常の相談へ移る。未送信の文字入力やIME変換だけでは画面を切り替えない。
 未ログイン送信は入力を保持して認証へ進む。未認証で会話・旅程・運行APIを利用しない。
 
-起動・再読み込み・メニューの相談・新規相談ボタンでは、過去の一般チャットを自動選択しない。
+起動・再読み込み・メニューのホーム・新規相談ボタンでは、過去の一般チャットを自動選択しない。
 初期画面表示だけで空のServer Conversationを作らない。既存履歴の移行・互換routeは用意しない。
 過去のサーバデータを自動削除・移行する操作はない。
 
+## ホームの掲載内容
+
+Heroの下に保存済み旅程・公式しおりへの入口、写真付き相談テーマ、公式しおり、サービス機能の紹介・案内を置く。
+相談テーマは出典付き検索候補や確定旅程ではなく、利用者が送信前に編集できる相談のヒント。選ぶとcomposerへ入力するだけで、送信・Trip作成・ログインは実行しない。既存入力の置換はアプリ内dialogで確認する。
+画像は既存の自作イメージで、実施設の写真として扱わない。テーマの掲載データはPresentationの`home-discovery.ts`が所有し、空の枠・掲載前・期限切れ・不正な期間は表示しない。
+公式しおりの取得・権限・取り込みは[公式しおりの仕様](official-guides.md)を維持する。取得失敗や未掲載でもHeroと相談テーマは使える。
+機能紹介は実装済みの旅程と運行画面へ接続する。掲載中の架空キャンペーン・提携を作らず、広告ネットワーク・追跡・外部配信APIは導入しない。ホームはサービス紹介・宣伝の枠として掲載内容を差し替えられる。
+未認証の静的ホーム表示では個人API・地図を起動しない。旅程や運行を選ぶ操作は共通認証境界を通す。
+
 ## 旅程の相談
 
-旅程一覧から旅程を開き、ヘッダーの「相談」で「どれについて相談しますか？」を開く。現在の登録内容から未決定の移動・宿泊先・予定時刻・自由時間と、確定した時刻の間にある1時間以上の空き時間を読み取り専用で抽出する。候補表示のためのAI・Provider呼び出しはしない。選んだ話題の予定ID・順番・保存済み日付を引き継いで同じ相談画面へ移る。Heroは出さない。表示する例は最大3件とし、未決定の項目を優先して同じ予定に偏らないよう選ぶ。経路・宿の選び直しも例の対象に含む。例は小さな文字と区切り線で表示し、カード風の背景・囲いは使わない。「ほかのことを相談」はダイアログ内の自由入力欄とし、空白のみでは送信できない。「相談する」で対象focusを解除し、入力内容を同じ相談画面へ渡して送信する。閉じる操作は入力欄の下に十分な間隔を空けて配置し、閉じる／Escapeでは送信しない。古いTrip・revision・sessionの候補から相談しない。
-相談の「旅程に戻る」で同じTripの画面へ戻す。会話は既存の認証済みTrip参照から取得し、別のTripや直近チャットへfallbackしない。
+旅程一覧から旅程を開き、ヘッダーの「相談」で「どれについて相談しますか？」を開く。現在の登録内容から未決定の移動・宿泊先・予定時刻・自由時間と、確定した時刻の間にある1時間以上の空き時間を読み取り専用で抽出する。候補表示のためのAI・Provider呼び出しはしない。選んだ話題の予定ID・順番・保存済み日付を引き継いで同じ旅のチャットタブへ移る。Heroは出さない。表示する例は最大3件とし、未決定の項目を優先して同じ予定に偏らないよう選ぶ。経路・宿の選び直しも例の対象に含む。例は小さな文字と区切り線で表示し、カード風の背景・囲いは使わない。「ほかのことを相談」はダイアログ内の自由入力欄とし、空白のみでは送信できない。「相談する」で対象focusを解除し、入力内容を同じ相談画面へ渡して送信する。閉じる操作は入力欄の下に十分な間隔を空けて配置し、閉じる／Escapeでは送信しない。古いTrip・revision・sessionの候補から相談しない。
+共通ヘッダーの「旅程」「チャット」で同じTripの表示を切り替える。旅程一覧・公式しおりの取り込みは旅程タブ、新規相談の初回送信はチャットタブを開く。同じTripが有効に読み込まれている間の切り替え・履歴移動では会話の再activate・履歴再取得・stream再開始を行わず、同じDOMとsessionの入力・応答・各スクロール位置を保持する。再読み込みや別Tripからの復元は通常の再認可・取得を通す。共有参加者（editor/viewer）にはチャットタブを表示しない。共有起動と認可の境界は[共有仕様](trip-sharing.md)を参照する。会話は既存の認証済みTrip参照から取得し、別のTripや直近チャットへfallbackしない。
 履歴へ戻る操作でTripの相談を復元する場合も、明示されたTrip参照を再認可・取得する。
 URLにTrip本文・owner・認証情報を含めず、現在の画面参照だけをhistory stateに置く。
 

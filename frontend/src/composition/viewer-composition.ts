@@ -185,6 +185,7 @@ const unsignedConversation: ConversationSession = {
   createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
 };
 let activeConversationSession = unsignedConversation;
+let readyConversationId: string | undefined;
 const isSignedIn = canUsePersonalState;
 // Preserve an opened invite across login from any application entry point.
 if (initialShareLink && !isSignedIn()) { try { saveShareLogin(window.sessionStorage, initialShareLink); } catch { /* Explicit join still owns the login handoff. */ } }
@@ -284,6 +285,7 @@ const mobileContextNavigation = createMobileContextNavigation({
 const returnToConversation = () => {
   if (app.dataset.primaryView === "map") {
     if (conversationUi.active()) primaryShell?.showConversation(activeConversationSession.tripId);
+    else if (activeConversationSession.id.startsWith("ui-shared-") && tripWorkspaceController.current()) primaryShell?.showTrip(tripWorkspaceController.current()!.id);
     else primaryShell?.navigate("chat");
   }
   delete app.dataset.mapFocusMode;
@@ -404,6 +406,7 @@ const tripWorkspace = configureTripWorkspace({
   conversationId: () => activeConversationSession.id, onPlanAdoption: adoptPlan,
   app, chat: aiGuidePanel, messages: aiGuideMessages, input: aiGuideInput,
   controller: tripWorkspaceController,
+  canChat: () => readyConversationId === activeConversationSession.id && conversationUi.active()?.id === activeConversationSession.id && !!activeConversationSession.tripId,
   showContext: (view) => contextWorkspaceController.show(view), returnToConversation,
   onViewChange: (view) => {
     const trip = tripWorkspaceController.current();
@@ -446,6 +449,7 @@ const activateConversation = async (sessionId: string) => {
   if (activeConversationSession.id !== sessionId && !await canLeaveConditions()) throw new Error("Navigation cancelled");
   const session = conversationUi.selectLocal(sessionId);
   if (!session) return;
+  readyConversationId = undefined;
   returnToConversation(); activeConversationSession = session;
   serverAgentSession.contextChanged(); syncServerTripSource(session);
   tripWorkspaceController.activateSession(session.id); contextWorkspaceController.activateSession(session.id);
@@ -459,6 +463,7 @@ const activateConversation = async (sessionId: string) => {
     tripWorkspaceController.activateSession(session.id);
     try { aiGuideController.switchSession(session.id); }
     catch (error) { reportConversationReadFailure("render", error); throw error; }
+    readyConversationId = session.id; tripWorkspace.render();
   }
 };
 openBranchedTrip = async (trip, title) => {
@@ -474,6 +479,21 @@ openBranchedTrip = async (trip, title) => {
 };
 const tripNavigation = createTripConsultationNavigation({
   getTrip: (id) => serverTripClient.get(id),
+  role: id => serverTripClient.getRole(id),
+  openShared: async (trip, isCurrent) => {
+    const allowed = await canLeaveConditions();
+    if (!isCurrent()) return;
+    if (!allowed) throw new Error("Navigation cancelled");
+    // Display identity only. Trip grants never create/read another resource's history.
+    conversationUi.clear(); readyConversationId = undefined;
+    activeConversationSession = { ...unsignedConversation, id: `ui-shared-${trip.id}`, title: trip.title, tripId: trip.id };
+    serverAgentSession.contextChanged(); syncServerTripSource(activeConversationSession);
+    tripWorkspaceController.activateSession(activeConversationSession.id);
+    contextWorkspaceController.activateSession(activeConversationSession.id);
+    aiGuideController.switchSession(activeConversationSession.id); aiGuideInput.disabled = aiGuideSubmit.disabled = true;
+    await tripWorkspaceController.source()?.retry?.();
+    if (isCurrent() && tripWorkspaceController.current()?.id !== trip.id) throw new Error("Shared Trip unavailable");
+  },
   findConversation: (id) => conversationUi.findForTrip(id),
   createConversation: (trip) => conversationUi.create({ title: trip.title, scope: "trip", tripId: trip.id }, false),
   activate: activateConversation,
@@ -484,6 +504,7 @@ const tripNavigation = createTripConsultationNavigation({
 });
 let pendingStart: { tripId: string; prompt: string; account: number | undefined } | undefined;
 const resetConsultation = () => {
+  readyConversationId = undefined;
   pendingStart = undefined;
   tripNavigation.cancel(); conversationUi.clear();
   activeConversationSession = { ...unsignedConversation, id: `ui-new-${crypto.randomUUID()}` };
@@ -527,6 +548,7 @@ let authenticationGeneration = 0;
 currentAuthentication().subscribe(() => {
   if (initialAuthenticationNotification) { initialAuthenticationNotification = false; return; }
   const generation = ++authenticationGeneration;
+  readyConversationId = undefined;
   pendingStart = undefined;
   tripNavigation.cancel(); serverTripReferences.clear();
   conversationUi.clear(); profileUi.clear(); activeConversationSession = unsignedConversation;
@@ -552,13 +574,7 @@ const tripSharing = configureTripSharing({ root: document.body, button: sharingB
   current: () => { const trip = tripWorkspaceController.current(); return trip ? { tripId: trip.id, role: tripWorkspaceController.source()?.getRole?.(), trip } : undefined; },
   parseLink: parseTripShareLink, makeLink: (link) => makeTripShareLink(window.location.href, link),
   async navigate(tripId) {
-    const trip = await serverTripClient.get(tripId); if (!trip) throw new Error("Trip unavailable");
-    // A new personal conversation, never the owner's Conversation or Trace.
-    const session = await conversationUi.create({ title: trip.title, tripId });
-    await activateConversation(session.id);
-    await tripWorkspaceController.source()?.retry?.();
-    if (tripWorkspaceController.current()?.id !== tripId) throw new Error("Trip unavailable");
-    returnToConversation(); tripWorkspace.show("trip");
+    await tripNavigation.open(tripId, "trip");
   } });
 aiGuideController.open();
 
@@ -624,13 +640,15 @@ primaryShell = configureAiFirstShell(document, app, {
   openTrip: (id) => tripNavigation.open(id, "trip"),
   openTravelMode: (id) => { void tripNavigation.open(id, "trip").then(() => tripWorkspace.openTravelMode()).catch(() => aiGuideController.notify("旅行モードを開けませんでした。")); },
   consultTrip: (id) => tripNavigation.open(id, "chat"),
+  activeTrip: () => tripWorkspaceController.loadState() !== "unavailable" && !["viewer", "editor"].includes(tripWorkspaceController.source()?.getRole?.() ?? "") && readyConversationId === activeConversationSession.id && conversationUi.active()?.id === activeConversationSession.id ? tripWorkspaceController.current()?.id : undefined,
+  switchTripView: view => tripWorkspace.show(view),
   openMap: () => { void startMap(); selectSidebarMapMode(); },
   journeySettings: () => ({ transferPace: journeyTransferPace.value, rankingPreference: journeyRankingPreference.value }),
   setJourneySettings: ({ transferPace, rankingPreference }) => {
     journeyTransferPace.value = transferPace; journeyTransferPace.dispatchEvent(new Event("change", { bubbles: true }));
     journeyRankingPreference.value = rankingPreference; journeyRankingPreference.dispatchEvent(new Event("change", { bubbles: true }));
   },
-  canLeave: () => tripWorkspace.canLeave(),
+  canLeave: () => canLeaveConditions(),
   now: () => new Date(),
 });
 configureTravelProfile(document, profileUi);

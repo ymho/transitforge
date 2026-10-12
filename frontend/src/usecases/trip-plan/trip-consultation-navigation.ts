@@ -4,6 +4,8 @@ import type { ConversationSession } from "../../domain/conversation-session";
 /** Latest explicit navigation wins, including account changes and new conversations. */
 export function createTripConsultationNavigation(ports: {
   getTrip(id: string): Promise<Trip | undefined>;
+  role?(tripId: string): import("@raiquora/trip/trip-sharing").TripRole | undefined;
+  openShared?(trip: Trip, isCurrent: () => boolean): Promise<void>;
   findConversation(tripId: string): Promise<ConversationSession | undefined>;
   createConversation(trip: Trip): Promise<ConversationSession>;
   activate(id: string): Promise<void>;
@@ -22,6 +24,15 @@ export function createTripConsultationNavigation(ports: {
       const trip = await ports.getTrip(tripId);
       if (!valid()) return;
       if (!trip || trip.id !== tripId) throw new Error("Trip unavailable");
+      if (["editor", "viewer"].includes(ports.role?.(tripId) ?? "")) {
+        // Trip grants do not authorize any Conversation or Agent write path.
+        if (view !== "trip" || !ports.openShared) throw new Error("Shared trip chat unavailable");
+        await ports.openShared(trip, valid);
+        if (!valid()) return;
+        if (ports.current().tripId !== tripId) throw new Error("Shared Trip unavailable");
+        ports.show("trip");
+        return;
+      }
       let session = await ports.findConversation(tripId);
       if (!valid()) return;
       session ??= await ports.createConversation(trip);

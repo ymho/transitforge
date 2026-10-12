@@ -16,7 +16,7 @@ TripParty（同行者）と認証されたTripParticipant（アクセス権）�
 | 既存Proposal/CAS適用 | 可 | 可 | 不可 |
 | archive | 可 | 不可 | 不可 |
 | Grant発行/失効、参加者権限変更 | 可 | 不可 | 不可 |
-| 自分のConversation | 従来どおり | 従来どおり | 従来どおり |
+| 当該Tripに属する自分のConversation | 可 | 不可 | 不可 |
 | ownerのConversation/Trace | 自分のみ | 不可 | 不可 |
 
 ownerはactiveな既存owner storageから暗黙認可する。owner移譲なし、全件backfillなし。
@@ -75,11 +75,9 @@ Checklist/Impact/Notification/Delivery/Push subscription/Trace/Conversationの�
 participantのownerへ自動付け替えしない。未取得はunknownのままで、空の予約として扱わない。
 
 共有管理panelは当該Tripのrole/必須期限指定、作成、コピー、取消、参加者一覧/権限変更を提供する。参加は共有リンクからの専用起動に限定し、参加中Trip一覧は旅程一覧へ集約する。
-shared openは新しい本人用Conversationで既存Trip Workspaceを表示する。
-viewerは閲覧専用表示でwriter/confirmを無効化。相談用Proposal previewは保存しない。
+共有旅程の起動は認可済みTrip sourceと一時的な表示IDだけでworkspaceを表示する。Conversationを作成・取得せず、ownerの履歴を読まない。現在のConversation・Agentは本人所有Tripだけを対象とするため、editor/viewerにはチャットタブ・相談・相談による追加を表示しない。viewerは閲覧専用でwriter/confirmを無効化し、editorの既存手入力編集は保持する。
 editorの確認は既存ServerTripWorkspaceSource/ServerTripWriterを再利用し、保存前に最新Tripとroleを再取得。
-Agentには`featureContext.tripRole`だけを追加し、owner/principal/secret/hashは追加しない。
-ToolやPromptを変更せず、最終適用のsecurity boundaryはserver authorization。
+この表示接続からAgentを起動しない。Trip編集の最終適用のsecurity boundaryは既存のserver authorization。共有Tripで本人用の相談を提供する場合は、ConversationとAgentの認可・候補採用・semantic更新の境界を別途定める。
 
 ## 公開ルートと非対象
 
@@ -91,7 +89,7 @@ API Gateway Cognito authorizer + scope、LambdaのAccess Token検証、Trip本�
 一覧の「あなたの旅」は本人所有Trip。「共有中の旅」はactiveなGrantを持つ本人所有Tripと、
 現時点で認可された参加Tripを合流してTrip IDで重複除去する。本人所有Tripは個人一覧にも表示する。
 owner/editor/viewerを「あなたの旅/共同編集/閲覧のみ」で示し、Cognito subjectを表示名として公開しない。
-個人・共有・公式それぞれ独立したloading/error/empty/cursorを持ち、共有・公式には再読み込みを設ける。
+個人・共有・公式それぞれ独立したloading/error/empty/cursorを持ち、共有・公式は続きの読み込みと取得失敗時の再試行を設ける。
 旅程ヘッダーには「旅程を確定」と「相談」を並べる。共有・削除は詳細上部の「…」にまとめ、一覧の操作メニューと予定ごとの相談操作は設けない。削除は所有者だけに表示する。
 詳細の「…」内の「共有」からGrant管理へ進む。「旅程を確定」はヘッダーに表示し、日程不足時は理由を添える。
 確定は既存TripAdoptionで、予約確定や公式公開とは別の操作。

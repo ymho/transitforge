@@ -9,6 +9,8 @@ import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation
 import { partyMarkup } from "../trip-plan/trip-party-control";
 import type { AuthState } from "../../usecases/auth/auth-session";
 import { externalServiceNote, renderExternalServiceList, type AccommodationProviderAttribution } from "../settings/external-service-list";
+import { configureHomeDiscovery } from "./home-discovery";
+import { confirmAction } from "../shared/app-dialog";
 
 export type PrimaryView = "chat" | "trips" | "my";
 export interface AiFirstShellPorts {
@@ -28,6 +30,8 @@ export interface AiFirstShellPorts {
   openTrip(id: string): Promise<void> | void;
   openTravelMode?(id: string): void;
   consultTrip?(id: string): Promise<void> | void;
+  activeTrip?(): string | undefined;
+  switchTripView?(view: "trip" | "chat"): void;
   openMap(): void;
   journeySettings(): { transferPace: string; rankingPreference: string };
   setJourneySettings(settings: { transferPace: string; rankingPreference: string }): void;
@@ -39,7 +43,7 @@ export interface AiFirstShellPorts {
 export function configureAiFirstShell(document: Document, app: HTMLElement, ports: AiFirstShellPorts) {
   const window = document.defaultView!;
   const root = document.createElement("section"); root.className = "product-shell";
-  const navigation: Array<[PrimaryView, string, ProductIconName]> = [["chat", "相談", "chat"], ["trips", "旅程", "trips"]];
+  const navigation: Array<[PrimaryView, string, ProductIconName]> = [["chat", "ホーム", "home"], ["trips", "旅程", "trips"]];
   const heroImages = [
     ["/media/home-setouchi-v2.webp", "1672", "941", "瀬戸内海の島々と海辺の町"],
     ["/media/home-kinosaki-v2.webp", "1942", "809", "夕暮れの温泉街と柳の水路"],
@@ -49,9 +53,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const selectedHeroImage = Math.floor(Math.random() * heroImages.length);
   const selectedExample = consultationExamples[0]!;
   root.innerHTML = `<nav class="product-nav" aria-label="メインナビゲーション"><div class="product-brand">${brandLogoMarkup()}</div>${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button><button type="button" data-account>${iconMarkup("account")}<span>設定</span></button></nav>
-    <section class="product-page" data-page="chat" aria-label="相談"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>KAIHO original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
+    <section class="product-page" data-page="chat" aria-label="ホーム"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>KAIHO original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
     <div class="home-brand">${brandLogoMarkup()}</div><form class="home-prompt"><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="${selectedExample}"></textarea><button type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
-    <section class="home-brand-story" aria-label="KAIHOについて"><h1>あなただけの旅を、一緒に形にします。</h1><p>その昔、旅に役立つ情報をまとめ、懐に収めて持ち歩ける案内書や地図が「懐宝」と名付けられました。</p><p>旅に必要なものを、いつでも手元に。その思いを受け継ぎ、KAIHOは新しい旅のパートナーとして生まれました。</p><p>AIとともに、行きたい場所や体験したいことを一つの旅へ。旅先の発見から、移動や旅程づくりまで、あなたの旅づくりをサポートします。</p></section><p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><section class="home-official-guides" data-home-official-guides aria-labelledby="home-official-heading"><h2 id="home-official-heading">公式しおり</h2><div data-official-own hidden></div></section><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
+    <section class="home-brand-story" aria-label="KAIHOについて"><h1>あなただけの旅を、一緒に形にします。</h1><p>その昔、旅に役立つ情報をまとめ、懐に収めて持ち歩ける案内書や地図が「懐宝」と名付けられました。</p><p>旅に必要なものを、いつでも手元に。その思いを受け継ぎ、KAIHOは新しい旅のパートナーとして生まれました。</p><p>AIとともに、行きたい場所や体験したいことを一つの旅へ。旅先の発見から、移動や旅程づくりまで、あなたの旅づくりをサポートします。</p></section><p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><div class="home-content" data-home-content><nav class="home-entry-links" aria-label="ホームの入口"><button type="button" data-home-trips>保存した旅程</button><button type="button" data-home-guides>公式しおりを見る</button></nav><div data-home-themes></div><section class="home-official-guides" data-home-official-guides aria-labelledby="home-official-heading"><h2 id="home-official-heading">公式しおり</h2><p class="home-section-copy">モデルコースから、あなただけの旅へ。</p><div data-official-own hidden></div></section><div data-home-services></div></div><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
     <section class="trip-route-progress" data-trip-route-progress role="status" hidden></section>
     <section class="product-page" data-page="trips" aria-label="旅程" hidden><div class="trip-list-heading">${pageHeadingMarkup("", "旅のしおり")}</div><div data-trip-list></div></section>
     <section class="product-page" data-page="my" aria-label="設定" hidden><div class="my-shell">${pageHeadingMarkup("", "設定")}<div class="my-grid"><section class="home-card my-account-card ds-surface"><h2>ログイン</h2><p data-my-account-status></p><button class="ds-button" type="button" data-my-login>ログイン</button><button class="ds-button" type="button" data-my-logout hidden>ログアウト</button></section><section class="home-card account-profile-card ds-surface" data-signed-in-only><div id="travel-profile-page" class="travel-profile-page" aria-label="いつもの好み設定"></div></section>
@@ -96,6 +100,9 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const homeForm = root.querySelector<HTMLFormElement>(".home-prompt")!;
   const homeSubmit = homeForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   adoptComposer(homeForm, textarea, homeSubmit);
+  const homePage = root.querySelector<HTMLElement>('[data-page="chat"]')!;
+  const homeScrolled = () => { app.dataset.homeScrolled = String(homePage.scrollTop > 24); };
+  homePage.addEventListener("scroll", homeScrolled, { passive: true });
   const draftKey = "raiquora:home-prompt-draft";
   const pendingKey = "raiquora:home-prompt-submit";
   let pendingPrompt: string | undefined;
@@ -224,23 +231,24 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       window.history.replaceState({ consultation: "new" }, "", "#chat"); apply(true); return;
     }
     const route = window.location.hash.slice(1), isMap = route === "map", isTrip = route === "trip";
-    if (route === "trips" || isTrip) current = "trips";
+    const tripChat = route === "chat" && consultationMode === "conversation" && typeof window.history.state?.tripId === "string";
+    if (route === "trips" || isTrip || tripChat) current = "trips";
     else if (route === "my") current = "my";
     else if (!isMap) current = "chat";
-    app.dataset.primaryView = isMap ? "map" : isTrip ? tripEntry === "loaded" ? "trip" : "trip-loading" : current;
+    app.dataset.primaryView = isMap ? "map" : isTrip ? tripEntry === "loaded" ? "trip" : "trip-loading" : tripChat ? "chat" : current;
     const tripProgress = root.querySelector<HTMLElement>("[data-trip-route-progress]")!;
     tripProgress.hidden = !isTrip || tripEntry === "loaded";
     setLoadingStatus(tripProgress, tripEntry === "loading" ? "旅程を読み込んでいます。" : "旅程を読み込めませんでした。旅程一覧から再試行してください。", tripEntry === "loading");
     setLoadingStatus(entryStatus, entryStatus.textContent ?? "", consultationMode === "starting");
     app.dataset.consultationMode = consultationMode;
     hero.hidden = consultationMode !== "landing";
-    root.querySelector<HTMLElement>("[data-home-official-guides]")!.hidden = consultationMode !== "landing";
+    root.querySelector<HTMLElement>("[data-home-content]")!.hidden = consultationMode !== "landing";
     progress.hidden = consultationMode === "landing" || consultationMode === "conversation";
     entryError.hidden = !entryError.textContent;
     entryRetry.hidden = consultationMode !== "unavailable";
     textarea.disabled = homeSubmit.disabled = consultationMode === "starting";
     for (const page of root.querySelectorAll<HTMLElement>("[data-page]")) {
-      page.hidden = isMap || isTrip || page.dataset.page !== current || (current === "chat" && consultationMode === "conversation");
+      page.hidden = isMap || isTrip || page.dataset.page !== current || (route === "chat" && consultationMode === "conversation");
     }
     root.querySelectorAll<HTMLElement>("[data-primary]").forEach((a) => {
       if (!isMap && a.dataset.primary === current) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
@@ -281,6 +289,12 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const generation = ++entryGeneration;
     pendingTripId = route === "trip" ? window.history.state?.tripId : undefined;
     ports.cancelNavigation?.();
+    const targetTripId = route === "trip" || route === "chat" && window.history.state?.consultation === "trip" ? window.history.state?.tripId : undefined;
+    if (typeof targetTripId === "string" && targetTripId === ports.activeTrip?.() && ports.switchTripView) {
+      pendingTripId = undefined; tripEntry = "loaded"; consultationMode = "conversation";
+      tripNavigationResult = Promise.resolve();
+      paintRoute(); ports.switchTripView(route === "trip" ? "trip" : "chat"); return;
+    }
     if (route === "chat") {
       const tripId = window.history.state?.consultation === "trip" ? window.history.state?.tripId : undefined;
       if (isSignedIn() && typeof tripId === "string" && ports.consultTrip) {
@@ -361,10 +375,23 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     openTrip: async id => { window.history.pushState({ tripId: id }, "", "#trip"); apply(); await tripNavigationResult; },
     authenticated: isSignedIn, session: () => ports.librarySession?.() ?? 0,
   });
+  root.querySelector("[data-home-trips]")!.addEventListener("click", () => navigate("trips"));
+  root.querySelector("[data-home-guides]")!.addEventListener("click", () => root.querySelector<HTMLElement>("[data-home-official-guides]")!.scrollIntoView({ behavior: "smooth", block: "start" }));
+  const discovery = configureHomeDiscovery(root.querySelector<HTMLElement>("[data-home-themes]")!, root.querySelector<HTMLElement>("[data-home-services]")!, {
+    now: ports.now, trips: () => navigate("trips"), map: showMap,
+    choosePrompt: async prompt => {
+      const generation = entryGeneration;
+      if (textarea.disabled) return;
+      if (textarea.value.trim() && textarea.value.trim() !== prompt && !await confirmAction(document, "入力中の相談を、このテーマの相談に置き換えますか？")) return;
+      if (generation !== entryGeneration || !root.isConnected || textarea.disabled || consultationMode !== "landing") return;
+      textarea.value = prompt; saveDraft(); textarea.focus({ preventScroll: true });
+      homeForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    },
+  });
   const unsubscribe = ports.subscribe(() => { render(); resumePending(); }); render(); apply(); resumePending();
   return { navigate, showMap, showConversation, showTrip, refresh: render, dispose() {
-    ++entryGeneration; window.clearInterval(exampleTimer); unsubscribe(); libraryUi?.dispose(); officialUi?.dispose();
-    document.removeEventListener("click", dismissTripMenus, true);
+    ++entryGeneration; discovery.dispose(); window.clearInterval(exampleTimer); unsubscribe(); libraryUi?.dispose(); officialUi?.dispose();
+    document.removeEventListener("click", dismissTripMenus, true); homePage.removeEventListener("scroll", homeScrolled);
     window.removeEventListener("pageshow", resumed); window.removeEventListener("focus", resumed);
     document.removeEventListener("visibilitychange", visibilityChanged);
     window.removeEventListener("popstate", historyChanged); window.removeEventListener("hashchange", historyChanged);

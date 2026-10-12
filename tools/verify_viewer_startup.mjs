@@ -56,7 +56,7 @@ const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of [{ width: 360, height: 844 }, { width: 390, height: 844 }, { width: 768, height: 1000 }, { width: 1280, height: 900 }, { width: 1440, height: 900 }]) {
     trips[0] = { ...trips[0], revision: 0, weather: structuredClone(initialWeather), items: trips[0].items.map(({ bookingStatus: _booking, memo: _memo, ...item }) => item) };
-    const weatherRefreshes = [];
+    const weatherRefreshes = [], sharedRoles = new Map();
     const context = await browser.newContext({ viewport });
     const page = await context.newPage(), errors = [], apiCalls = [], dataCalls = [], failures = [], consoleErrors = [];
     page.on("requestfailed", request => failures.push(new URL(request.url()).pathname));
@@ -98,7 +98,7 @@ try {
         return route.fulfill({ json: { version: "trip-api-v1", trip: updated, revision: updated.revision, mutationId: command.mutationId } });
       }
       const json = path === "/api/profile/v1" ? { version: "profile-api-v1", profile: null }
-        : path === "/api/trips/v1" ? { version: "trip-api-v1", ...(command?.operation === "get" ? { trip, role: "owner" } : { trips }) }
+        : path === "/api/trips/v1" ? { version: "trip-api-v1", ...(command?.operation === "get" ? { trip, role: sharedRoles.get(trip?.id) ?? "owner" } : { trips }) }
         : path === "/api/trips/sharing/v1" ? { version: "trip-sharing-v1", ...(command?.operation === "official-list" ? { guides: [guide] } : command?.operation === "official-get" ? { guide } : command?.operation === "official-capabilities" ? { publisher: false } : command?.operation === "manage" ? { participants: [], grants: [] } : { trips: [{ trip: trips[0], role: "owner" }] }) }
         : path === "/api/conversations/v1" ? { version: "conversation-api-v1", ...(command?.operation === "get" ? { conversation: conversation(trip ?? trips[0]) } : command?.operation === "history" ? { items: [{ role: "user", text: "乗換のある経路を比べてください", sequence: 1, createdAt: fixture.selectedAt }, { role: "assistant", sequence: 2, createdAt: fixture.selectedAt, ...consultationDesignFixture() }] } : { items: trips.map(conversation) }) }
         : { version: "conversation-api-v1", items: [] };
@@ -389,6 +389,21 @@ try {
     assert.equal(await page.locator("#app").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(250, 250, 250)");
     await page.screenshot({ path: `.artifacts/product-design/settings-dark-${viewport.width}.png` });
     await page.emulateMedia({ colorScheme: "light" });
+
+    // Full composition: shared grants must never create/read a Conversation.
+    for (const role of ["viewer", "editor"]) {
+      sharedRoles.set(trips[1].id, role);
+      await page.locator('[data-primary="trips"]').click();
+      const conversationsBefore = apiCalls.filter(path => path === "/api/conversations/v1").length;
+      await page.locator(`[data-trip="${trips[1].id}"]`).click();
+      await page.locator('#app[data-primary-view="trip"] .trip-workspace').waitFor();
+      assert.equal(await page.locator("#trip-workspace-chat-tab").isVisible(), false);
+      assert.equal(await page.locator("[data-trip-consultation]").isVisible(), false);
+      assert.equal(await page.locator(".trip-title-edit").isVisible(), role === "editor");
+      assert.equal(apiCalls.filter(path => path === "/api/conversations/v1").length, conversationsBefore);
+      await checkLayout(`shared-${role}`);
+    }
+    await page.locator('[data-account]').click();
 
     // CI bundles a dummy Mapbox token; force a deterministic adapter load failure.
     await page.route("**/mapbox-*.js", route => route.abort());

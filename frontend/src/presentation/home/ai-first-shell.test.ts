@@ -188,7 +188,7 @@ it("keeps list cards free of operation menus even for a current adopted Trip", (
 const signedIn = () => ({ status: "signed-in" as const, displayName: "テスト" });
 it("unifies the menu and uses a fresh hero entry even when a prior chat was active", async () => {
   const { shell, ports } = setup({ authState: signedIn });
-  expect([...document.querySelectorAll(".product-nav a, .product-nav button")].map(x => x.textContent)).toEqual(["相談", "旅程", "運行", "設定"]);
+  expect([...document.querySelectorAll(".product-nav a, .product-nav button")].map(x => x.textContent)).toEqual(["ホーム", "旅程", "運行", "設定"]);
   expect(document.querySelector('[data-page="explore"]')).toBeNull();
   expect(document.querySelector("main")!.dataset.consultationMode).toBe("landing");
   expect(ports.newConsultation).not.toHaveBeenCalled();
@@ -438,4 +438,17 @@ it("does not ask signed-in users to log in when the trip read view is unavailabl
   expect(document.querySelector('[data-trip-list]')!.textContent).toContain("旅程を取得できませんでした");
   expect(document.querySelector('[data-trip-list]')!.textContent).not.toContain("ログインすると");
   expect(f.ports.login).not.toHaveBeenCalled(); f.shell.dispose();
+});
+
+it("offers home content without calling personal APIs and fills a theme without submitting", async () => {
+  const f = setup();
+  expect(document.querySelector('[data-page="chat"]')!.getAttribute("aria-label")).toBe("ホーム");
+  expect(document.querySelector('[data-primary="chat"]')!.textContent).toBe("ホーム");
+  expect(document.querySelectorAll("[data-home-theme]")).toHaveLength(3);
+  document.querySelector<HTMLButtonElement>("[data-home-theme]")!.click();
+  await Promise.resolve();
+  expect(document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value).toContain("瀬戸内");
+  expect(f.ports.newConsultation).not.toHaveBeenCalled(); expect(f.ports.login).not.toHaveBeenCalled();
+  document.querySelector<HTMLButtonElement>("[data-home-trips]")!.click(); expect(f.ports.login).toHaveBeenCalledOnce();
+  expect(f.ports.openTrip).not.toHaveBeenCalled(); f.shell.dispose();
 });

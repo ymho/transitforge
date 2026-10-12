@@ -33,16 +33,23 @@ function openTrip(view: "trip" | "chat") {
   workspace.show(view); notify();
 }
 const shell = configureAiFirstShell(document, app, {
+  library: { accessible: async () => ({ trips: [] }), ownedShared: async () => ({ trips: [] }), officialCapabilities: async () => false,
+    officialList: async () => ({ guides: [] }), officialGet: async () => { throw new Error("No fixture guide"); },
+    officialPublish: async () => { throw new Error("Read-only fixture"); }, officialWithdraw: async () => { throw new Error("Read-only fixture"); },
+    officialImport: async () => { throw new Error("No fixture guide"); } },
   read: () => ({ state: "available", trips: [trip] }), authState: () => ({ status: "signed-in", displayName: "表示検証" }),
   login: () => undefined, logout: () => undefined, retry: async () => undefined,
   subscribe: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; },
   resetConsultation: reset,
   newConsultation: async prompt => {
+    const created = createTrip("74200000-0000-4000-8000-000000000002", "新しい旅（表示検証用）", "2026-09-27T00:00:00Z", []);
+    controller.attach("new-trip-fixture", { getCurrentTrip: () => created }); controller.activateSession("new-trip-fixture");
     submissions++; document.body.dataset.submissions = String(submissions);
-    await Promise.resolve(); append("user", prompt); append("assistant", "目的地の紹介をここに表示します。これは接続先を持たない画面検証用のサンプルです。");
+    await Promise.resolve(); append("user", prompt); append("assistant", "目的地の紹介をここに表示します。これは接続先を持たない画面検証用のサンプルです。"); return { tripId: created.id };
   },
   openChat: () => { panel.hidden = false; if (controller.current()) workspace.show("chat"); },
   openTrip: () => openTrip("trip"), consultTrip: async () => { openTrip("chat"); },
+  activeTrip: () => controller.current()?.id, switchTripView: view => workspace.show(view),
   openMap: () => undefined,
   journeySettings: () => ({ transferPace: "standard", rankingPreference: "balanced" }), setJourneySettings: () => undefined,
   now: () => new Date("2026-09-27T00:00:00Z"),
@@ -50,7 +57,7 @@ const shell = configureAiFirstShell(document, app, {
 workspace = configureTripWorkspace({ app, chat: panel, messages, input, controller,
   showContext: () => undefined, returnToConversation: () => undefined, showMap: () => undefined,
   ask: prompt => append("user", prompt), nextItemId: () => crypto.randomUUID(),
-  onViewChange: view => view === "trip" ? shell.showTrip(trip.id) : shell.showConversation(controller.current()?.id),
+  onViewChange: view => view === "trip" ? shell.showTrip(controller.current()!.id) : shell.showConversation(controller.current()?.id),
 });
 configureConsultationScreen(panel, messages, form, input, {
   read: () => ({ sessionId: controller.sessionId(), trip: controller.current() }), profile: () => undefined,
