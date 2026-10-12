@@ -344,6 +344,7 @@ export function configureAiGuidePanel(
           else pendingMessage.remove();
           return;
         }
+        elements.onTripConditionsSaved?.();
         const errorResponse = agentFailureMessage(error);
         const assistantMessage = historyRepository.append(requestedSessionId, {
           role: "assistant",
@@ -434,6 +435,10 @@ export function configureAiGuidePanel(
         addProposalAction(restored, entry.response);
         if (!submitFeedback) restored.querySelector(".conversation-feedback")?.remove();
       }
+      if (restoredHistory.at(-1)?.role === "user") {
+        const interrupted = appendPendingMessage(messages);
+        resolveAssistantMessage(interrupted, { text: "この相談の回答はまだ取得できていません。時間をおいて旅程を開き直すか、もう一度相談してください。" }, { animate: false });
+      }
       const latestPlan = [...restoredHistory].reverse().find(entry => entry.role === "assistant" && entry.response.publicPlanPresentation);
       if (latestPlan?.role === "assistant" && latestPlan.response.publicPlanPresentation)
         elements.onPlanPresentation?.(latestPlan.response.publicPlanPresentation, false);
@@ -455,7 +460,7 @@ export function configureAiGuidePanel(
 
 export function agentFailureMessage(error: unknown): string {
   if (error instanceof Error && error.message === "limit_reached") {
-    return "処理の上限に達し、今回の案をまとめきれませんでした。条件は保持しています。もう一度お試しください。";
+    return "処理の上限に達し、今回の案をまとめきれませんでした。反映済みの条件と保存済みの予定は保持しています。今回の希望が反映されたか、条件欄を確認してください。もう一度お試しください。";
   }
   if (error instanceof Error && error.message === "turn_conflict") {
     return "同じ相談を処理中です。少し待ってから、もう一度お試しください。";

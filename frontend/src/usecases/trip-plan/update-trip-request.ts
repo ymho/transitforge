@@ -34,7 +34,10 @@ export function proposeAssumptionDecision(trip: Trip, assumptionId: string, stat
 
 /** Trusted user action, not a model actor flag. Prior profile hypotheses cannot override this trip. */
 export function proposeUserParty(trip: Trip, party: Omit<TripParty, "source" | "assumptionId">): TripUpdateProposal {
-  const request: TripRequest = { ...trip.request, party: { ...party, source: "user" }, assumptions: trip.request.assumptions.map((a) => {
+  const request: TripRequest = { ...trip.request,
+    partialConditions: trip.request.partialConditions?.filter(fact => fact.target !== "party_size" ||
+      !["conversation", "trip"].includes(fact.scope.type)),
+    party: { ...party, source: "user" }, assumptions: trip.request.assumptions.map((a) => {
     if (!a.affects.some((ref) => ref.type === "party") || a.status === "rejected") return a;
     // Confirmation history remains; the old hypothesis no longer supports the replacement.
     return { ...a, ...(a.status === "unconfirmed" && a.affects.every((ref) => ref.type === "party") ? { status: "rejected" as const } : {}),

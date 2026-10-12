@@ -97,6 +97,14 @@ function inlineNodes(tokens: Token[]): InlineNode[] {
         if (!nestedTokens(token).length) {
           const repaired = token.text.replace(/\*\*([^*`\n]+?)[ \t]+\*\*/gu, "**$1**");
           if (repaired !== token.text) return inlineNodes(marked.Lexer.lexInline(repaired, { gfm: true, breaks: true }));
+          // CommonMark punctuation rules leave a CJK-adjacent closing delimiter
+          // literal. Repair only this plain token, preserving escapes/code/links.
+          const match = /(?<!\*)\*\*([^*`\n]+)\*\*(?!\*)/u.exec(token.text);
+          if (match) return [
+            { kind: "text", value: token.text.slice(0, match.index) },
+            { kind: "strong", children: inlineNodes(marked.Lexer.lexInline(match[1]!)) },
+            ...inlineNodes([{ ...token, text: token.text.slice(match.index + match[0].length) }]),
+          ];
         }
         return nestedTokens(token).length > 0 ? inlineNodes(nestedTokens(token)) : [{ kind: "text", value: token.text }];
       case "escape":

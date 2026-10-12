@@ -120,7 +120,7 @@ adults = 2
 children = 1
 ```
 
-Conversation Intentでは匿名の`kind=party`へ変換し、子どもの人数だけ空要素として保持する。年齢・年代・家族/友人等の関係性はこのToolのSchema自体に置かないため、モデルが任意に補完できない。具体的なProviderが年齢を必要とする段階で、確認済み詳細を扱う別の業務操作を追加する。TripPartyと同じ基本整合性をDomainで検証するが、Tripへの採用は共通の条件Application commitが所有する。
+Conversation Intentでは匿名の`kind=party`へ変換し、子どもの人数だけ空要素として保持する。明示された子どもの年齢はoptionalなchildAgesへ人数と同じ長さで渡し、未確認はnullで保持する。Applicationは今回のquoteに年齢表現が存在することを検証する。年齢帯・食事寝具・関係性を年齢から補完せず、Providerの料金区分や受入条件を証明しない。TripPartyと同じ基本整合性をDomainで検証するが、Tripへの採用は共通の条件Application commitが所有する。
 
 ### 一操作の理由
 

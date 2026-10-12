@@ -257,3 +257,17 @@ describe("model-facing reply references", () => {
       { executionId: "test", evidence: [discovery] })).toThrow("ineligible_evidence");
   });
 });
+
+it("publishes restaurant-provided pictures with actual shop links and no API documentation source", async () => {
+  const { externalTravelEvidence } = await import("./external-travel-evidence");
+  const evidence = externalTravelEvidence({ restaurants: { status: "available", freshness: "fresh", data: { restaurants: [{
+    providerRestaurantId: "J0001", name: "検証用海鮮店", genre: "海鮮丼", detailUrl: "https://www.hotpepper.jp/strJ0001/",
+    imageUrl: "https://images.example/shop.jpg", access: "駅から徒歩5分",
+  }] }, evidence: [{ kind: "restaurant", provider: "hot-pepper", sourceUrl: "https://webservice.recruit.co.jp/doc/hotpepper/reference.html", retrievedAt: "2026-10-01T00:00:00Z" }] } },
+  { retrievedAt: "2026-10-01T00:00:00Z" });
+  const result = admitAgentV2Reply({ kind: "candidates", evidenceIds: [evidence[0]!.id], commentary: "店舗提供写真です。料理の内容は未確認です。" }, { executionId: "restaurants", evidence });
+  expect(result.publicPlacePresentation?.cards[0]).toMatchObject({ sourceUrl: "https://www.hotpepper.jp/strJ0001/", photo: {
+    url: "https://images.example/shop.jpg", sourceUrl: "https://www.hotpepper.jp/strJ0001/",
+  } });
+  expect(JSON.stringify(result)).not.toContain("reference.html");
+});

@@ -69,7 +69,7 @@ function projectFacts(facts: readonly ConversationIntentFact[]): TripConstraint[
   const dates = facts.filter((fact) => ["start_date", "end_date"].includes(fact.target) && fact.value.kind === "local_date");
   const start = dates.find(({ target }) => target === "start_date");
   const end = dates.find(({ target }) => target === "end_date");
-  if (start) constraints.push(constraint([start], { type: "dates", start: { earliest: start.value.kind === "local_date" ? start.value.date : "", latest: start.value.kind === "local_date" ? start.value.date : "" },
+  if (start) constraints.push(constraint(end ? [start, end] : [start], { type: "dates", start: { earliest: start.value.kind === "local_date" ? start.value.date : "", latest: start.value.kind === "local_date" ? start.value.date : "" },
     ...(end?.value.kind === "local_date" ? { end: { earliest: end.value.date, latest: end.value.date } } : {}) }));
   const destinations = facts.filter((fact) => fact.target === "destination" && fact.value.kind === "place_label");
   if (destinations.length) constraints.push(constraint(destinations, { type: "destinations", places: destinations.map((fact) => ({ name: fact.value.kind === "place_label" ? fact.value.label : "", sources: [] })), order: "flexible" }));

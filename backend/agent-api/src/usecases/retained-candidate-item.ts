@@ -9,10 +9,11 @@ export function trustedCandidateItem(draft: DraftPlanItem, candidateSetId: strin
     if (!retainedItem || retainedItem.id !== draft.sourceCandidateRef || retainedItem.type !== draft.kind || !selectedAt) throw new Error("Missing retained candidate");
     const item = { ...structuredClone(retainedItem), id: base.id, ...(draft.logicalDayId ? { logicalDayId: draft.logicalDayId } : {}) };
     if (item.type === "transport" && item.detail.status === "selected" && item.detail.mode === "rail") item.detail = { ...item.detail, journey: { ...item.detail.journey, selectedAt } };
-    if (item.type === "stay" && item.selection.status === "selected") item.selection = { ...item.selection, accommodation: { ...item.selection.accommodation, selectedAt } };
+    if (item.type === "stay" && draft.plannedTiming) item.plannedTiming = structuredClone(draft.plannedTiming);
+    if (item.type === "stay" && item.selection.status === "selected" && draft.baseItemId !== retainedItem.id) item.selection = { ...item.selection, accommodation: { ...item.selection.accommodation, selectedAt } };
     return item;
   }
   if (draft.kind === "transport") return { ...base, type: "transport", detail: { status: "unresolved" } };
-  if (draft.kind === "stay") return { ...base, type: "stay", selection: { status: "unselected" } };
+  if (draft.kind === "stay") return { ...base, type: "stay", selection: { status: "unselected" }, ...(draft.plannedTiming ? { plannedTiming: structuredClone(draft.plannedTiming) } : {}) };
   return { ...base, type: "activity", category: "other" };
 }

@@ -212,7 +212,7 @@ export function admitAgentV2Reply(value: unknown, context: AgentV2ReplyContext):
         if (photoSections && !card.photo) throw new AgentV2ReplyError("ineligible_evidence");
         const sectionHeading = photoSections?.find(section => section.photoEvidenceId === item.id)?.heading.trim();
         card = { ...card, photoPlacement: sectionHeading ? { sectionHeading } : {} };
-        if (!card.photo || cards.some(previous => previous.photo?.url === card.photo?.url && previous.title === card.title)) continue;
+        if (!card.photo || cards.some(previous => previous.photo?.url === card.photo?.url)) continue;
         selected.set(item.id, structuredClone(item)); cards.push(card);
         for (const [field, statement, transform] of [["sourceTitle", card.title, "identity"], ["sourceExcerpt", card.description, "bounded_quote"]] as const) {
           proof.references.push({ evidenceId: item.id, field });
@@ -282,7 +282,7 @@ function accommodationPanelFact(evidence: Evidence, field: string, effective?: E
 function accommodationComparison(selected: Map<string, Evidence>, claims: EvidenceClaim[], context: AgentV2ReplyContext): PublicAccommodationPresentation | undefined {
   const scopes = new Set([...selected.values()].filter(item => item.observation?.predicate === "accommodation_search_result").map(item => item.observation!.scopeKey));
   const cards: PublicAccommodationPresentation["cards"] = [];
-  for (const evidence of context.evidence.filter(item => scopes.has(item.observation?.scopeKey ?? "") && item.observation?.predicate === "accommodation_search_result")) {
+  for (const evidence of [...selected.values()].filter(item => scopes.has(item.observation?.scopeKey ?? "") && item.observation?.predicate === "accommodation_search_result")) {
     let card: PublicAccommodationPresentation["cards"][number];
     try { card = accommodationCard(evidence, context.effectiveIntent); }
     catch (error) { if (error instanceof AgentV2ReplyError) continue; throw error; }

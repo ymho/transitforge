@@ -33,6 +33,7 @@ import type { AgentOperation } from "../ports/agent-operation.js";
 import { DynamoDbItineraryCandidateRepository } from "../adapters/dynamodb-itinerary-candidate-repository.js";
 import { knownItineraryDayCount, PlanCandidateRetentionApplication, registerPlanCandidateRetentionTool, type RetainedCandidatePlan } from "../usecases/plan-candidate-retention.js";
 import { proposeVerifiedIntentRequest } from "@raiquora/agent/verified-intent-proposal";
+import { applyTripProposal } from "@raiquora/trip/trip";
 import type { EffectiveIntent } from "@raiquora/agent/effective-intent";
 import type { IntentApplicationReceipt } from "@raiquora/agent/conversation-intent-reducer";
 import { publicSemanticReceipt } from "@raiquora/agent/public-semantic-receipt";
@@ -100,7 +101,7 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         } } : {}),
       });
     };
-    const result = await createServerAgent({ ...options,
+    const result: import("@raiquora/agent/runtime-contract").AgentRuntimeResult = await createServerAgent({ ...options,
       registerAdditionalTools: (tools, evidence, scope) => {
         turnExecutionId = scope.executionId;
         options.registerAdditionalTools?.(tools, evidence, scope);
@@ -122,21 +123,30 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
                 proposeVerifiedIntentRequest({ conversationId: scope.conversationId!, trip: trip!, effectiveIntent, receipt: currentIntentReceipt }) ? 1 : 0),
               baseItemIds: trip!.items.map(item => item.id),
               baseDayIds: trip!.timeline?.logicalDays.map(day => day.id),
-              currentTrip: trip!,
+              currentTrip: effectiveIntent && currentIntentReceipt ? (() => { const proposal = proposeVerifiedIntentRequest({ conversationId: scope.conversationId!, trip: trip!, effectiveIntent, receipt: currentIntentReceipt }); return proposal ? applyTripProposal(trip!, proposal) : trip!; })() : trip!,
             }), value => { retainedCandidatePlan = value; }, () => knownItineraryDayCount(effectiveIntent));
           }
         }
       },
       loadContext: contextLoader,
       runRuntime,
-    }).runAgentTurn(input, reportProgress);
+    }).runAgentTurn(input, reportProgress).catch(error => {
+      // A failed external/model operation must not erase independently accepted
+      // user conditions. Only the receipt-derived request is eligible below.
+      if (!input.conversationId || !effectiveIntent || !currentIntentReceipt || !trip ||
+          !proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent, receipt: currentIntentReceipt })) throw error;
+      return { status: "failed" as const, response: "", evidence: [], claims: [], trace: {
+        executionId: turnExecutionId ?? input.conversationId, events: [], droppedEventCount: 0,
+      } };
+    });
     if (input.conversationId && effectiveIntent && currentIntentReceipt && trip) {
       const verified = proposeVerifiedIntentRequest({ conversationId: input.conversationId, trip, effectiveIntent, receipt: currentIntentReceipt });
       if (verified) tripUpdateProposal = parsePublicRequestProposal(verified);
     }
     if (!retainedCandidatePlan && trip && input.conversationId && options.verifiedSearchSelectionItems && result.status === "completed") {
       const selectionItems = options.verifiedSearchSelectionItems(result);
-      const draft = searchSelectionDraft(selectionItems, trip, input.uiContext?.itemId);
+      const selectionTrip = tripUpdateProposal?.intentBinding ? applyTripProposal(trip, tripUpdateProposal) : trip;
+      const draft = searchSelectionDraft(selectionItems, selectionTrip, input.uiContext?.itemId);
       if (draft) retainedCandidatePlan = await new PlanCandidateRetentionApplication(candidateRepository).retain({
         principal: input.principal, executionId: turnExecutionId!, conversationId: input.conversationId,
         userRequest: input.userRequest, tripId: trip.id, baseTripRevision: trip.revision + (tripUpdateProposal?.patches.every(patch => patch.type === "request") ? 1 : 0),
@@ -148,6 +158,6 @@ export function createStatefulServerAgent(options: Omit<Parameters<typeof create
         { modelCalls: usage.modelCalls, toolCalls: usage.toolCalls, wallClockMs: usage.wallClockMs, requestedMode, effectiveMode }) };
     }
     return { ...result, ...(shown && (result.status === "completed" || result.status === "follow_up") ? shown : {}), ...((result.status === "completed" || result.status === "follow_up") && retainedCandidatePlan ? { publicPlanPresentation: retainedCandidatePlan.presentation } : {}),
-      ...((result.status === "completed" || result.status === "follow_up") && tripUpdateProposal ? { tripUpdateProposal } : {}) };
+      ...((result.status === "completed" || result.status === "follow_up" || tripUpdateProposal?.intentBinding) && tripUpdateProposal ? { tripUpdateProposal } : {}) };
   } };
 }

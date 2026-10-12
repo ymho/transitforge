@@ -27,7 +27,7 @@ export function parseProviderRequest(value: unknown): FixedEgressRequest {
     if (!record(value) || byteLength(value) > providerRequestBytes) throw new Error();
     keys(value, ["operation", "request", "requestId"]);
     if (value.operation !== "search_accommodation" || !record(value.request)) throw new Error();
-    keys(value.request, ["destination", "checkInDate", "checkOutDate", "adults", "limit"]);
+    keys(value.request, ["destination", "checkInDate", "checkOutDate", "adults", "children", "limit"]);
     if (value.request.adults === undefined || value.request.limit === undefined) throw new Error();
     if (value.requestId !== undefined && (typeof value.requestId !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/u.test(value.requestId))) throw new Error();
     const request = providerSearchFrom(value.request);

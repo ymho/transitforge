@@ -27,6 +27,15 @@ export function createConversationServerAgent(options: Omit<Parameters<typeof cr
           baseTripRevision: proposal.baseRevision, committedTripRevision: saved.revision, mutationId });
       }
     },
+    conditionsAlreadyAdopted: async (identity, receipt) => {
+      const working = await turns.getWorkingState(identity.principal, identity.conversationId);
+      const adoption = working?.semantic?.adoptions?.find(item => item.binding.intentRevision === receipt.intentRevision &&
+        receipt.operations.filter(operation => operation.status === "accepted").every(operation =>
+          item.binding.changes.some(change => change.changeRef === operation.operationId)));
+      if (!adoption) return false;
+      const saved = await trips.get(identity.principal, adoption.tripId);
+      return !!saved && saved.revision >= adoption.committedTripRevision;
+    },
     runAgentTurn: (input, historyBeforeSequence, reportProgress, acceptCondition) =>
       createStatefulServerAgent({ ...options, historyBeforeSequence }).runAgentTurn(input, reportProgress, acceptCondition),
     diagnostics: options.diagnostics,

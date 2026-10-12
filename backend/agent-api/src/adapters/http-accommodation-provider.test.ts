@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { HttpAccommodationProvider } from "./http-accommodation-provider.js";
 
@@ -135,4 +135,12 @@ it("keeps short provider features and a review example without per-hotel request
   expect(result[0]!.reviewExcerpt).toMatch(/。$/u);
   expect(result[0]!.reviewExcerpt!.length).toBeGreaterThan(160);
   expect(result[0]!.reviewExcerpt).not.toContain("続きはこちら");
+});
+
+it("does not claim adult-only vacancy results cover a party with children", async () => {
+  const fetcher = vi.fn(async () => ({ ok: true, json: async () => ({ hotels: [{ hotelBasicInfo: { hotelNo: 42, hotelName: "検証宿" } }] }) }));
+  const provider = new HttpAccommodationProvider({ fetch: fetcher }, { load: async () => ({ applicationId: "fixture", accessKey: "fixture", hotelSearchUrl: "https://example.com/catalog", vacantHotelSearchUrl: "https://example.com/vacancy" }) });
+  const result = await provider.search({ destination: "白浜", checkInDate: "2026-11-21", checkOutDate: "2026-11-22", adults: 2, children: 1, limit: 1 });
+  expect(fetcher).toHaveBeenCalledOnce();
+  expect(result[0]?.availability).toBe("unknown");
 });

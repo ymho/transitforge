@@ -16,3 +16,14 @@ it("keeps an unknown end date unknown and excludes item-specific dates from the 
   const dated = trip("2026-10-05", "2026-10-06");
   expect(tripDateLabel({ ...dated, request: { constraints: [requestConstraint({ type: "dates", start: { earliest: "2026-10-07", latest: "2026-10-07" }, end: { earliest: "2026-10-08", latest: "2026-10-08" } }, { scope: { type: "item", itemId: "stay" } })], assumptions: [] } })).toBe("10月5日ー10月6日・1泊2日");
 });
+
+it("warns when wished dates differ from saved hotel dates without moving the hotel", async () => {
+  const { tripDateMismatchNotice } = await import("./trip-header-presentation");
+  const dated = trip("2026-11-07", "2026-11-08");
+  const changed = { ...dated, request: { constraints: [requestConstraint({ type: "dates", start: { earliest: "2026-11-14", latest: "2026-11-14" },
+    end: { earliest: "2026-11-15", latest: "2026-11-15" } })], assumptions: [] } };
+  expect(tripDateMismatchNotice(changed)).toContain("希望日程と保存済みの日時が異なる");
+  expect(tripDateMismatchNotice(changed)).toContain("宿");
+  expect(changed.items).toEqual(dated.items);
+  expect(tripDateMismatchNotice(dated)).toBeUndefined();
+});

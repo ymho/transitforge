@@ -1,5 +1,6 @@
 import { validateItinerarySchedule, bindTimelineFromAnchor, type ItinerarySchedule } from "./itinerary-schedule";
 import { localDate } from "./daily-itinerary";
+import type { StayPlannedTiming } from "./planned-itinerary-time";
 import type { Money } from "./money";
 import type { ItineraryItem, Trip, TripUpdateProposal } from "./trip";
 import { applyTripProposal, validateTrip, createTrip } from "./trip";
@@ -16,6 +17,7 @@ export interface DraftPlanItem {
   readonly kind: "transport" | "stay" | "activity";
   readonly title: string;
   readonly schedule: ItinerarySchedule;
+  readonly plannedTiming?: StayPlannedTiming;
   readonly logicalDayId?: string;
   readonly sourceCandidateRef?: string;
   readonly sourcePlaceRef?: string;
@@ -30,6 +32,7 @@ export interface PlanCoverage { readonly coveredScopes: readonly string[]; reado
 export interface PlanVariant {
   readonly id: string;
   readonly label: string;
+  readonly comparisonOnly?: true;
   readonly timeline: DraftTimeline;
   readonly items: readonly DraftPlanItem[];
   readonly assumptionRefs: readonly string[];
@@ -87,7 +90,7 @@ export function validateCandidateSet(value: ItineraryCandidateSet): void {
   }
   const variantIds = new Set<string>();
   for (const variant of value.variants) {
-    stableId(variant.id); if (variantIds.has(variant.id)) throw new Error("Duplicate variant"); variantIds.add(variant.id);
+    stableId(variant.id); if (variant.comparisonOnly !== undefined && variant.comparisonOnly !== true) throw new Error("Invalid comparison flag"); if (variantIds.has(variant.id)) throw new Error("Duplicate variant"); variantIds.add(variant.id);
     const ids = new Set(variant.items.map(({ componentId }) => componentId));
     if (ids.size !== variant.items.length || variant.timeline.itemOrder.length !== ids.size || variant.timeline.itemOrder.some((id) => !ids.has(id)) ||
         variant.changedComponentIds.some((id) => !ids.has(id)) || new Set(variant.timeline.dayOrder).size !== variant.timeline.dayOrder.length ||
@@ -154,6 +157,7 @@ export function proposePlanAdoption(input: { candidateSet: ItineraryCandidateSet
   if (!validInstant(input.now) || Date.parse(input.now) >= Date.parse(input.candidateSet.expiresAt) || context.requestFingerprint !== input.requestFingerprint ||
       context.tripId !== input.currentTrip.id || context.baseTripRevision !== input.currentTrip.revision) throw new Error("Stale or foreign candidate set");
   const variant = input.candidateSet.variants.find(({ id }) => id === input.variantId); if (!variant) throw new Error("Unknown variant");
+  if (variant.comparisonOnly) throw new Error("Comparison-only variants cannot be adopted");
   const componentMap: { componentId: string; itemId: string }[] = [], patches: TripUpdateProposal["patches"][number][] = [];
   // Relative candidate schedules refer to logical days. Adopt those days in
   // the same proposal as the items, preserving existing days and date bindings.
@@ -190,6 +194,10 @@ export function proposePlanAdoption(input: { candidateSet: ItineraryCandidateSet
       }
       patches.push({ type: "replace", itemId: draft.baseItemId, item }); componentToItem.set(componentId, item.id);
     } else {
+      if (draft.sourceCandidateRef && item.logicalDayId) {
+        if (item.schedule.type === "fixed") anchors.push({ dayId: item.logicalDayId, date: localDate(item.schedule.startAt), timeZone: item.schedule.startAt.timeZone });
+        else if (item.schedule.type === "day" && item.schedule.timeZone) anchors.push({ dayId: item.logicalDayId, date: item.schedule.date, timeZone: item.schedule.timeZone });
+      }
       if (!draft.placement) throw new Error("New candidate item requires explicit placement");
       if ("atBeginning" in draft.placement && (input.currentTrip.items.length > variant.removedBaseItemIds.length || componentToItem.size)) throw new Error("Current Proposal contract cannot insert before an existing first item");
       const afterId = "atBeginning" in draft.placement ? undefined : componentToItem.get(draft.placement.afterRef) ?? (currentIds.has(draft.placement.afterRef) ? draft.placement.afterRef : undefined);

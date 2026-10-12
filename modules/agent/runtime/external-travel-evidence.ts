@@ -20,7 +20,8 @@ export function externalTravelEvidence(output: unknown, context: Pick<ToolEviden
         ...(typeof raw.reviewAverage === "number" && Number.isFinite(raw.reviewAverage) && raw.reviewAverage >= 0 && raw.reviewAverage <= 5 ? { reviewAverage: raw.reviewAverage } : {}),
         ...(typeof raw.checkInDate === "string" && typeof raw.checkOutDate === "string" ? { accommodationSummary: [
           `${raw.checkInDate}〜${raw.checkOutDate}`,
-          ...(Number.isSafeInteger(output.searchAdults) ? [`検索人数: 大人${output.searchAdults}名`] : []),
+          ...(Number.isSafeInteger(output.searchAdults) ? [`検索人数: 大人${output.searchAdults}名${Number(output.searchChildren) > 0 ? `（同行する子ども${output.searchChildren}名の料金条件は未確認）` : ""}`] : []),
+          ...(Number(output.searchChildren) > 0 ? ["子どもの年齢・食事・寝具による料金と受入条件は未確認"] : []),
           raw.availability === "available" ? "空室あり（取得時の検索条件）" : "空室は未確認",
           isPriceObservation(raw.price) ? `${raw.price.basis === "selected-dates" ? "指定日の参考料金" : "参考最安値"}: ${formatMoney(raw.price.price)}（宿泊合計・税込条件は詳細で確認）` : "料金は未確認",
           ...(typeof raw.reviewAverage === "number" && Number.isFinite(raw.reviewAverage) && raw.reviewAverage >= 0 && raw.reviewAverage <= 5 ? [`評価: ${raw.reviewAverage}/5`] : []),
@@ -35,6 +36,29 @@ export function externalTravelEvidence(output: unknown, context: Pick<ToolEviden
         retrievedAt: context.retrievedAt, applicability: "applicable" as const, state: "current" as const, retention: "reference_only" as const },
     }];
   });
+  // Restaurant photos and user-facing shop links belong to each returned shop,
+  // not the Provider's API documentation or an inferred Mapbox place.
+  if (isRecord(output.restaurants) && output.restaurants.status === "available" && output.restaurants.freshness === "fresh" &&
+      isRecord(output.restaurants.data) && Array.isArray(output.restaurants.data.restaurants)) {
+    const info = output.restaurants;
+    const provenance = Array.isArray(info.evidence) ? info.evidence.find(raw => isRecord(raw) && raw.kind === "restaurant") : undefined;
+    if (!isRecord(provenance) || typeof provenance.provider !== "string" || typeof provenance.retrievedAt !== "string") return [];
+    return output.restaurants.data.restaurants.slice(0, 8).flatMap(raw => {
+      if (!isRecord(raw) || typeof raw.providerRestaurantId !== "string" || typeof raw.name !== "string" || typeof raw.detailUrl !== "string") return [];
+      const subjectKey = `place:${encodeURIComponent(provenance.provider as string)}:${encodeURIComponent(raw.providerRestaurantId)}`;
+      const id = boundedEvidenceId(`observation:${identity}:${subjectKey}`);
+      return [{ id, category: "external" as const, knowledgeKind: "deterministic_fact" as const, subject: raw.name,
+        facts: { provider: provenance.provider as string, sourceTitle: raw.name, sourceExcerpt: [raw.genre, raw.budget, raw.access, raw.openingHours].filter(value => typeof value === "string").join("\n").slice(0, 400) || raw.name,
+          sourceUrl: raw.detailUrl, sourcePrecision: "place-description", status: "available", freshness: "fresh",
+          ...(typeof raw.imageUrl === "string" ? { imageUrl: raw.imageUrl, imageSourceUrl: raw.detailUrl,
+            imageAttribution: "ホットペッパーグルメ（店舗提供写真・料理の内容は未確認）" } : {}) },
+        references: [{ sourceType: "external-source" as const, sourceRef: raw.detailUrl, retrievedAt: provenance.retrievedAt as string,
+          freshness: "current" as const, summary: "取得した飲食店の詳細" }],
+        observation: { observationId: id, subjectKey, scopeKey: identity, predicate: "place_description", retrievedAt: provenance.retrievedAt as string,
+          applicability: "applicable" as const, state: "current" as const, retention: "reference_only" as const },
+      }];
+    });
+  }
   const information = isRecord(output.forecast) ? output.forecast : isRecord(output.result) ? output.result : isRecord(output.webSearch) ? output.webSearch : isRecord(output.webPages) ? output.webPages : isRecord(output.alerts) ? output.alerts : isRecord(output.groundAccess) ? output.groundAccess : isRecord(output.restaurants) ? output.restaurants : undefined;
   if (!information || !Array.isArray(information.evidence)) return [];
   const resultKind = isRecord(output.forecast) ? "weather" : isRecord(output.alerts) ? "hazard" : undefined;

@@ -24,6 +24,7 @@ export function renderPublicPlacePresentation(input: PublicPlacePresentation, se
       image.alt = `${place.title}の写真`;
       image.loading = "lazy";
       image.decoding = "async";
+      image.addEventListener("error", () => { image.hidden = true; caption.prepend(document.createTextNode("写真を読み込めませんでした。 ")); }, { once: true });
       image.referrerPolicy = "no-referrer";
       const caption = document.createElement("figcaption");
       const credit = document.createElement("a");
@@ -56,9 +57,12 @@ export function renderPublicPlacePresentation(input: PublicPlacePresentation, se
     source.setAttribute("aria-label", `${place.title}の出典を開く`);
     header.append(title, source);
     const excerpt = document.createElement("blockquote");
-    excerpt.textContent = place.description;
+    const decoded = document.createElement("textarea"); decoded.innerHTML = place.description.replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+    excerpt.textContent = decoded.value;
     excerpt.setAttribute("aria-label", "資料の抜粋");
-    card.append(header, excerpt);
+    const details = document.createElement("details");
+    const summary = document.createElement("summary"); summary.textContent = "参照資料を読む";
+    details.append(summary, excerpt); card.append(header, details);
     if (place.retrievedAt) {
       const asOf = document.createElement("p");
       asOf.textContent = `参照資料は${researchDateLabel(place.retrievedAt)}時点（日本時間）。最新情報は改めて確認してください。`;

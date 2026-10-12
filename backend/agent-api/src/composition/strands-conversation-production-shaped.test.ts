@@ -204,9 +204,12 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   await expect(firstApp.runConversationTurn(input)).rejects.toBeDefined();
   const afterFailure = await new DynamoDbConversationTurnRepository("test-state", state.client)
     .getWorkingState(principal, conversationId);
-  expect(afterFailure?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [
-    { target: "destination", value: { kind: "place_label", label: "京都" } },
-  ] });
+  expect(afterFailure?.semantic?.overlay).toMatchObject({ intentRevision: 1, facts: [] });
+  const afterFailureTrip = await trips.repository.get(principal, metadata.tripId);
+  expect(afterFailureTrip?.request.constraints).toEqual(expect.arrayContaining([expect.objectContaining({
+    requirement: { type: "destinations", places: [{ name: "京都", sources: [] }], order: "flexible" },
+  })]));
+  expect(afterFailureTrip?.revision).toBe(1);
 
   const retryEngine = new StrandsAgentEngine({
     modelId: "unused", region: "ap-northeast-1", systemPrompt: "Submit the reply.", maxTurns: 3,
@@ -225,6 +228,7 @@ it("persists a V2 intent A-commit across answer failure and retries without reap
   expect(afterRetry?.semantic?.overlay.intentRevision).toBe(1);
   expect(afterRetry?.semantic?.overlay.facts).toHaveLength(0);
   const saved = await trips.repository.get(principal, stateMetadata().tripId);
+  expect(saved?.revision).toBe(1);
   expect(saved?.request.constraints.some(({ requirement }) => requirement.type === "destinations" &&
     requirement.places.some(({ name }) => name === "京都"))).toBe(true);
   expect((await state.conversations.history(principal, conversationId)).items.map(({ text }) => text))

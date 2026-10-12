@@ -28,7 +28,7 @@ export class HttpAccommodationProvider implements AccommodationProvider {
       if (!response.ok) throw new Error("provider response was not successful");
       const body = await response.json();
       const discovered = providerResults(body, request.limit, this.now());
-      const available = credentials.vacantHotelSearchUrl
+      const available = credentials.vacantHotelSearchUrl && !request.children
         ? await this.confirmAvailability(credentials, request, discovered)
         : undefined;
       // Vacancy search may confirm fewer hotels than discovery. Keep the other

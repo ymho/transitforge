@@ -93,7 +93,7 @@ it(`connects hotel comparison, same-turn origin/draft, rail cards, adoption and 
     [{ name: "update_current_destination", input: { action: "set", place: "出雲大社", quote: "出雲大社にいきたい" } }, reply("出雲大社へ行く希望を受け止めました。アクセス駅は出雲市駅で調べられます。")],
     [{ name: "update_current_travel_period", input: { action: "set", period: { start: { kind: "relative_date", relation: "tomorrow" }, duration: { unit: "nights", amount: 1 } }, quote: "明日から1泊で行きたい" } }, reply("出雲大社へのアクセスや宿泊施設の提案が必要ですか？")],
     [{ name: "search_accommodations", input: { destination: "出雲大社", checkInDate: "2026-10-04", checkOutDate: "2026-10-05", adults: 1, limit: 3 } },
-      { name: "strands_structured_output", input: { reply: { kind: "answer", commentary: "検索用に大人1名を仮定した宿泊候補です。", references: [{ evidenceId: "hotel-1", field: "name" }] } } }],
+      { name: "strands_structured_output", input: { reply: { kind: "answer", commentary: "検索用に大人1名を仮定した宿泊候補です。", references: [1, 2, 3].map(id => ({ evidenceId: `hotel-${id}`, field: "name" })) } } }],
     [{ name: "strands_structured_output", input: { reply: { kind: "clarification", target: "origin", text: "電車を検索するため出発駅を教えてください。" } } }],
     [{ name: "update_current_origin", input: { action: "set", place: "向日町駅", quote: "向日町駅" } },
       { name: "draft_itinerary", input: { variants: [{ label: "1泊の旅程案", dayCount: 2, items: [{ kind: "transport", title: "向日町からの往路（未選択）", day: 1 },

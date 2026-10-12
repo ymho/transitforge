@@ -238,7 +238,8 @@ describe("Trip workspace DOM and mobile navigation", () => {
     expect(disclosure.querySelector("summary")?.textContent).toBe("手入力");
     expect(disclosure.open).toBe(false);
     expect(form.querySelectorAll(".trip-manual-transport-fields label")).toHaveLength(3);
-    expect([...form.querySelectorAll("option")].map(o => o.textContent)).toEqual(["飛行機", "バス", "フェリー", "車", "レンタカー", "タクシー", "配車", "徒歩", "自転車", "移動"]);
+    expect([...form.querySelectorAll("option")].map(o => o.textContent)).toEqual(["交通手段を選択", "飛行機", "バス", "フェリー", "車", "レンタカー", "タクシー", "配車", "徒歩", "自転車", "移動"]);
+    expect(form.querySelector("select")!.value).toBe("");
     form.querySelector("select")!.value = "air";
     const fields = form.querySelectorAll("input"); fields[0]!.value = "大阪"; fields[1]!.value = "東京";
     form.dispatchEvent(new Event("submit", { cancelable: true }));

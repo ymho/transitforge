@@ -30,7 +30,12 @@ function blocks(tokens: Token[]): string {
 function inline(tokens: Token[]): string {
   return tokens.map(token => {
     switch (token.type) {
-      case "text": return nested(token).length ? inline(nested(token)) : literal(token.text);
+      case "text": {
+        if (nested(token).length) return inline(nested(token));
+        const match = /(?<!\*)\*\*([^*`\n]+)\*\*(?!\*)/u.exec(token.text);
+        return match ? literal(token.text.slice(0, match.index)) + `**${inline(marked.Lexer.lexInline(match[1]!))}** ` +
+          inline([{ ...token, text: token.text.slice(match.index + match[0].length) }]) : literal(token.text);
+      }
       case "escape": return literal(token.text);
       case "strong": return `**${inline(nested(token))}**`;
       case "em": return `*${inline(nested(token))}*`;

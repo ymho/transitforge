@@ -1,3 +1,4 @@
+import { emptyConversationIntentOverlay } from "@raiquora/trip/conversation-intent";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { admitConditionChange, admitTripScenario, completeConditionFromCurrentIntent, budgetConditionUpdateInputSchema, conditionDelta, conditionOperationId, conditionPayload, placeConditionUpdateInputSchema, partyConditionUpdateInputSchema, travelPeriodUpdateInputSchema, tripScenarioInputSchema } from "./conversation-condition";
@@ -311,4 +312,13 @@ it("does not derive a fixed end from a date window or a hypothetical duration", 
   const overlay = reduceConversationIntent(empty(), hypothetical).overlay;
   const start = admitConditionChange({ target: "travel_period", period: { start: { kind: "calendar_date", month: 10, day: 12 } }, quote: "10/12" }, "10/12", "2026-10-11");
   expect(reduceConversationIntent(overlay, conditionDelta(start, "actual-start", overlay)).overlay.facts.find(fact => fact.target === "end_date" && fact.frame === "actual")).toBeUndefined();
+});
+
+it("preserves explicitly grounded child ages without inferring missing ages", () => {
+  const change = admitConditionChange({ target: "party_size", party: { kind: "composition", adults: 2, children: 2, childAges: [5, null] },
+    quote: "大人2人、5歳と年齢未定の子ども2人" }, "大人2人、5歳と年齢未定の子ども2人");
+  const delta = conditionDelta(change, "age-turn", emptyConversationIntentOverlay());
+  expect(delta.operations[0]?.value).toEqual({ kind: "party", adults: 2, children: [{ age: 5 }, {}] });
+  expect(() => admitConditionChange({ target: "party_size", party: { kind: "composition", adults: 2, children: 1, childAges: [7] },
+    quote: "大人2人と子ども1人" }, "大人2人と子ども1人")).toThrow("invalid_source");
 });

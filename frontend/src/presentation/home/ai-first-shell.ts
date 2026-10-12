@@ -187,6 +187,11 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
     const stateText = listState === "loading" ? "旅程を読み込んでいます。" : listState === "unauthenticated" ? "ログインすると、保存した旅程をここで確認できます。相談はこのまま始められます。"
       : listState === "unavailable" ? "旅程を取得できませんでした。未予約・準備完了とは判断していません。" : "次の旅はまだ決まっていません。相談から始めてみましょう。";
     root.querySelector("[data-trip-list]")!.innerHTML = view.trips.length ? view.trips.map((row) => card(row.trip, row.group)).join("") : `<p role="status" aria-busy="${listState === "loading"}">${listState === "loading" ? loadingMarkup(stateText) : stateText}</p>`;
+    if (listState === "unavailable") {
+      const retry = document.createElement("button"); retry.type = "button"; retry.textContent = "旅程を再読み込み";
+      retry.addEventListener("click", () => { retry.disabled = true; void ports.retry().finally(() => { retry.disabled = false; }); });
+      root.querySelector("[data-trip-list]")!.append(retry);
+    }
     root.querySelectorAll<HTMLButtonElement>("[data-trip], [data-trip-open]").forEach((button) => button.addEventListener("click", () => {
       const move = (allowed: boolean) => { if (!allowed || !button.isConnected) return; window.history.pushState({ tripId: (button.dataset.trip ?? button.dataset.tripOpen)! }, "", "#trip"); apply(); };
       const result = canNavigate(); if (typeof result === "boolean") move(result); else void result.then(move);

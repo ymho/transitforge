@@ -123,3 +123,20 @@ it("runs the production-shaped Conversation state path through the trusted Stran
     turnId: "44444444-4444-4444-8444-444444444444" })).rejects.toMatchObject({ code: "not-found" });
   expect(calls).toHaveLength(callsBeforeForeign);
 });
+
+it("keeps verified conditions in Trip when later research exhausts the turn budget", async () => {
+  const { stateA } = await import("../adapters/state-dynamodb.fixture.js");
+  const state = stateDynamoFixture(), trips = tripDynamoFixture(), metadata = stateMetadata();
+  await state.conversations.create(stateA, conversationId, metadata);
+  trips.seed(createTrip(metadata.tripId, "検討中", "2026-10-01T00:00:00Z"), stateA.subject);
+  const app = createConversationServerAgent({ stateTable: "test-state", tripTable: "test-trips", stateClient: state.client, tripClient: trips.client,
+    weather: { search: vi.fn() }, runRuntime: async input => {
+      await input.conditionController!.apply({ target: "party_size", party: { kind: "composition", adults: 2, children: 1, childAges: [5] }, quote: "大人2人と5歳1人" });
+      return { status: "limit_reached", response: "", evidence: [], claims: [], trace: { executionId: input.executionId, events: [], droppedEventCount: 0 } };
+    } });
+  await expect(app.runConversationTurn({ principal: stateA, conversationId, turnId: secondId, userRequest: "大人2人と5歳1人で旅を考えて" }))
+    .rejects.toThrow("limit_reached");
+  const saved = await trips.repository.get(stateA, metadata.tripId);
+  expect(saved?.request.partialConditions?.[0]?.value).toEqual({ kind: "party", adults: 2, children: [{ age: 5 }] });
+  expect(saved?.items).toEqual([]);
+});

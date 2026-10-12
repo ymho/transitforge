@@ -51,3 +51,10 @@ it("repairs a model's spaced bold delimiter without changing code, escaped synta
   expect(parseAssistantMarkdown("`**そのまま **`")).toMatchObject([{ children: [{ kind: "code", value: "**そのまま **" }] }]);
   expect(parseAssistantMarkdown("```\n**そのまま **\n```")).toMatchObject([{ kind: "code", value: "**そのまま **" }]);
 });
+
+it("renders CJK-adjacent bold while leaving escaped delimiters literal", () => {
+  expect(parseAssistantMarkdown("**金沢21世紀美術館（まるびぃ）**を訪問")).toMatchObject([
+    { children: [{ kind: "text" }, { kind: "strong", children: [{ value: "金沢21世紀美術館（まるびぃ）" }] }, { kind: "text", value: "を訪問" }] },
+  ]);
+  expect(JSON.stringify(parseAssistantMarkdown("\\*\\*金沢\\*\\*"))).not.toContain('"kind":"strong"');
+});

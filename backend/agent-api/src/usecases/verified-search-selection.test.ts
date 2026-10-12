@@ -5,7 +5,9 @@ import { ReservationApplication } from "./reservation-application.js";
 import { expect, it, vi } from "vitest";
 import { searchJourneyIndex } from "@raiquora/journey/journey-search-engine";
 import { projectPublicJourneyPresentation } from "@raiquora/agent/public-journey-presentation";
-import { createTrip, type ItineraryItem } from "@raiquora/trip/trip";
+import { createItineraryCandidateSet, proposePlanAdoption } from "@raiquora/trip/itinerary-candidates";
+import { projectDailyItinerary } from "@raiquora/trip/daily-itinerary";
+import { createTrip, applyTripProposal, type ItineraryItem } from "@raiquora/trip/trip";
 import type { AccommodationSelectionEvidence } from "@raiquora/trip/select-accommodation";
 import type { AccommodationOffering } from "@raiquora/trip/travel-candidate";
 import { verifiedJourneySelectionItems, VerifiedJourneySelections } from "./verified-journey-selection.js";
@@ -250,4 +252,52 @@ it("retains all ten accommodation choices for adoption instead of dropping the b
   expect(retained.presentation.candidates).toHaveLength(10);
   expect(retained.presentation.target?.tripId).toBe(tripId);
   expect(searchSelectionDraft([...items, { ...item, id: "hotel-11" }], trip)).toBeUndefined();
+});
+
+it("offers explicit replacement targets when outward and return slots share a day", () => {
+  const trip = createTrip(tripId, "日帰り", at, ["outward", "return"].map(id => ({ id, title: id, type: "transport" as const,
+    detail: { status: "unresolved" as const }, schedule: { type: "day" as const, date: index.service_date, timeZone: "Asia/Tokyo" } })));
+  const items = verifiedJourneySelectionItems(search(), index, at), draft = searchSelectionDraft(items, trip)!;
+  expect(draft.variants).toHaveLength(4);
+  expect(draft.variants.map(variant => variant.items[0]!.baseItemId)).toEqual(["outward", "outward", "return", "return"]);
+  expect(draft.variants.map(variant => variant.label).every(label => label.includes("差し替え"))).toBe(true);
+  expect(trip.items).toHaveLength(2);
+});
+
+it("anchors a first adopted hotel before adding a logical first-day activity", async () => {
+  const base = createTrip(tripId, "1泊旅行", at), { offering, proof } = hotel();
+  const selected = verifiedAccommodationSelectionItems([offering], [proof], at);
+  const draft = searchSelectionDraft(selected, base)!;
+  const set = createItineraryCandidateSet({ id: "initial-hotel", revision: 0, contextRef: { conversationId, tripId, baseTripRevision: 0,
+    requestFingerprint: "initial" }, variants: draft.variants, coverage: draft.coverage, selectionItems: draft.selectionItems, issuedAt: at, expiresAt: "2026-10-05T00:00:00Z" });
+  const proposal = proposePlanAdoption({ candidateSet: set, variantId: "option-1", currentTrip: base, requestFingerprint: "initial", now: at,
+    trustedFactory: item => trustedCandidateItem(item, set.id, "option-1", selected[0], at) }).proposal;
+  const saved = applyTripProposal(base, proposal);
+  expect(saved.timeline?.calendarBindings.map(binding => binding.date)).toEqual(["2026-10-04", "2026-10-05"]);
+  const after = applyTripProposal(saved, { tripId, baseRevision: saved.revision, summary: "初日の観光", patches: [{ type: "add",
+    item: { id: "visit", title: "美術館", type: "activity", category: "sightseeing", schedule: { type: "relative", dayId: "day-1" } }, afterId: saved.items[0]!.id }] });
+  expect(new Set(projectDailyItinerary(after).days.map(day => day.localDate))).toEqual(new Set(["2026-10-04", "2026-10-05"]));
+  expect(projectDailyItinerary(after).days.find(day => day.entries.some(entry => entry.sourceItemId === "visit"))?.localDate).toBe("2026-10-04");
+  expect(after.items[0]).toEqual(saved.items[0]);
+});
+
+it("updates the selected hotel's planned check-in through a draft without replacing its identity", async () => {
+  const { AgentToolRegistry } = await import("@raiquora/agent/tool-registry");
+  const { registerPlanCandidateRetentionTool } = await import("./plan-candidate-retention.js");
+  const { offering, proof } = hotel(), selected = verifiedAccommodationSelectionItems([offering], [proof], at)[0]!;
+  const current = createTrip(tripId, "白浜", at, [{ ...selected, id: "stay" }]);
+  let set: import("@raiquora/trip/itinerary-candidates").ItineraryCandidateSet | undefined;
+  const repository = { put: async (_owner: unknown, value: NonNullable<typeof set>) => { set = value; }, get: async () => set };
+  const tools = new AgentToolRegistry();
+  registerPlanCandidateRetentionTool(tools, new PlanCandidateRetentionApplication(repository, () => new Date(at)), {
+    principal: stateA, executionId: "check-in", conversationId, tripId, baseTripRevision: 0, currentTrip: current,
+    baseItemIds: ["stay"], userRequest: "宿はそのまま、チェックイン16時にして" }, vi.fn());
+  expect(await tools.execute("draft_itinerary", { variants: [{ label: "到着時刻", dayCount: 2, items: [{ kind: "stay", title: selected.title,
+    day: 1, endDay: 2, baseItemId: "stay", startTime: "16:00", timeQuote: "チェックイン16時" }] }], unknowns: [] }, { executionId: "check-in" })).toMatchObject({ ok: true });
+  const proposal = proposePlanAdoption({ candidateSet: set!, variantId: "plan-1", currentTrip: current, requestFingerprint: set!.contextRef.requestFingerprint,
+    now: at, trustedFactory: item => trustedCandidateItem(item, set!.id, "plan-1", set!.selectionItems?.[0], at) }).proposal;
+  const after = applyTripProposal(current, proposal);
+  expect(after.items).toHaveLength(1);
+  expect(after.items[0]).toMatchObject({ id: "stay", type: "stay", plannedTiming: { checkIn: { at: "2026-10-04T16:00:00+09:00" } } });
+  expect(after.items[0]?.type === "stay" && after.items[0].selection).toEqual(selected.type === "stay" && selected.selection);
 });

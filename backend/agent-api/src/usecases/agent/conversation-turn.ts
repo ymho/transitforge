@@ -27,6 +27,7 @@ export function createConversationTurnApplication(dependencies: {
     acceptCondition?: (change: ConversationConditionInput, currentIntent?: EffectiveIntent) => Promise<IntentApplicationReceipt>) =>
     Promise<AgentRuntimeResult & Pick<ConversationTurnResult, "tripUpdateProposal" | "consultationRequestProposal" | "tripCostProposal">>;
   adoptTripProposal?: (identity: ConversationTurnIdentity, lease: ConversationTurnLease, proposal: import("@raiquora/trip/trip").TripUpdateProposal) => Promise<void>;
+  conditionsAlreadyAdopted?: (identity: ConversationTurnIdentity, receipt: IntentApplicationReceipt) => Promise<boolean>;
   diagnostics?: AgentDiagnosticsSink;
   log?: (event: string, fields: Record<string, unknown>) => void;
 }) {
@@ -64,18 +65,19 @@ export function createConversationTurnApplication(dependencies: {
       const runtime = reportProgress
         ? await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, reportProgress, acceptCondition)
         : await dependencies.runAgentTurn(runtimeInput, begun.lease.userSequence, undefined, acceptCondition);
-      if (runtime.status !== "completed" && runtime.status !== "follow_up") {
-        throw new ConversationTurnExecutionError(runtime.status === "limit_reached" ? "limit_reached" : "agent_failed");
-      }
       const autoAdoptConditionProposal = !!dependencies.adoptTripProposal && runtime.tripUpdateProposal?.intentBinding &&
         runtime.tripUpdateProposal.patches.length > 0 && runtime.tripUpdateProposal.patches.every(({ type }) => type === "request");
       if (autoAdoptConditionProposal) await dependencies.adoptTripProposal!(identity, begun.lease, runtime.tripUpdateProposal!);
       if (acceptedReceipt) {
         // "Reflected" is public only after a verified request proposal was adopted.
         // Partial values without a Trip representation remain internal until #761 persists them.
-        if (dependencies.adoptTripProposal && !autoAdoptConditionProposal) throw new StateError("unavailable");
+        if (dependencies.adoptTripProposal && !autoAdoptConditionProposal &&
+            !await dependencies.conditionsAlreadyAdopted?.(identity, acceptedReceipt)) throw new StateError("unavailable");
         await reportIntentAccepted?.(publicSemanticReceipt(acceptedReceipt));
         await safeDiagnostic(dependencies, semanticDiagnostic(turnId, "publish", "completed", acceptedReceipt));
+      }
+      if (runtime.status !== "completed" && runtime.status !== "follow_up") {
+        throw new ConversationTurnExecutionError(runtime.status === "limit_reached" ? "limit_reached" : "agent_failed");
       }
       const presentationReceipt = runtime.publicPlanPresentation ? presentationFromPublicPlan(runtime.publicPlanPresentation) : presentationFromObservation(turnId, runtime.turnObservation);
       if (presentationReceipt) await safeDiagnostic(dependencies, { version: "agent-diagnostic-v1", executionId: turnId,

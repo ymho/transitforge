@@ -106,7 +106,7 @@ export function productionServerTools(options: {
           // A topic must occur in the read page's title; a generic destination
           // image must not masquerade as a photo of its food or specific activity.
           const topic = interests.find(interest => normalizedIncludes(source.title ?? "", interest));
-          if (!topic && !needsDestinationPhoto) return [];
+          if (!topic && (interests.length || !needsDestinationPhoto)) return [];
           const place = { providerPlaceId: source.url, name: destination, sourceUrl: source.url,
             summary: source.text.slice(0, 1_200), sources: [{ provider: "web-page", label: source.title ?? destination, url: source.url, role: "identity" as const }],
             openingHoursStatus: "unknown" as const };
@@ -191,7 +191,7 @@ export function productionServerTools(options: {
     })),
     { descriptor: accommodationToolDescriptor, operation: async (input, context) => {
       const response = await options.accommodation(input, context);
-      return { ...response, body: { ...response.body, searchAdults: input.adults ?? 1 } };
+      return { ...response, body: { ...response.body, searchAdults: input.adults ?? 1, searchChildren: input.children ?? 0 } };
     }, evidence: (output, context) => {
       const evidence = externalTravelEvidence(output, context);
       if (output && typeof output === "object" && "accommodations" in output && Array.isArray(output.accommodations)) {

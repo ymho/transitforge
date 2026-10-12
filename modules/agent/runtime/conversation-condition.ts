@@ -25,8 +25,11 @@ const partyCount = z.strictObject({
 const partyComposition = z.strictObject({
   kind: z.literal("composition"),
   adults: z.number().int().min(0).max(20),
-  children: z.number().int().min(0).max(20).describe("明示された子どもの人数。年齢・年代・関係性はこのToolでは扱わない。"),
-}).refine((value) => value.adults + value.children >= 1 && value.adults + value.children <= 20, { message: "同行者は1〜20人にする" });
+  children: z.number().int().min(0).max(20).describe("明示された子どもの人数。内訳の年齢は明示されたchildAgesだけで扱う。"),
+  childAges: z.array(z.number().int().min(0).max(120).nullable()).max(20).optional()
+    .describe("各子どもの明示された年齢。人数と同じ長さ、年齢未確認はnull。年齢帯を数値に変換しない。"),
+}).refine(value => value.childAges === undefined || value.childAges.length === value.children,
+  { message: "Child age count differs" }).refine((value) => value.adults + value.children >= 1 && value.adults + value.children <= 20, { message: "同行者は1〜20人にする" });
 export const partyConditionValueSchema = z.union([partyCount, partyComposition]);
 export const partyConditionInputSchema = z.strictObject({
   party: partyConditionValueSchema.describe("今回の同行者。合計だけならcount、明示された大人/子どもの人数がある時だけcomposition。"),
@@ -189,11 +192,16 @@ export function admitConditionChange(value: unknown, userMessage: string, calend
     throw new ConditionUpdateRejectedError("invalid_source");
   if ("party" in input && input.party?.kind === "composition") {
     try {
-      validateTripParty({ adults: input.party.adults, children: Array.from({ length: input.party.children }, () => ({})), source: "user" });
+      validateTripParty({ adults: input.party.adults, children: partyChildren(input.party), source: "user" });
     } catch { throw new ConditionUpdateRejectedError("invalid_condition"); }
   }
   if ("place" in input) return input;
-  if ("party" in input) return input;
+  if ("party" in input) {
+    if (input.party?.kind === "composition" && input.party.childAges?.some(age => age !== null &&
+      !new RegExp(`(?:^|[^0-9])${age}\\s*歳`, "u").test(input.quote.normalize("NFKC"))))
+      throw new ConditionUpdateRejectedError("invalid_source");
+    return input;
+  }
   if ("budget" in input) {
     if (input.budget === null) return input;
     return { target: "budget", budget: resolveBudget(input.budget, input.quote), quote: input.quote };
@@ -201,6 +209,12 @@ export function admitConditionChange(value: unknown, userMessage: string, calend
   if (input.period === null) return { target: "travel_period", period: null, quote: input.quote };
   const period = resolveTravelPeriod(input.period, input.quote, calendarDate);
   return { target: "travel_period", period, quote: input.quote };
+}
+
+function partyChildren(party: z.infer<typeof partyComposition>) {
+  return Array.from({ length: party.children }, (_, index) => {
+    const age = party.childAges?.[index]; return age === undefined || age === null ? {} : { age };
+  });
 }
 
 /** Application-issued identity: one final decision per business slot per user message. */
@@ -241,7 +255,7 @@ export function conditionDelta(change: ConversationConditionChange, turnId: stri
   if (!cleared && "place" in change) value = { kind: "place_label", label: change.place! };
   if (!cleared && "party" in change && change.party?.kind === "count") value = { kind: "quantity", amount: change.party.people, unit: "people" };
   if (!cleared && "party" in change && change.party?.kind === "composition")
-    value = { kind: "party", adults: change.party.adults, children: Array.from({ length: change.party.children }, () => ({})) };
+    value = { kind: "party", adults: change.party.adults, children: partyChildren(change.party) };
   return parseAcceptedIntentDelta({ version: 1, mutationId, baseIntentRevision: overlay.intentRevision,
     speechAct: cleared ? "cancel" : "inform", operations: [{
       operationId: mutationId, groupId: mutationId, target: change.target, action: cleared ? "retract" : "set",

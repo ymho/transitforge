@@ -88,6 +88,7 @@ export async function consumeAgentStream(options: {
       if (result.done) { parser.finish(); break; }
       metrics.ttfbMs ??= received - metrics.requestStart; lastByte = received; resetIdle();
       parser.push(result.value);
+      if (done) { parser.finish(); break; }
     }
     if (!done || !pending) throw new AgentStreamError("incomplete_stream");
     if (pending.type === "error") throw new AgentStreamError(pending.code);
@@ -100,7 +101,8 @@ export async function consumeAgentStream(options: {
     metrics.settledMs = now() - metrics.requestStart;
     controller.abort(); clearTimeout(deadline); if (idle) clearTimeout(idle);
     options.signal.removeEventListener("abort", abort);
-    await reader?.cancel().catch(() => {});
+    // Socket cancellation may never settle; terminal delivery must not wait for it.
+    void reader?.cancel().catch(() => {});
     reader?.releaseLock();
   }
 }
