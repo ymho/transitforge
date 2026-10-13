@@ -4,7 +4,7 @@ import type { TripLibraryClient } from "../../usecases/trip-plan/trip-library-cl
 import { homeReadModel, tripDisplayLabels, type HomeReadInput } from "../../usecases/trip-plan/home-read-model";
 import { adoptComposer, iconMarkup, pageHeadingMarkup, loadingMarkup, setLoadingStatus, type ProductIconName } from "../shared/primitives";
 import type { Trip } from "@raiquora/trip/trip";
-import { tripCoverImage } from "../shared/trip-cover";
+import { brandTravelImages, tripCoverImage } from "../shared/trip-cover";
 import { tripDateLabel } from "../../usecases/trip-plan/trip-header-presentation";
 import { partyMarkup } from "../trip-plan/trip-party-control";
 import type { AuthState } from "../../usecases/auth/auth-session";
@@ -44,16 +44,12 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const window = document.defaultView!;
   const root = document.createElement("section"); root.className = "product-shell";
   const navigation: Array<[PrimaryView, string, ProductIconName]> = [["chat", "ホーム", "home"], ["trips", "旅程", "trips"]];
-  const heroImages = [
-    ["/media/home-setouchi-v2.webp", "1672", "941", "瀬戸内海の島々と海辺の町"],
-    ["/media/home-kinosaki-v2.webp", "1942", "809", "夕暮れの温泉街と柳の水路"],
-    ["/media/home-izumo-v2.webp", "1774", "887", "木立に包まれた神社の参道"],
-  ] as const;
+  const heroImages = brandTravelImages;
   const consultationExamples = ["週末にしたいことは？", "来週、出雲大社にいきたい", "リラックスできる旅を提案して"];
   const selectedHeroImage = Math.floor(Math.random() * heroImages.length);
   const selectedExample = consultationExamples[0]!;
   root.innerHTML = `<nav class="product-nav" aria-label="メインナビゲーション"><div class="product-brand">${brandLogoMarkup()}</div>${navigation.map(([key, label, icon]) => `<a href="#${key}" data-primary="${key}">${iconMarkup(icon)}<span>${label}</span></a>`).join("")}<button type="button" data-map="realtime" data-map-navigation>${iconMarkup("train")}<span>運行</span></button><button type="button" data-account>${iconMarkup("account")}<span>設定</span></button></nav>
-    <section class="product-page" data-page="chat" aria-label="ホーム"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}<figcaption>KAIHO original images</figcaption></figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
+    <section class="product-page" data-page="chat" aria-label="ホーム"><div class="home-hero" data-home-hero role="region" aria-label="旅の相談を始める"><figure class="home-hero-media">${heroImages.map(([src, width, height, alt], index) => `<img data-hero-image src="${src}" width="${width}" height="${height}" alt="${alt}"${index === selectedHeroImage ? ' fetchpriority="high"' : ' loading="lazy" hidden'}>`).join("")}</figure><div class="home-hero-scrim" aria-hidden="true"></div><div class="home-hero-copy">
     <div class="home-brand">${brandLogoMarkup()}</div><form class="home-prompt"><textarea id="home-prompt" aria-label="どんな旅にしたいですか？" maxlength="400" rows="1" placeholder="${selectedExample}"></textarea><button type="submit" aria-label="AIに相談する">${iconMarkup("send")}</button></form>
     <section class="home-brand-story" aria-label="KAIHOについて"><h1>あなただけの旅を、一緒に形にします。</h1><p>その昔、旅に役立つ情報をまとめ、懐に収めて持ち歩ける案内書や地図が「懐宝」と名付けられました。</p><p>旅に必要なものを、いつでも手元に。その思いを受け継ぎ、KAIHOは新しい旅のパートナーとして生まれました。</p><p>AIとともに、行きたい場所や体験したいことを一つの旅へ。旅先の発見から、移動や旅程づくりまで、あなたの旅づくりをサポートします。</p></section><p class="consultation-entry-error" data-consultation-error role="status" hidden></p></div></div><div class="home-content" data-home-content><nav class="home-entry-links" aria-label="ホームの入口"><button type="button" data-home-trips>保存した旅程</button><button type="button" data-home-guides>公式しおりを見る</button></nav><div data-home-themes></div><section class="home-official-guides" data-home-official-guides aria-labelledby="home-official-heading"><h2 id="home-official-heading">公式しおり</h2><p class="home-section-copy">モデルコースから、あなただけの旅へ。</p><div data-official-own hidden></div></section><div data-home-services></div></div><div class="consultation-entry-progress" data-consultation-progress hidden><p role="status" data-consultation-status></p><button type="button" data-consultation-retry hidden>再試行</button></div></section>
     <section class="trip-route-progress" data-trip-route-progress role="status" hidden></section>
@@ -119,18 +115,23 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   textarea.addEventListener("compositionstart", () => { composing = true; });
   textarea.addEventListener("compositionend", () => { composing = false; });
   textarea.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.isComposing || composing)) event.stopPropagation(); });
-  homeForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (composing || consultationMode === "starting" || !textarea.value.trim()) return;
+  let leavingForSubmission: number | undefined;
+  async function submitConsultation() {
+    if (composing || consultationMode !== "landing" || leavingForSubmission === entryGeneration || !textarea.value.trim()) return;
     if (!isSignedIn()) {
       saveDraft(); pendingPrompt = textarea.value.trim();
       try { window.sessionStorage.setItem(pendingKey, pendingPrompt); } catch { /* Same-document authentication can still resume. */ }
       ports.login(); return;
     }
-    const allowed = canNavigate(); if (!(typeof allowed === "boolean" ? allowed : await allowed)) return;
+    const entry = entryGeneration, route = routeKey(), prompt = textarea.value.trim();
+    leavingForSubmission = entry;
+    let allowed: boolean;
+    try { const result = canNavigate(); allowed = typeof result === "boolean" ? result : await result; }
+    finally { if (leavingForSubmission === entry) leavingForSubmission = undefined; }
+    if (!allowed || entry !== entryGeneration || route !== routeKey() || !root.isConnected || !isSignedIn() || textarea.value.trim() !== prompt) return;
     pendingPrompt = undefined;
     try { window.sessionStorage.removeItem(pendingKey); } catch { /* Do not block sending. */ }
-    const prompt = textarea.value.trim(), generation = ++entryGeneration;
+    const generation = ++entryGeneration;
     entryError.textContent = "";
     consultationMode = "starting";
     entryStatus.textContent = "相談を始めています。";
@@ -152,7 +153,8 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
       entryError.textContent = "相談を開始できませんでした。入力は残しています。もう一度送信してください。";
       replaceRoute("chat", { consultation: "new" });
     }
-  });
+  }
+  homeForm.addEventListener("submit", event => { event.preventDefault(); void submitConsultation(); });
   root.querySelector("[data-account]")!.addEventListener("click", () => {
     if (isSignedIn()) navigate("my"); else ports.login();
   });
@@ -380,12 +382,12 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
   const discovery = configureHomeDiscovery(root.querySelector<HTMLElement>("[data-home-themes]")!, root.querySelector<HTMLElement>("[data-home-services]")!, {
     now: ports.now, trips: () => navigate("trips"), map: showMap,
     choosePrompt: async prompt => {
-      const generation = entryGeneration;
+      const generation = entryGeneration, route = routeKey();
       if (textarea.disabled) return;
       if (textarea.value.trim() && textarea.value.trim() !== prompt && !await confirmAction(document, "入力中の相談を、このテーマの相談に置き換えますか？")) return;
-      if (generation !== entryGeneration || !root.isConnected || textarea.disabled || consultationMode !== "landing") return;
-      textarea.value = prompt; saveDraft(); textarea.focus({ preventScroll: true });
-      homeForm.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (generation !== entryGeneration || route !== routeKey() || !root.isConnected || textarea.disabled || consultationMode !== "landing") return;
+      textarea.value = prompt; saveDraft();
+      await submitConsultation();
     },
   });
   const unsubscribe = ports.subscribe(() => { render(); resumePending(); }); render(); apply(); resumePending();
@@ -401,5 +403,5 @@ export function configureAiFirstShell(document: Document, app: HTMLElement, port
 }
 function esc(value: string): string { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 function card(trip: Trip, group: keyof typeof tripDisplayLabels): string {
-  return `<article class="home-card home-trip-card" data-trip-card="${esc(trip.id)}"><div class="trip-list-choice"><button class="trip-list-cover" type="button" data-trip-open="${esc(trip.id)}" aria-label="${esc(trip.title)}のしおりを開く"><img src="${tripCoverImage(trip.id)}" alt="" loading="lazy"><small>旅のイメージ</small></button><div class="trip-list-copy"><div class="trip-list-title-row"><button class="trip-list-title-open" type="button" data-trip="${esc(trip.id)}"><strong>${esc(trip.title)}</strong></button></div><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span><span class="trip-status-chip" data-trip-status="${group}">${esc(tripDisplayLabels[group])}</span></div></div></article>`;
+  return `<article class="home-card home-trip-card" data-trip-card="${esc(trip.id)}"><div class="trip-list-choice"><button class="trip-list-cover" type="button" data-trip-open="${esc(trip.id)}" aria-label="${esc(trip.title)}のしおりを開く"><img src="${tripCoverImage(trip.id)}" alt="" loading="lazy"></button><div class="trip-list-copy"><div class="trip-list-title-row"><button class="trip-list-title-open" type="button" data-trip="${esc(trip.id)}"><strong>${esc(trip.title)}</strong></button></div><small>${esc(tripDateLabel(trip))}</small><span class="trip-party-pair">${partyMarkup(trip)}</span><span class="trip-status-chip" data-trip-status="${group}">${esc(tripDisplayLabels[group])}</span></div></div></article>`;
 }

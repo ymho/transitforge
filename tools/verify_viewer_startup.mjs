@@ -170,6 +170,15 @@ try {
     assert.equal(await page.locator("#home-prompt").evaluate(el => getComputedStyle(el).outlineStyle), "none");
     assert.equal(await page.locator(".home-prompt").evaluate(el => getComputedStyle(el).outlineWidth), "2px");
     await page.screenshot({ path: `.artifacts/product-design/home-${viewport.width}.png` });
+    await page.locator("[data-home-campaign]").first().scrollIntoViewIfNeeded();
+    assert.equal(await page.locator("[data-home-campaign]").count(), 3);
+    assert.equal(await page.locator("[data-home-theme]").count(), 6);
+    await page.locator(".home-discovery img").evaluateAll(images => images.forEach(image => { image.loading = "eager"; }));
+    await page.waitForFunction(() => [...document.querySelectorAll(".home-discovery img")].every(image => image.complete && image.naturalWidth > 0));
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "Home campaigns must not overflow the viewport");
+    await page.screenshot({ path: `.artifacts/product-design/home-campaigns-${viewport.width}.png` });
+    await page.locator("[data-home-theme]").first().scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `.artifacts/product-design/home-themes-${viewport.width}.png` });
     await page.locator("#home-prompt").fill("");
     await page.locator("[data-account]").click();
     await page.waitForSelector('[data-primary-view="my"]');
@@ -379,6 +388,11 @@ try {
     assert.equal(await supplement.locator("strong").first().isVisible(), true);
     await supplement.locator("summary").click();
     assert.equal(await page.locator(".ai-guide-message-copy p").first().evaluate(el => getComputedStyle(el).fontSize), "14px");
+    const toolbarBox = await page.locator(".consultation-context").boundingBox();
+    const viewportBox = await page.locator(".consultation-message-viewport").boundingBox();
+    const dockBox = await page.locator(".consultation-composer-dock").boundingBox();
+    assert.ok(toolbarBox && viewportBox && toolbarBox.y + toolbarBox.height <= viewportBox.y + 1, "Chat actions must be above the messages");
+    assert.ok(dockBox && dockBox.height <= 56, "Chat composer must remain a compact single row");
     await checkLayout("chat");
     await page.emulateMedia({ colorScheme: "dark" });
     assert.equal(await page.locator(".consultation-page").evaluate(el => getComputedStyle(el).backgroundColor), "rgb(250, 250, 250)");

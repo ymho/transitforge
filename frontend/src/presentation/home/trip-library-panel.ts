@@ -106,5 +106,5 @@ export function configureTripLibrary(root: HTMLElement, own: HTMLElement, client
 function catalogueCard(id: string): HTMLElement {
   const card = element("article", "home-card trip-library-card");
   const cover = element("div", "trip-list-cover"), image = element("img"); image.src = tripCoverImage(id); image.alt = ""; image.loading = "lazy"; cover.setAttribute("aria-hidden", "true");
-  cover.append(image, element("small", "", "旅のイメージ")); card.append(cover); return card;
+  cover.append(image); card.append(cover); return card;
 }

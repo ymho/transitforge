@@ -237,7 +237,7 @@ GetItem以外を拒否し、IAMも試験ownerに限定する。内部の観測�
 
 ## 再現可能なブラウザ確認
 
-`tools/verify_unified_consultation.mjs`は実Shell・相談画面・Trip workspaceとCSSを固定メモリ状態で組み合わせる。1440px/390pxでホームのテーマと画像→新規送信→旅程→旅程／チャット切り替え→旅程の相談→旅程へ戻る→ホームを操作し、未送信入力・対象Trip・可視性・横溢れ・タブとチャットの領域・composerとメニューの重なりを検証して画像を保存する。実API/Bedrock/認証済み実ユーザーの検証とは分ける。
+`tools/verify_unified_consultation.mjs`は実Shell・相談画面・Trip workspaceとCSSを固定メモリ状態で組み合わせる。1440px/390pxでホームの画像・特集バナー→テーマから直接チャット開始→バナーから直接チャット開始→新規送信→旅程→旅程／チャット切り替え→旅程の相談→旅程へ戻る→ホームを操作し、未送信入力・対象Trip・送信回数・可視性・横溢れ・タブとチャットの領域・composerとメニューの重なりを検証して画像を保存する。実API/Bedrock/認証済み実ユーザーの検証とは分ける。
 
 ```sh
 npm run dev --workspace @raiquora/frontend -- --host 127.0.0.1 --port 5178 --strictPort
