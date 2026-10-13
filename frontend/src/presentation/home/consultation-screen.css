@@ -276,23 +276,23 @@
   & .consultation-heading > button:first-child { margin-right: 0; }
   & .consultation-conditions-toggle { align-items: center; }
   & .consultation-layout { grid-template-rows: minmax(0,1fr); }
-  & .consultation-conversation { grid-template-rows: minmax(0,1fr) auto; }
-  & .consultation-composer-dock { margin: 0 18px 18px; background: var(--tf-bg); border: 1px solid var(--tf-line); border-radius: 24px; box-shadow: 0 4px 16px #233d3508; min-width: 0; }
-  & .consultation-context { padding: 10px 14px 2px; gap: 8px; flex-wrap: wrap; }
+  & .consultation-conversation { grid-template-rows: auto minmax(0,1fr) auto; }
+  & .consultation-composer-dock { margin: 0 18px 12px; background: var(--tf-bg); border: 1px solid var(--tf-line); border-radius: 22px; box-shadow: none; min-width: 0; }
+  & .consultation-context { padding: 0 14px 4px; gap: 8px; flex-wrap: nowrap; }
   & .consultation-identity { flex: 1 1 120px; }
   & .consultation-identity > strong { font-size: 12px; }
   & .consultation-heading { position: static; width: auto; min-height: 32px; margin: 0; padding: 0; gap: 4px; flex-shrink: 0; }
   & .consultation-heading > button { font-size: 11px; min-height: 32px; padding: 5px 8px; border: 0; border-radius: 8px; }
   & .consultation-heading > button:hover { background: var(--tf-soft); }
-  & .consultation-composer { margin: 0; border: 0; border-radius: 0 0 24px 24px; box-shadow: none; padding: 6px; background: transparent; }
+  & .consultation-composer { margin: 0; border: 0; border-radius: 22px; box-shadow: none; padding: 4px 6px; background: transparent; }
   & .consultation-conditions-toggle { display: none; }
 }
 @media (max-width:44rem) {
   #app[data-primary-view="chat"]:not([data-primary-view="map"]) {
     & .consultation-composer-dock { margin: 0 8px 10px; }
-    & .consultation-context { padding: 8px 12px 0; }
-    & .consultation-identity { flex-basis: calc(100% - 100px); }
-    & .consultation-heading { width: 100%; justify-content: flex-start; }
+    & .consultation-context { padding: 0 8px 4px; }
+    & .consultation-identity { flex: 1 1 0; }
+    & .consultation-heading { width: auto; justify-content: flex-end; }
     & .consultation-conditions-toggle { display: inline-flex; }
   }
 }
@@ -305,7 +305,6 @@
 }
 @media (max-width:44rem) {
   #app[data-primary-view="chat"]:not([data-primary-view="map"]) {
-    & .consultation-heading { display: none; }
     & .consultation-composer { padding-left: 6px; }
   }
 }

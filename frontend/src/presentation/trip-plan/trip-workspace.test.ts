@@ -320,6 +320,12 @@ it("puts Trip confirmation and consultation in the header and explains missing s
   expect([...heading.querySelectorAll(".trip-header-actions button")].map(button => button.textContent)).toEqual(["旅程を確定", "相談"]);
   expect(heading.querySelector(".trip-header-management")).not.toBeNull();
   expect(heading.textContent).not.toContain("この旅について相談");
+  const help = [...heading.querySelectorAll<HTMLElement>(".trip-workspace-notice")].find(node => node.textContent?.includes("日程を設定すると確定"))!;
+  f.ui.show("trip");
+  expect(help.hidden).toBe(false);
+  f.ui.show("chat"); expect(help.hidden).toBe(true);
+  f.controller.refresh(); expect(help.hidden).toBe(true);
+  f.ui.show("trip"); expect(help.hidden).toBe(false);
   expect(heading.textContent).not.toContain("旅行モード");
 });
 

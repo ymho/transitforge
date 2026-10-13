@@ -100,13 +100,13 @@ it("requires authentication before opening every feature route including realtim
   window.dispatchEvent(new HashChangeEvent("hashchange"));
   expect(document.querySelector("main")!.dataset.primaryView).toBe("chat");
 });
-it("shows one random western Japan hero photo without selection controls", () => {
+it("shows one random travel hero photo without selection controls", () => {
   vi.spyOn(Math, "random").mockReturnValue(0.5);
   setup();
   const images = [...document.querySelectorAll<HTMLImageElement>("[data-hero-image]")];
-  expect(images).toHaveLength(3); expect(images[0]!.src).toContain("home-setouchi-v2.webp");
+  expect(images).toHaveLength(9); expect(images[0]!.src).toContain("home-setouchi-v2.webp");
   expect(images.filter((image) => !image.hidden)).toHaveLength(1);
-  expect(images[1]!.hidden).toBe(false);
+  expect(images[4]!.hidden).toBe(false);
   expect(document.querySelector("[data-hero-page]")).toBeNull();
 });
 it("places one short consultation example in the prompt placeholder", () => {
@@ -440,15 +440,65 @@ it("does not ask signed-in users to log in when the trip read view is unavailabl
   expect(f.ports.login).not.toHaveBeenCalled(); f.shell.dispose();
 });
 
-it("offers home content without calling personal APIs and fills a theme without submitting", async () => {
-  const f = setup();
+it("offers home content without personal calls, then resumes a selected theme after login exactly once", async () => {
+  let auth: AuthState = { status: "signed-out" }, notify!: () => void;
+  const f = setup({ authState: () => auth, subscribe: callback => { notify = callback; return () => {}; }, newConsultation: vi.fn(async () => ({ tripId: "theme-trip" })) });
   expect(document.querySelector('[data-page="chat"]')!.getAttribute("aria-label")).toBe("ホーム");
   expect(document.querySelector('[data-primary="chat"]')!.textContent).toBe("ホーム");
-  expect(document.querySelectorAll("[data-home-theme]")).toHaveLength(3);
-  document.querySelector<HTMLButtonElement>("[data-home-theme]")!.click();
-  await Promise.resolve();
-  expect(document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value).toContain("瀬戸内");
+  expect(document.querySelectorAll("[data-home-theme]")).toHaveLength(6);
   expect(f.ports.newConsultation).not.toHaveBeenCalled(); expect(f.ports.login).not.toHaveBeenCalled();
-  document.querySelector<HTMLButtonElement>("[data-home-trips]")!.click(); expect(f.ports.login).toHaveBeenCalledOnce();
-  expect(f.ports.openTrip).not.toHaveBeenCalled(); f.shell.dispose();
+  click("[data-home-theme]");
+  expect(document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value).toContain("瀬戸内");
+  expect(f.ports.newConsultation).not.toHaveBeenCalled(); expect(f.ports.login).toHaveBeenCalledOnce();
+  auth = signedIn(); notify(); notify();
+  await vi.waitFor(() => expect(f.ports.openChat).toHaveBeenCalledOnce());
+  expect(f.ports.newConsultation).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("瀬戸内"));
+  expect(window.history.state).toEqual({ consultation: "trip", tripId: "theme-trip" }); f.shell.dispose();
+});
+
+it.each(["[data-home-theme]", "[data-home-campaign]"])("opens the new Trip chat directly from %s", async selector => {
+  const f = setup({ authState: signedIn, newConsultation: vi.fn(async () => ({ tripId: "selected-theme" })) });
+  click(selector); click(selector);
+  await vi.waitFor(() => expect(f.ports.openChat).toHaveBeenCalledOnce());
+  expect(f.ports.newConsultation).toHaveBeenCalledOnce();
+  expect(document.querySelector<HTMLElement>("[data-home-hero]")!.hidden).toBe(true);
+  expect(window.history.state).toEqual({ consultation: "trip", tripId: "selected-theme" });
+  expect(document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value).toBe(""); f.shell.dispose();
+});
+
+it("preserves a typed draft when replacement is cancelled and prevents stale theme confirmation from submitting", async () => {
+  const f = setup({ authState: signedIn });
+  const input = document.querySelector<HTMLTextAreaElement>("#home-prompt")!;
+  input.value = "自分で考えた相談"; input.dispatchEvent(new Event("input"));
+  click("[data-home-theme]");
+  document.querySelector<HTMLButtonElement>(".app-dialog button[type=button]")!.click();
+  await vi.waitFor(() => expect(document.querySelector<HTMLButtonElement>("[data-home-theme]")!.disabled).toBe(false));
+  expect(input.value).toBe("自分で考えた相談"); expect(f.ports.newConsultation).not.toHaveBeenCalled();
+  click("[data-home-campaign]"); f.shell.navigate("my");
+  document.querySelector<HTMLFormElement>(".app-dialog form")!.dispatchEvent(new Event("submit", { cancelable: true }));
+  await Promise.resolve(); await Promise.resolve();
+  expect(f.ports.newConsultation).not.toHaveBeenCalled(); expect(input.value).toBe("自分で考えた相談"); f.shell.dispose();
+});
+
+it("retains a failed theme submission for manual retry with the same prompt", async () => {
+  const start = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ tripId: "retried-theme" });
+  const f = setup({ authState: signedIn, newConsultation: start });
+  click("[data-home-theme]");
+  await vi.waitFor(() => expect(document.querySelector<HTMLElement>("[data-consultation-error]")!.hidden).toBe(false));
+  const prompt = document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value;
+  expect(prompt).toContain("瀬戸内"); expect(f.ports.openChat).not.toHaveBeenCalled();
+  document.querySelector<HTMLFormElement>(".home-prompt")!.requestSubmit();
+  await vi.waitFor(() => expect(f.ports.openChat).toHaveBeenCalledOnce());
+  expect(start.mock.calls).toEqual([[prompt], [prompt]]); f.shell.dispose();
+});
+
+it("fences repeated submits and navigation while an asynchronous leave check is pending", async () => {
+  let allow!: (value: boolean) => void;
+  const f = setup({ authState: signedIn, canLeave: () => new Promise<boolean>(resolve => { allow = resolve; }) });
+  document.querySelector<HTMLTextAreaElement>("#home-prompt")!.value = "相談";
+  const form = document.querySelector<HTMLFormElement>(".home-prompt")!;
+  form.requestSubmit(); form.requestSubmit();
+  f.shell.showTrip("other-trip"); allow(true);
+  await Promise.resolve(); await Promise.resolve();
+  expect(f.ports.newConsultation).not.toHaveBeenCalled(); f.shell.dispose();
 });

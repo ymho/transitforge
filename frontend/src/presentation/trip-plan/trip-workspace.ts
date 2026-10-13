@@ -120,7 +120,7 @@ export function configureTripWorkspace(options: {
   const headerActions = element("div", "trip-header-actions"); headerActions.append(adoption, consult);
   const cover = element("div", "trip-header-cover"); const coverImage = element("img");
   coverImage.alt = ""; coverImage.setAttribute("aria-hidden", "true");
-  cover.append(coverImage, element("small", "trip-cover-caption", "旅のイメージ"));
+  cover.append(coverImage);
   const coverContent = element("div", "trip-header-content"); coverContent.append(identity, headerActions);
   const hero = element("div", "trip-header-hero"); hero.append(cover, coverContent);
   const topRow = element("div", "trip-detail-top-row"); topRow.append(back, management);
@@ -245,6 +245,7 @@ export function configureTripWorkspace(options: {
     }
     itinerary.hidden = proposal.hidden = view !== "trip";
     options.chat.hidden = view !== "chat";
+    adoptionHelp.hidden = view !== "trip" || !adoptionHelp.textContent;
   }
 
   async function showTravelMode() {
@@ -344,7 +345,7 @@ export function configureTripWorkspace(options: {
     management.hidden = share.hidden && archive.hidden;
     consult.hidden = !canChat();
     adoptionHelp.textContent = adoption.hidden || !adoption.disabled || adoptionBusy ? "" : !trip.items.length ? "予定を追加すると確定できます。" : "すべての予定に日程を設定すると確定できます。";
-    adoptionHelp.hidden = !adoptionHelp.textContent;
+    adoptionHelp.hidden = viewState().view !== "trip" || !adoptionHelp.textContent;
     const labels = [notice.textContent ?? "", role === "viewer" ? "" : role === "editor" ? "共有された旅程です（共同編集）。チャットは共有されません。" : "", trip.officialOrigin ? `公式しおりから作成（第${trip.officialOrigin.version}版）` : ""].filter(Boolean);
     notice.textContent = labels.join(" "); notice.hidden = role !== "viewer" && role !== "editor" && !trip.officialOrigin;
     summary.textContent = tripDateLabel(trip);

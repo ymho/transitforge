@@ -27,6 +27,10 @@ it("uses the explicit bound Trip and preserves message/composer nodes and listen
   expect(f.panel.querySelector('.consultation-heading button[aria-label="新しい相談"]')!.textContent).toBe("新しい相談");
   expect(f.panel.querySelector<HTMLButtonElement>('.consultation-composer button')!.getAttribute("aria-label")).toBe("送信");
   expect(f.panel.querySelector('.consultation-composer button')!.textContent).toBe("");
+  const conversation = f.panel.querySelector(".consultation-conversation")!;
+  expect(conversation.firstElementChild?.className).toBe("consultation-context");
+  expect(f.panel.querySelector(".consultation-composer-dock")!.children).toHaveLength(1);
+  expect(f.panel.querySelector(".consultation-composer-dock .consultation-conditions-toggle")).toBeNull();
 });
 it("new consultation never infers a Trip from title or Home data", () => {
   const f = setup(false); expect(f.panel.textContent).toContain("新しい旅を相談中"); expect(f.panel.textContent).toContain("まだ旅程に紐付いていません");
