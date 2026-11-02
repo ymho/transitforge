@@ -227,26 +227,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          request='{"origin":{"name":"出雲市駅","latitude":35.36092,"longitude":132.75640},"destination":{"name":"出雲科学館","latitude":35.36104,"longitude":132.77344},"departureAt":"2026-10-01T10:00:00+09:00","mode":"walk"}'
+          aws lambda wait function-updated-v2 --function-name "$OTP_BRIDGE_FUNCTION"
+          aws lambda get-function-configuration \
+            --function-name "$OTP_BRIDGE_FUNCTION" \
+            --query '{state:State,updateStatus:LastUpdateStatus,bucket:Environment.Variables.OTP_GRAPH_BUCKET,key:Environment.Variables.OTP_GRAPH_MANIFEST_KEY,version:Environment.Variables.OTP_GRAPH_VERSION,region:Environment.Variables.OTP_REGION_ID,image:Environment.Variables.OTP_EXPECTED_IMAGE,sha256:Environment.Variables.OTP_EXPECTED_GRAPH_SHA}' \
+            --output json > otp-runtime.json
+          config=infra/terraform/environments/dev/otp-runtime.auto.tfvars.json
+          manifest_uri=$(node tools/deployment/otp-route-smoke.mjs source otp-runtime.json "$config")
+          aws s3 cp "$manifest_uri" otp-manifest.json --only-show-errors
+          node tools/deployment/otp-route-smoke.mjs request otp-runtime.json "$config" otp-manifest.json > otp-request.json
           for attempt in $(seq 1 18); do
             rm -f otp-invoke.json otp-response.json
             if aws lambda invoke \
               --function-name "$OTP_BRIDGE_FUNCTION" \
               --cli-binary-format raw-in-base64-out \
-              --payload "$request" \
+              --payload file://otp-request.json \
               otp-response.json > otp-invoke.json; then
               function_error=$(jq -r '.FunctionError // ""' otp-invoke.json)
               status=$(jq -r '.status // ""' otp-response.json 2>/dev/null || true)
-              if [ -z "$function_error" ] &&
-                jq -e '.status == "available" and (.routes | length > 0) and
-                  .coverage.serviceStart == "2026-10-01" and
-                  .coverage.serviceEnd == "2026-10-31"' otp-response.json > /dev/null; then
-                {
-                  echo "### OTP route smoke"
-                  echo "- Bridge Lambda: ready"
-                  echo "- Pinned graph coverage: 2026-10-01 to 2026-10-31"
-                  echo "- Walking route: available"
-                } >> "$GITHUB_STEP_SUMMARY"
+              if [ -z "$function_error" ] && [ "$status" = "available" ]; then
+                node tools/deployment/otp-route-smoke.mjs verify otp-runtime.json "$config" otp-manifest.json otp-response.json | tee -a "$GITHUB_STEP_SUMMARY"
                 exit 0
               fi
               if [ -z "$function_error" ] && [ "$status" != "unavailable" ] && [ -n "$status" ]; then

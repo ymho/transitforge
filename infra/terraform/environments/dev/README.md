@@ -113,6 +113,10 @@ Data BuilderはGTFSとOSMから`otp/izumo-matsue/versions/<version>/`へgraphと
 
 OTPの有効化、固定graph version、完全なgraph SHA-256、digest固定したOTP imageとgraph loader imageは、非秘密かつレビュー可能な`otp-runtime.auto.tfvars.json`を正本にする。初回は`enable_otp_route_service=false`のままData Builderの手動生成を完了し、manifest、graph hash、OTP image、GTFS有効期間を確認する。その後、同じOTP image、graph version、完全なgraph SHA-256を`otp-runtime.auto.tfvars.json`へ記録してplanを確認する。init containerはダウンロードしたgraphのSHA-256が一致しない限りOTPを起動しない。`current.json`だけでは稼働中サービスを切り替えない。Graph更新時は新versionでECS taskを入れ替える。CDはECSの安定化を待ち、Bridge Lambda経由の徒歩経路smokeを確認する。さらに徒歩・バス・対象外日・経路なしを確認してから旧taskを停止する。
 
+CDの徒歩smokeは、Bridge Lambdaの許可した設定項目だけを読み戻してレビュー対象の固定version/hash/image/regionと照合する。その固定キーのmanifestをS3から取得し、manifestの運行開始日の10時で出雲市駅〜出雲科学館の徒歩を照会する。応答coverageの期間・範囲・出典・構築日時・v2 feed一覧をmanifestと一致確認する。`current.json`や特定の月の固定日付へは依存しない。
+
+このsmokeは選択版の接続・読込確認であり、過去日での成功も含む。データの現在有効性、両社のバス、祝日・期間境界・経路なしを確認する試験は別に行う。regionを出雲・松江以外へ変更する場合は、この固定徒歩ケースも対象地域の実ケースへ変更する。実行契約とoffline確認は`tools/deployment/otp-route-smoke.mjs`と隣接テストを参照する。
+
 2026-09-28時点の初回候補では、OTP 2.10.0を`docker.io/opentripplanner/opentripplanner@sha256:8d54e5c589186707ee365417f2202dc878c451fa3001b8edff07019531100933`、graph loaderをAWS CLI 2.37.4の`public.ecr.aws/aws-cli/aws-cli@sha256:fdd8d1fcbea9c371678dee5a40df8b178c7a781b4586605756ee28114c97ead6`として確認した。いずれもmulti-architecture manifest digestである。設定時はData Builderのmanifestと一致すること、各registryでdigestを再確認する。
 
 ## 独自ドメインの初回導入
