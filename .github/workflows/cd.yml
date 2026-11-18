@@ -26,9 +26,12 @@ concurrency:
 
 jobs:
   deploy:
+    # While AWS is hibernated, permit read-only plans only. Never auto-apply
+    # after CI succeeds; applying the normal configuration would reawaken AWS.
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      github.event.workflow_run.conclusion == 'success'
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.mode == 'plan'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dev
