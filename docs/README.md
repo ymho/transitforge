@@ -56,6 +56,7 @@
 ## 運用・検証
 
 - [Agent v2 実環境運用と復旧](operations/agent-deployment.md)
+- [TransitForge AWS一時停止・再開](operations/aws-hibernation.md)
 - [Agent v2 テスト戦略 — greenfield acceptance](operations/testing.md)
 - [Trip再チェックruntime](operations/trip-rechecks.md)
 
