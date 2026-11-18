@@ -166,6 +166,10 @@
       "category": "operations"
     },
     {
+      "path": "docs/operations/aws-hibernation.md",
+      "category": "operations"
+    },
+    {
       "path": "docs/operations/testing.md",
       "category": "operations"
     },
