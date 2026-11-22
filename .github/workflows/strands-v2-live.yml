@@ -46,7 +46,8 @@ concurrency:
 
 jobs:
   evaluate:
-    if: github.ref == 'refs/heads/main'
+    # Re-enable only during the documented recovery.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dev

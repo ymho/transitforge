@@ -25,7 +25,7 @@ while IFS= read -r distribution_id; do
   enabled="$(aws cloudfront get-distribution-config --id "$distribution_id" --query 'DistributionConfig.Enabled' --output text)"
   status="$(aws cloudfront get-distribution --id "$distribution_id" --query 'Distribution.Status' --output text)"
   echo "CloudFront: enabled=$enabled, deployment=$status"
-  [[ "$enabled" == "False" ]] || failed=1
+  [[ "$enabled" == "False" && "$status" == "Deployed" ]] || failed=1
   cf=$((cf + 1))
 done < "$tmpdir/distributions"
 [[ "$cf" -ge 1 ]] || failed=1
@@ -81,14 +81,24 @@ aws ec2 describe-instances --filters "Name=tag:Project,Values=transitforge" "Nam
 jq -r --arg p "transitforge-dev-$account-ai-nat" '
   .Reservations[].Instances[]
   | select((.IamInstanceProfile.Arn // "") | endswith("/" + $p))
+  | select(.State.Name != "terminated")
   | .State.Name
 ' "$tmpdir/instances" > "$tmpdir/nat-states"
 nat_count="$(wc -l < "$tmpdir/nat-states" | tr -d ' ')"
 echo "NAT instances found=$nat_count, states=$(paste -sd, "$tmpdir/nat-states")"
-[[ "$nat_count" -eq 1 ]] || failed=1
-while IFS= read -r state; do
-  [[ "$state" == "stopped" ]] || failed=1
-done < "$tmpdir/nat-states"
+[[ "$nat_count" -eq 0 ]] || failed=1
+aws ec2 describe-addresses --filters "Name=tag:Project,Values=transitforge" "Name=tag:Environment,Values=dev" --output json > "$tmpdir/addresses"
+eips="$(jq '.Addresses | length' "$tmpdir/addresses")"
+echo "Project Elastic IP allocations remaining: $eips"
+[[ "$eips" -eq 0 ]] || failed=1
+aws servicediscovery list-namespaces --output json > "$tmpdir/namespaces"
+namespaces="$(jq --arg n "transitforge-dev-$account.internal" '[.Namespaces[] | select(.Name == $n)] | length' "$tmpdir/namespaces")"
+echo "OTP private DNS namespaces remaining: $namespaces"
+[[ "$namespaces" -eq 0 ]] || failed=1
+aws cloudwatch describe-alarms --alarm-name-prefix transitforge-dev- --output json > "$tmpdir/alarms"
+alarms="$(jq '(.MetricAlarms | length) + (.CompositeAlarms | length)' "$tmpdir/alarms")"
+echo "Project CloudWatch alarms remaining: $alarms"
+[[ "$alarms" -eq 0 ]] || failed=1
 
 {
   echo "## Verified AWS hibernation"
@@ -96,8 +106,8 @@ done < "$tmpdir/nat-states"
   echo "- Scheduler jobs: $schedules, still enabled: $enabled_schedules"
   echo "- EventBridge scheduled rules: $rules, still enabled: $enabled_rules"
   echo "- ECS services: $ecs_services, running tasks: $ecs_running"
-  echo "- NAT EC2 found: $nat_count (expected state: stopped)"
-  echo "- S3, DynamoDB, EBS and EIP remain; residual storage/IP charges continue."
+  echo "- NAT EC2 remaining: $nat_count; EIP allocations: $eips; OTP DNS namespaces: $namespaces; alarms: $alarms"
+  echo "- S3, ECR, DynamoDB, Secrets Manager and retained logs remain; storage/backup/secret charges may continue."
 } >> "$GITHUB_STEP_SUMMARY"
 if [[ "$failed" -ne 0 ]]; then echo "Hibernation verification FAILED." >&2; exit 1; fi
 echo "Hibernation verification PASSED."

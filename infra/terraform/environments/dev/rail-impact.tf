@@ -76,6 +76,7 @@ resource "aws_lambda_function" "rail_impact" {
 }
 # Internal host must use RequestResponse and inspect failed/replayRequired. No lossy async success receipt.
 resource "aws_cloudwatch_metric_alarm" "rail_impact_failure" {
+  count               = var.hibernation_enabled ? 0 : 1
   alarm_name          = "${local.rail_impact_name}-failure"
   namespace           = "Raiquora/RailImpact"
   metric_name         = "EvaluationFailure"

@@ -73,7 +73,7 @@ output "personal_api_gateway" {
 
 output "ai_provider_egress_ip_address" {
   description = "旅行提供者など送信元IP許可制の外部提供者へ登録するAI Lambdaの固定IPv4アドレス。"
-  value       = aws_eip.ai_egress.public_ip
+  value       = try(aws_eip.ai_egress[0].public_ip, null)
 }
 
 output "travel_provider_secret_name" {

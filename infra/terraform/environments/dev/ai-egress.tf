@@ -53,9 +53,10 @@ resource "aws_route_table" "ai_egress_private" {
 }
 
 resource "aws_route" "ai_egress_private_internet" {
+  count                  = var.hibernation_enabled ? 0 : 1
   route_table_id         = aws_route_table.ai_egress_private.id
   destination_cidr_block = "0.0.0.0/0"
-  network_interface_id   = aws_instance.ai_nat.primary_network_interface_id
+  network_interface_id   = aws_instance.ai_nat[0].primary_network_interface_id
 }
 
 resource "aws_route_table_association" "ai_egress_private" {
@@ -126,10 +127,12 @@ resource "aws_iam_instance_profile" "ai_nat" {
 }
 
 resource "aws_eip" "ai_egress" {
+  count  = var.hibernation_enabled ? 0 : 1
   domain = "vpc"
 }
 
 resource "aws_instance" "ai_nat" {
+  count                       = var.hibernation_enabled ? 0 : 1
   ami                         = data.aws_ssm_parameter.ai_nat_instance_ami.value
   instance_type               = var.ai_nat_instance_type
   iam_instance_profile        = aws_iam_instance_profile.ai_nat.name
@@ -198,6 +201,7 @@ resource "aws_instance" "ai_nat" {
 }
 
 resource "aws_eip_association" "ai_nat" {
-  allocation_id = aws_eip.ai_egress.id
-  instance_id   = aws_instance.ai_nat.id
+  count         = var.hibernation_enabled ? 0 : 1
+  allocation_id = aws_eip.ai_egress[0].id
+  instance_id   = aws_instance.ai_nat[0].id
 }

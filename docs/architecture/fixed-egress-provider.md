@@ -50,8 +50,9 @@ HTTP空室確認の失敗時は既存仕様どおり発見済み候補を空室�
   任意vacant_hotel_search_url/affiliate_id形式。値はTerraform・Git・Agent環境変数へ置かない。
 - `aws_subnet.ai_egress_private`と`aws_security_group.ai_lambda`を再利用する。
   既存SGはinboundなし/outbound HTTPSのみ、既存NAT SGがこのSGから443だけを受信する。
-- `aws_eip.ai_egress`、`aws_eip_association.ai_nat`、`aws_instance.ai_nat`を変更しない。
-  EIP replacementを生むresource identity/引数の変更はない。実planによる保証は統合時に行う。
+- 通常稼働時は`aws_eip.ai_egress[0]`、`aws_eip_association.ai_nat[0]`、`aws_instance.ai_nat[0]`を使う。
+  休止中はこれらを撤去し、復旧時に新しいEIPを割り当てる。外部Providerの許可IP登録を確認する。
+  [休止・復旧手順](../operations/aws-hibernation.md)に従い、秘密値は残す。
 
 ## timeout / retry
 

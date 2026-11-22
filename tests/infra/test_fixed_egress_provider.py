@@ -19,8 +19,8 @@ class FixedEgressProviderTest(unittest.TestCase):
             self.assertNotIn(f'resource "{resource}"', text)
         egress = (DEV / "ai-egress.tf").read_text()
         self.assertIn('resource "aws_eip" "ai_egress"', egress)
-        self.assertIn("allocation_id = aws_eip.ai_egress.id", egress)
-        self.assertIn("network_interface_id   = aws_instance.ai_nat.primary_network_interface_id", egress)
+        self.assertIn("allocation_id = aws_eip.ai_egress[0].id", egress)
+        self.assertIn("network_interface_id   = aws_instance.ai_nat[0].primary_network_interface_id", egress)
         sg = egress.split('resource "aws_security_group" "ai_lambda"')[1].split('resource "')[0]
         self.assertNotIn("ingress {", sg)
         self.assertIn("from_port   = 443", sg)
