@@ -193,12 +193,12 @@ resource "aws_security_group" "otp_bridge" {
 }
 
 resource "aws_service_discovery_private_dns_namespace" "otp" {
-  count = var.enable_otp_route_service ? 1 : 0
+  count = var.enable_otp_route_service && !var.hibernation_enabled ? 1 : 0
   name  = "${local.resource_prefix}.internal"
   vpc   = aws_vpc.ai_egress.id
 }
 resource "aws_service_discovery_service" "otp" {
-  count = var.enable_otp_route_service ? 1 : 0
+  count = var.enable_otp_route_service && !var.hibernation_enabled ? 1 : 0
   name  = "otp"
   dns_config {
     namespace_id   = aws_service_discovery_private_dns_namespace.otp[0].id
@@ -251,7 +251,7 @@ resource "aws_ecs_task_definition" "otp" {
 }
 
 resource "aws_ecs_service" "otp" {
-  count                              = var.enable_otp_route_service ? 1 : 0
+  count                              = var.enable_otp_route_service && !var.hibernation_enabled ? 1 : 0
   name                               = local.otp_service_name
   cluster                            = aws_ecs_cluster.otp[0].id
   task_definition                    = aws_ecs_task_definition.otp[0].arn

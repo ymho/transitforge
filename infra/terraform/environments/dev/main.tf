@@ -123,7 +123,7 @@ resource "aws_cloudfront_function" "legacy_redirect" {
 }
 
 resource "aws_cloudfront_distribution" "website" {
-  enabled             = true
+  enabled             = !var.hibernation_enabled
   default_root_object = "index.html"
   price_class         = "PriceClass_200"
 

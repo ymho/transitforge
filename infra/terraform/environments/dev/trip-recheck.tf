@@ -126,6 +126,7 @@ resource "aws_iam_role_policy" "trip_recheck" {
 resource "aws_cloudwatch_event_rule" "trip_recheck" {
   name                = local.trip_recheck_name
   schedule_expression = "rate(1 minute)"
+  state               = var.hibernation_enabled ? "DISABLED" : "ENABLED"
 }
 resource "aws_lambda_function" "trip_recheck" {
   function_name                  = local.trip_recheck_name
@@ -198,7 +199,7 @@ resource "aws_cloudwatch_event_target" "trip_recheck" {
   depends_on = [aws_lambda_permission.trip_recheck_tick, aws_sqs_queue_policy.trip_recheck_tick_dlq]
 }
 resource "aws_cloudwatch_metric_alarm" "trip_recheck" {
-  for_each            = { DLQ = 0, RecheckLagMs = 300000, ProviderFailure = 10 }
+  for_each            = var.hibernation_enabled ? {} : { DLQ = 0, RecheckLagMs = 300000, ProviderFailure = 10 }
   alarm_name          = "${local.trip_recheck_name}-${each.key}"
   namespace           = "Raiquora/TripRecheck"
   metric_name         = each.key
@@ -210,6 +211,7 @@ resource "aws_cloudwatch_metric_alarm" "trip_recheck" {
   treat_missing_data  = "notBreaching"
 }
 resource "aws_cloudwatch_metric_alarm" "trip_recheck_heartbeat" {
+  count               = var.hibernation_enabled ? 0 : 1
   alarm_name          = "${local.trip_recheck_name}-poll-stopped"
   namespace           = "Raiquora/TripRecheck"
   metric_name         = "PollSuccess"
@@ -221,6 +223,7 @@ resource "aws_cloudwatch_metric_alarm" "trip_recheck_heartbeat" {
   treat_missing_data  = "breaching"
 }
 resource "aws_cloudwatch_metric_alarm" "trip_recheck_tick_dlq" {
+  count               = var.hibernation_enabled ? 0 : 1
   alarm_name          = "${local.trip_recheck_name}-tick-dlq"
   namespace           = "AWS/SQS"
   metric_name         = "ApproximateNumberOfMessagesVisible"

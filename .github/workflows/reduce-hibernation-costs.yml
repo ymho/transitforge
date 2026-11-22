@@ -1,0 +1,53 @@
+name: AWS / Reduce hibernation costs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/reduce-hibernation-costs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: transitforge-dev
+  cancel-in-progress: false
+
+jobs:
+  reduce:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      AWS_PAGER: ""
+      TF_VAR_github_repository: ${{ github.repository }}
+      TF_VAR_data_builder_github_oidc_subject: ${{ vars.DATA_BUILDER_GITHUB_OIDC_SUBJECT }}
+      TF_VAR_enable_fixed_egress_provider: ${{ vars.FIXED_EGRESS_PROVIDER_ENABLED }}
+      TF_VAR_cloudflare_front_door_enabled: ${{ vars.CLOUDFLARE_FRONT_DOOR_ENABLED || 'false' }}
+      TF_VAR_legacy_cloudfront_redirect_enabled: ${{ vars.LEGACY_CLOUDFRONT_REDIRECT_ENABLED || 'false' }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.12.2
+          terraform_wrapper: false
+      - name: Assume the existing dev deployment role
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Review and apply only approved rebuildable deletions
+        run: bash tools/deployment/reduce-hibernation-costs.sh main
+      - name: Verify serving remains off and fixed-cost resources are gone
+        run: bash tools/deployment/verify-hibernation.sh

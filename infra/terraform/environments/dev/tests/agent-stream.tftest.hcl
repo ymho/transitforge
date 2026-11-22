@@ -23,6 +23,7 @@ override_resource {
   values          = { value = "syntheticOriginKeyFixtureOnly1234" }
 }
 variables {
+  hibernation_enabled              = false
   github_repository                = "example/transitforge"
   data_builder_github_oidc_subject = "repo:example@12345/transitforge-data-builder@67890:environment:dev"
   enable_fixed_egress_provider     = true
@@ -348,5 +349,50 @@ run "cloudfront_origin_guard" {
   assert {
     condition     = one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].restriction_type == "whitelist" && one(aws_cloudfront_distribution.website.restrictions).geo_restriction[0].locations == toset(["JP"]) && one(aws_cloudfront_distribution.viewer[0].restrictions).geo_restriction[0].restriction_type == "none"
     error_message = "Direct viewers use JP IP filtering; the Cloudflare ingress uses its trusted country header."
+  }
+}
+
+run "hibernated_cost_resources" {
+  command = plan
+  variables {
+    hibernation_enabled           = true
+    cloudflare_front_door_enabled = true
+  }
+  assert {
+    condition = (
+      length(aws_instance.ai_nat) == 0 && length(aws_eip.ai_egress) == 0 &&
+      length(aws_eip_association.ai_nat) == 0 && length(aws_route.ai_egress_private_internet) == 0 &&
+      length(aws_ecs_service.otp) == 0 && length(aws_service_discovery_service.otp) == 0 &&
+      length(aws_service_discovery_private_dns_namespace.otp) == 0
+    )
+    error_message = "Hibernation must remove NAT, EIP, OTP service and billable DNS."
+  }
+  assert {
+    condition = (
+      !aws_cloudfront_distribution.website.enabled && !aws_cloudfront_distribution.viewer[0].enabled &&
+      aws_cloudwatch_event_rule.trip_changed.state == "DISABLED" &&
+      aws_cloudwatch_event_rule.trip_recheck.state == "DISABLED" &&
+      length(aws_cloudwatch_metric_alarm.trip_changed_dlq) == 0 &&
+      length(aws_cloudwatch_metric_alarm.trip_changed_lag) == 0 &&
+      length(aws_cloudwatch_metric_alarm.trip_changed_heartbeat) == 0 &&
+      length(aws_cloudwatch_metric_alarm.trip_changed_tick_dlq) == 0 &&
+      length(aws_cloudwatch_metric_alarm.trip_recheck) == 0 &&
+      length(aws_cloudwatch_metric_alarm.trip_recheck_heartbeat) == 0 &&
+      length(aws_cloudwatch_metric_alarm.trip_recheck_tick_dlq) == 0 &&
+      length(aws_cloudwatch_metric_alarm.notification) == 0 &&
+      length(aws_cloudwatch_metric_alarm.notification_tick_dlq) == 0 &&
+      length(aws_cloudwatch_metric_alarm.rail_impact_failure) == 0
+    )
+    error_message = "Serving, polling and paid alarm objects must stay off."
+  }
+  assert {
+    condition = (
+      aws_dynamodb_table.trips.deletion_protection_enabled &&
+      aws_dynamodb_table.server_state.deletion_protection_enabled &&
+      aws_dynamodb_table.trip_notifications.deletion_protection_enabled &&
+      aws_dynamodb_table.trip_rechecks.deletion_protection_enabled &&
+      length(aws_lambda_function.agent_stream) == 1 && length(aws_lambda_function.fixed_egress_provider) == 1
+    )
+    error_message = "Hibernation must preserve application data and secret-dependent function definitions."
   }
 }

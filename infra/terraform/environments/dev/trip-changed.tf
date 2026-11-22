@@ -54,6 +54,7 @@ resource "aws_cloudwatch_event_rule" "trip_changed" {
   name                = local.trip_changed_name
   description         = "Drain durable TripChanged outbox; not a per-Trip recheck schedule"
   schedule_expression = "rate(1 minute)"
+  state               = var.hibernation_enabled ? "DISABLED" : "ENABLED"
 }
 resource "aws_lambda_function" "trip_changed" {
   function_name                  = local.trip_changed_name
@@ -127,6 +128,7 @@ resource "aws_cloudwatch_event_target" "trip_changed" {
 
 # Operator-facing CloudWatch alarms; not user Trip Notifications (#395).
 resource "aws_cloudwatch_metric_alarm" "trip_changed_dlq" {
+  count               = var.hibernation_enabled ? 0 : 1
   alarm_name          = "${local.trip_changed_name}-dead-letter"
   namespace           = "Raiquora/TripChanged"
   metric_name         = "DLQ"
@@ -138,6 +140,7 @@ resource "aws_cloudwatch_metric_alarm" "trip_changed_dlq" {
   treat_missing_data  = "notBreaching"
 }
 resource "aws_cloudwatch_metric_alarm" "trip_changed_lag" {
+  count               = var.hibernation_enabled ? 0 : 1
   alarm_name          = "${local.trip_changed_name}-projection-lag"
   namespace           = "Raiquora/TripChanged"
   metric_name         = "ProjectionLagMs"
@@ -149,6 +152,7 @@ resource "aws_cloudwatch_metric_alarm" "trip_changed_lag" {
   treat_missing_data  = "notBreaching"
 }
 resource "aws_cloudwatch_metric_alarm" "trip_changed_heartbeat" {
+  count               = var.hibernation_enabled ? 0 : 1
   alarm_name          = "${local.trip_changed_name}-poll-stopped"
   namespace           = "Raiquora/TripChanged"
   metric_name         = "PollSuccess"
@@ -160,6 +164,7 @@ resource "aws_cloudwatch_metric_alarm" "trip_changed_heartbeat" {
   treat_missing_data  = "breaching"
 }
 resource "aws_cloudwatch_metric_alarm" "trip_changed_tick_dlq" {
+  count               = var.hibernation_enabled ? 0 : 1
   alarm_name          = "${local.trip_changed_name}-tick-dead-letter"
   namespace           = "AWS/SQS"
   metric_name         = "ApproximateNumberOfMessagesVisible"

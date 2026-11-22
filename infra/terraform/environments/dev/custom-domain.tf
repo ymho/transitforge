@@ -80,7 +80,7 @@ resource "aws_cloudfront_distribution" "viewer" {
   count = var.cloudflare_front_door_enabled ? 1 : 0
 
   aliases             = [var.viewer_domain_name]
-  enabled             = true
+  enabled             = !var.hibernation_enabled
   default_root_object = "index.html"
   http_version        = "http2"
   price_class         = "PriceClass_200"

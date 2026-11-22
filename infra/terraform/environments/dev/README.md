@@ -2,6 +2,15 @@
 
 静的ビューワー AI API 混雑と遅延の収集基盤をTerraformで管理する
 
+## 休止中の料金削減
+
+現在は`hibernation.auto.tfvars.json`の`hibernation_enabled=true`が正本。
+CloudFrontと定期実行を無効に保ち、再生成可能なNAT/EIP・OTP内部DNSとサービス・アラームを撤去する。
+通常CDはplanだけに制限し、撤去は専用workflowの削除対象検査済みplanだけを適用する。
+元データ・ユーザー情報・秘密値・stateは残す。復旧時は新しいEIPの外部許可IP登録を確認する。
+実行順序と復旧は[AWS休止手順](../../../../docs/operations/aws-hibernation.md)を参照。
+以下の通常デプロイ手順は、休止解除のレビュー後に使用する。
+
 ## 管理範囲
 
 - 非公開S3とCloudFront

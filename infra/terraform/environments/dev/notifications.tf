@@ -175,7 +175,7 @@ resource "aws_cloudwatch_event_target" "notification" {
   depends_on = [aws_lambda_permission.notification_tick, aws_sqs_queue_policy.notification_tick_dlq]
 }
 resource "aws_cloudwatch_metric_alarm" "notification" {
-  for_each            = { DLQ = 0, DeliveryLatencyMs = 300000, Failed = 10 }
+  for_each            = var.hibernation_enabled ? {} : { DLQ = 0, DeliveryLatencyMs = 300000, Failed = 10 }
   alarm_name          = "${local.notification_name}-${each.key}"
   namespace           = "Raiquora/Notification"
   metric_name         = each.key
@@ -187,6 +187,7 @@ resource "aws_cloudwatch_metric_alarm" "notification" {
   treat_missing_data  = "notBreaching"
 }
 resource "aws_cloudwatch_metric_alarm" "notification_tick_dlq" {
+  count               = var.hibernation_enabled ? 0 : 1
   alarm_name          = "${local.notification_name}-tick-dlq"
   namespace           = "AWS/SQS"
   metric_name         = "ApproximateNumberOfMessagesVisible"

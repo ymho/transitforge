@@ -101,3 +101,6 @@ downloads/
 
 # Generated from Terraform public output for local authentication
 /frontend/public/auth-config.json
+
+# Public, versioned hibernation switch (contains no credentials).
+!infra/terraform/environments/dev/hibernation.auto.tfvars.json
